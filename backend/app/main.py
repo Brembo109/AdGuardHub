@@ -8,7 +8,7 @@ import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
@@ -111,8 +111,8 @@ def mount_frontend(application: FastAPI) -> None:
     if os.path.isdir(assets):
         application.mount("/assets", StaticFiles(directory=assets), name="assets")
 
-    @application.get("/{path:path}", include_in_schema=False)
-    async def spa(request: Request, path: str) -> FileResponse | JSONResponse:
+    @application.get("/{path:path}", include_in_schema=False, response_model=None)
+    async def spa(path: str) -> FileResponse | JSONResponse:
         if path.startswith("api/"):
             return JSONResponse({"detail": "Not Found"}, status_code=404)
         candidate = os.path.normpath(os.path.join(static_dir, path))

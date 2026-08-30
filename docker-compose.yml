@@ -1,0 +1,24 @@
+services:
+  adguardhub:
+    image: ghcr.io/fgrfn/adguardhub:latest
+    container_name: adguardhub
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+    environment:
+      # Required. Signs session cookies AND derives the key that encrypts the
+      # stored AdGuard credentials. Losing or changing it invalidates both.
+      # Generate one with: openssl rand -base64 48
+      ADGUARDHUB_SECRET_KEY: "change-me-to-a-long-random-string"
+
+      # Optional: create the admin account on first start. Without these, the UI
+      # asks you to create it on the first visit instead.
+      # ADGUARDHUB_ADMIN_USERNAME: "admin"
+      # ADGUARDHUB_ADMIN_PASSWORD: "choose-a-strong-password"
+
+      # Optional tuning (seconds).
+      # ADGUARDHUB_RECONCILE_INTERVAL: "300"
+      # ADGUARDHUB_RETRY_INTERVAL: "30"
+      # ADGUARDHUB_QUERYLOG_POLL_INTERVAL: "5"
