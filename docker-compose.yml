@@ -4,7 +4,9 @@ services:
     container_name: adguardhub
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      # The container listens on 80. Map it elsewhere (e.g. "8080:80") if the host
+      # already serves something on port 80.
+      - "80:80"
     volumes:
       - ./data:/data
     environment:
@@ -12,6 +14,11 @@ services:
       # stored AdGuard credentials. Losing or changing it invalidates both.
       # Generate one with: openssl rand -base64 48
       ADGUARDHUB_SECRET_KEY: "change-me-to-a-long-random-string"
+
+      # The user that should own /data. Set these to the host user that owns the
+      # mounted directory — on Unraid that is PUID=99, PGID=100.
+      PUID: "1000"
+      PGID: "1000"
 
       # Optional: create the admin account on first start. Without these, the UI
       # asks you to create it on the first visit instead.

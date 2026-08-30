@@ -20,20 +20,33 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# gosu drops privileges in the entrypoint after it has fixed /data's ownership.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends gosu \
+ && rm -rf /var/lib/apt/lists/*
+
 COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/app ./app
 COPY --from=frontend /build/dist ./static
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh && mkdir -p /data
 
-# The DB and its encryption-key-dependent contents live here; mount a volume.
-RUN mkdir -p /data && useradd --system --uid 10001 adguardhub && chown -R adguardhub /data /app
-USER adguardhub
+# The container starts as root only so the entrypoint can chown the mounted /data,
+# then re-execs the app as PUID:PGID. Override those to match the host user that
+# owns the mount (Unraid: PUID=99, PGID=100).
+ENV PUID=1000 \
+    PGID=1000
 
 VOLUME ["/data"]
-EXPOSE 8000
+
+# The container listens on 80; publish it wherever you like (-p 8080:80). Docker
+# sets net.ipv4.ip_unprivileged_port_start=0, so the unprivileged app user may bind it.
+EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
-  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4).status == 200 else 1)"
+  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:80/api/health', timeout=4).status == 200 else 1)"
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "80"]

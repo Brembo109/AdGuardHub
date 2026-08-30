@@ -62,11 +62,13 @@ services:
     container_name: adguardhub
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "80:80"
     volumes:
       - ./data:/data
     environment:
       ADGUARDHUB_SECRET_KEY: "<a long random string>"
+      PUID: "1000"   # Unraid: 99
+      PGID: "1000"   # Unraid: 100
 ```
 
 ```bash
@@ -77,14 +79,33 @@ docker compose up -d
 
 ```bash
 docker run -d --name adguardhub \
-  -p 8000:8000 \
+  -p 80:80 \
   -v "$PWD/data:/data" \
   -e ADGUARDHUB_SECRET_KEY="$(openssl rand -base64 48)" \
+  -e PUID=1000 -e PGID=1000 \
   --restart unless-stopped \
   ghcr.io/fgrfn/adguardhub:latest
 ```
 
-Then open <http://localhost:8000> and create the admin account.
+Then open <http://localhost> and create the admin account.
+
+The container listens on **port 80**. If the host already serves something there,
+publish it elsewhere — `-p 8080:80` — the container-side port stays 80.
+
+### File permissions (PUID / PGID)
+
+A bind mount keeps the *host* directory's ownership, so the container has to run as a
+user that may write there. Set `PUID`/`PGID` to whoever owns the mounted directory:
+
+| Platform | PUID | PGID |
+| --- | --- | --- |
+| Unraid | `99` | `100` |
+| Most Linux hosts (first user) | `1000` | `1000` |
+
+The container starts as root only long enough for its entrypoint to `chown /data`, then
+drops to `PUID:PGID` for the application itself. If the directory still isn't writable,
+startup aborts with a single line naming the directory, the uid it tried, and the fix —
+rather than a SQLAlchemy traceback.
 
 > **Keep `ADGUARDHUB_SECRET_KEY` safe and stable.** It signs your session cookie *and* derives the
 > key that encrypts your AdGuard admin passwords at rest — the key itself is never written to the
@@ -160,6 +181,9 @@ cd frontend
 npm install
 npm run dev
 ```
+
+Local development stays on uvicorn's default port 8000 — binding 80 on a host needs root.
+Only the container listens on 80.
 
 Checks — the same ones CI runs:
 
