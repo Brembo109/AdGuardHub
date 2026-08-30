@@ -20,6 +20,12 @@ _engine: AsyncEngine | None = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None
 
 
+_REMEDY = (
+    "In Docker, set PUID/PGID to the user that owns the mounted directory "
+    "(Unraid: PUID=99, PGID=100), or chown it on the host."
+)
+
+
 class DataDirError(RuntimeError):
     """The data directory is missing or not writable by the current user."""
 
@@ -39,9 +45,7 @@ def check_data_dir() -> None:
         os.makedirs(data_dir, exist_ok=True)
     except OSError as exc:
         raise DataDirError(
-            f"Cannot create the data directory {data_dir!r} as {identity}: {exc}. "
-            "In Docker, set PUID/PGID to the user that owns the mounted directory "
-            "(Unraid: PUID=99, PGID=100), or chown it on the host."
+            f"Cannot create the data directory {data_dir!r} as {identity}: {exc}. {_REMEDY}"
         ) from exc
 
     probe = os.path.join(data_dir, ".adguardhub-write-test")
@@ -52,9 +56,22 @@ def check_data_dir() -> None:
     except OSError as exc:
         raise DataDirError(
             f"The data directory {data_dir!r} is not writable as {identity}: {exc}. "
-            "In Docker, set PUID/PGID to the user that owns the mounted directory "
-            "(Unraid: PUID=99, PGID=100), or chown it on the host."
+            f"{_REMEDY}"
         ) from exc
+
+    # A writable directory is not enough: a database left behind by an earlier run
+    # under a different uid stays unwritable, and SQLite reports that identically.
+    database = settings.database_path
+    if os.path.exists(database):
+        try:
+            with open(database, "r+b"):
+                pass
+        except OSError as exc:
+            raise DataDirError(
+                f"The database {database!r} exists but is not writable as {identity}: {exc}. "
+                "It was probably created by an earlier run under a different user. "
+                f"{_REMEDY}"
+            ) from exc
 
 
 def get_engine() -> AsyncEngine:

@@ -44,3 +44,25 @@ def test_unwritable_directory_explains_the_fix(tmp_path, monkeypatch) -> None:
     assert "not writable" in message
     assert "PUID" in message and "PGID" in message
     assert str(locked) in message
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="root ignores file permissions")
+def test_unwritable_existing_database_is_reported(tmp_path, monkeypatch) -> None:
+    """A writable directory still fails if an earlier run left a root-owned DB."""
+    data = tmp_path / "data"
+    data.mkdir()
+    database = data / "adguardhub.db"
+    database.write_bytes(b"")
+    database.chmod(0o444)
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("ADGUARDHUB_DATA_DIR", str(data))
+    try:
+        with pytest.raises(DataDirError) as caught:
+            check_data_dir()
+    finally:
+        database.chmod(0o644)
+        get_settings.cache_clear()
+
+    assert "not writable" in str(caught.value)
+    assert "earlier run" in str(caught.value)
