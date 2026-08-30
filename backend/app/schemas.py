@@ -60,6 +60,32 @@ class InstanceCreate(BaseModel):
         return value
 
 
+class ConnectionTest(BaseModel):
+    """Probe credentials before an instance is saved (or with edited values)."""
+
+    base_url: str = Field(min_length=1, max_length=500)
+    adapter: str = "adguard"
+    username: str = ""
+    password: str = ""
+    verify_tls: bool = True
+    # Set when re-testing a saved instance whose password was left untouched.
+    instance_id: int | None = None
+
+    @field_validator("base_url")
+    @classmethod
+    def _check_url(cls, value: str) -> str:
+        value = value.strip().rstrip("/")
+        if not value.startswith(("http://", "https://")):
+            raise ValueError("base_url must start with http:// or https://")
+        return value
+
+
+class ConnectionResult(BaseModel):
+    ok: bool
+    version: str = ""
+    error: str = ""
+
+
 class InstanceUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     base_url: str | None = None

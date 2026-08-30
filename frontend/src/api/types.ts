@@ -142,3 +142,9 @@ export interface SyncResult {
   instances: number
   failed: Record<string, string>
 }
+
+export interface ConnectionResult {
+  ok: boolean
+  version: string
+  error: string
+}

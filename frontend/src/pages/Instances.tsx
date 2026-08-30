@@ -1,21 +1,17 @@
 import { useState } from 'react'
 import { api } from '../api/client'
 import type { Instance } from '../api/types'
+import { InstanceForm } from '../components/InstanceForm'
+import { BLANK_DRAFT, type InstanceDraft, draftFrom } from '../components/instanceDraft'
 import { Badge, Banner, Card, Empty, PageHeader } from '../components/ui'
 import { formatTime } from '../format'
 import { errorMessage, useResource } from '../hooks/useApi'
 
-const BLANK = {
-  name: '',
-  base_url: 'http://',
-  username: '',
-  password: '',
-  verify_tls: true,
-}
-
 export default function Instances() {
   const instances = useResource<Instance[]>(() => api.instances())
-  const [form, setForm] = useState({ ...BLANK })
+  const [draft, setDraft] = useState<InstanceDraft>({ ...BLANK_DRAFT })
+  const [editing, setEditing] = useState<Instance | null>(null)
+  const [editDraft, setEditDraft] = useState<InstanceDraft>({ ...BLANK_DRAFT })
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
@@ -34,14 +30,35 @@ export default function Instances() {
     }
   }
 
-  const add = (event: React.FormEvent) => {
-    event.preventDefault()
-    void run(async () => {
-      const created = await api.createInstance(form)
-      setForm({ ...BLANK })
+  const add = () =>
+    run(async () => {
+      const created = await api.createInstance(draft)
+      setDraft({ ...BLANK_DRAFT })
       return `Added ${created.name}.`
     })
+
+  const startEdit = (instance: Instance) => {
+    setEditing(instance)
+    setEditDraft(draftFrom(instance))
+    setError('')
+    setMessage('')
   }
+
+  const saveEdit = () =>
+    run(async () => {
+      if (!editing) return ''
+      // An untouched password field must not wipe the stored credential.
+      const payload: Record<string, unknown> = {
+        name: editDraft.name,
+        base_url: editDraft.base_url,
+        username: editDraft.username,
+        verify_tls: editDraft.verify_tls,
+      }
+      if (editDraft.password) payload.password = editDraft.password
+      const updated = await api.updateInstance(editing.id, payload)
+      setEditing(null)
+      return `Saved ${updated.name}.`
+    })
 
   const toggle = (instance: Instance) =>
     run(async () => {
@@ -68,6 +85,7 @@ export default function Instances() {
       return
     void run(async () => {
       await api.deleteInstance(instance.id)
+      if (editing?.id === instance.id) setEditing(null)
       return `Removed ${instance.name}.`
     })
   }
@@ -98,62 +116,29 @@ export default function Instances() {
       {message ? <Banner kind="ok">{message}</Banner> : null}
       {instances.error ? <Banner kind="error">{instances.error}</Banner> : null}
 
-      <Card title="Add an instance">
-        <form onSubmit={add}>
-          <div className="row">
-            <div className="field">
-              <label htmlFor="name">Name</label>
-              <input
-                id="name"
-                value={form.name}
-                placeholder="adguard-primary"
-                onChange={(event) => setForm({ ...form, name: event.target.value })}
-                required
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="url">Base URL</label>
-              <input
-                id="url"
-                value={form.base_url}
-                placeholder="http://192.168.1.2:3000"
-                onChange={(event) => setForm({ ...form, base_url: event.target.value })}
-                required
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="user">Admin username</label>
-              <input
-                id="user"
-                value={form.username}
-                autoComplete="off"
-                onChange={(event) => setForm({ ...form, username: event.target.value })}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="pass">Admin password</label>
-              <input
-                id="pass"
-                type="password"
-                value={form.password}
-                autoComplete="new-password"
-                onChange={(event) => setForm({ ...form, password: event.target.value })}
-              />
-            </div>
-          </div>
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={form.verify_tls}
-              onChange={(event) => setForm({ ...form, verify_tls: event.target.checked })}
-            />
-            Verify the TLS certificate (turn off for a self-signed HTTPS instance)
-          </label>
-          <button className="primary" type="submit" disabled={busy}>
-            Add instance
-          </button>
-        </form>
-      </Card>
+      {editing ? (
+        <Card title={`Edit ${editing.name}`} hint="Test the connection before saving.">
+          <InstanceForm
+            draft={editDraft}
+            onChange={setEditDraft}
+            onSubmit={saveEdit}
+            onCancel={() => setEditing(null)}
+            submitLabel="Save changes"
+            busy={busy}
+            existingId={editing.id}
+          />
+        </Card>
+      ) : (
+        <Card title="Add an instance" hint="Test the connection first — it verifies the URL and credentials without saving.">
+          <InstanceForm
+            draft={draft}
+            onChange={setDraft}
+            onSubmit={add}
+            submitLabel="Add instance"
+            busy={busy}
+          />
+        </Card>
+      )}
 
       <Card
         title="Connected instances"
@@ -186,6 +171,9 @@ export default function Instances() {
                     </td>
                     <td>{formatTime(instance.last_synced_at)}</td>
                     <td className="right">
+                      <button className="small" onClick={() => startEdit(instance)} disabled={busy}>
+                        Edit
+                      </button>{' '}
                       <button className="small" onClick={() => test(instance)} disabled={busy}>
                         Test
                       </button>{' '}

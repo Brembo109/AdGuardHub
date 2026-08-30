@@ -497,3 +497,58 @@ details.details pre {
     padding: 16px;
   }
 }
+
+/* -- onboarding --------------------------------------------------------- */
+
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.step {
+  margin-bottom: 10px;
+}
+
+.step-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  padding: 11px 14px;
+  font-weight: 600;
+}
+
+.step.open .step-head {
+  border-color: var(--accent);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.step-n {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  font-size: 12px;
+  flex: 0 0 auto;
+}
+
+.step.done .step-n {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #06110b;
+}
+
+.step.open .card {
+  border-top: none;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  margin-bottom: 0;
+}

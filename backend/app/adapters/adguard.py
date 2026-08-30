@@ -6,7 +6,9 @@ from typing import Any
 
 import httpx
 
+from . import session
 from .base import AdapterError, DnsAdapter, QueryLogEntry, RemoteFilterList
+from .session import SessionKey, SessionStore
 
 # AdGuard's query log "reason" values that mean the answer was actually filtered.
 _ALLOWED_REASONS = {"NotFilteredWhiteList", "NotFilteredNotFound", "NotFilteredError", ""}
@@ -34,6 +36,7 @@ class AdGuardAdapter(DnsAdapter):
         verify_tls: bool = True,
         timeout: float = 10.0,
         client: httpx.AsyncClient | None = None,
+        sessions: SessionStore | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self._username = username
@@ -45,7 +48,9 @@ class AdGuardAdapter(DnsAdapter):
             timeout=timeout,
             follow_redirects=True,
         )
-        self._logged_in = False
+        # Sessions outlive the adapter, which is rebuilt for every operation.
+        self._sessions = sessions if sessions is not None else session.store
+        self._key: SessionKey = (self.base_url, self._username)
 
     async def aclose(self) -> None:
         if self._owns_client:
@@ -54,9 +59,20 @@ class AdGuardAdapter(DnsAdapter):
     # -- transport -------------------------------------------------------
 
     async def _login(self) -> None:
-        """Establish a session cookie for builds that reject HTTP Basic auth."""
+        """Authenticate once and cache the session cookie for later adapters.
+
+        Never call this per request: AdGuard Home counts login traffic against its
+        brute-force protection and starts answering 429 (see adapters/session.py).
+        """
         if not self._username:
             raise AdapterError("Authentication required but no credentials are configured")
+
+        blocked = self._sessions.blocked_for(self._key)
+        if blocked:
+            raise AdapterError(
+                f"AdGuard Home is rate-limiting logins (HTTP 429); waiting {blocked:.0f}s "
+                "before trying again. The credentials themselves may be fine."
+            )
         try:
             response = await self._client.post(
                 "/control/login",
@@ -64,19 +80,63 @@ class AdGuardAdapter(DnsAdapter):
             )
         except httpx.HTTPError as exc:
             raise AdapterError(f"Login failed: {exc}") from exc
+
+        if response.status_code == 429:
+            self._sessions.note_rate_limited(self._key)
+            raise AdapterError(
+                "AdGuard Home rejected the login with HTTP 429 (too many requests). Its "
+                "brute-force protection is active — the credentials may well be correct. "
+                "Wait a minute, or restart AdGuard Home to clear the block."
+            )
+        if response.status_code in (401, 403):
+            raise AdapterError(
+                f"AdGuard Home rejected the credentials for user {self._username!r} "
+                f"(HTTP {response.status_code})."
+            )
         if response.status_code >= 400:
             raise AdapterError(f"Login rejected with HTTP {response.status_code}")
-        self._logged_in = True
 
-    async def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
-        auth = (self._username, self._password) if self._username and not self._logged_in else None
+        self._sessions.set(self._key, self._client.cookies)
+
+    async def _ensure_session(self) -> None:
+        """Attach a cached cookie, logging in only when there isn't one yet."""
+        if not self._username:
+            return
+        cookies = self._sessions.get(self._key)
+        if cookies is not None:
+            self._client.cookies = cookies
+            return
+        async with self._sessions.lock(self._key):
+            # Another caller may have logged in while we waited for the lock.
+            cookies = self._sessions.get(self._key)
+            if cookies is not None:
+                self._client.cookies = cookies
+                return
+            await self._login()
+
+    async def _send(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         try:
-            response = await self._client.request(method, path, auth=auth, **kwargs)
-            if response.status_code in (401, 403) and self._username and not self._logged_in:
-                await self._login()
-                response = await self._client.request(method, path, **kwargs)
+            return await self._client.request(method, path, **kwargs)
         except httpx.HTTPError as exc:
             raise AdapterError(f"{method} {path} failed: {exc}") from exc
+
+    async def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        await self._ensure_session()
+        response = await self._send(method, path, **kwargs)
+
+        # An expired or invalidated session: drop it and authenticate once more.
+        if response.status_code in (401, 403) and self._username:
+            self._sessions.clear(self._key)
+            async with self._sessions.lock(self._key):
+                await self._login()
+            response = await self._send(method, path, **kwargs)
+
+        if response.status_code == 429:
+            self._sessions.note_rate_limited(self._key)
+            raise AdapterError(
+                f"{method} {path} returned HTTP 429: AdGuard Home is rate-limiting requests. "
+                "Backing off for a minute."
+            )
         if response.status_code >= 400:
             detail = response.text.strip()[:200]
             raise AdapterError(f"{method} {path} returned HTTP {response.status_code}: {detail}")

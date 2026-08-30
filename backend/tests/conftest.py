@@ -17,6 +17,7 @@ import httpx  # noqa: E402
 
 from app import db  # noqa: E402
 from app.adapters import ADAPTERS  # noqa: E402
+from app.adapters import session as adapter_session  # noqa: E402
 from app.config import get_settings  # noqa: E402
 from app.main import app  # noqa: E402
 from app.services.querylog import buffer  # noqa: E402
@@ -38,6 +39,8 @@ async def fresh_db(tmp_path, monkeypatch) -> AsyncIterator[None]:
     await db.dispose_db()
     await db.init_db()
     await buffer.clear()
+    # Cached AdGuard sessions are process-wide; keep them from leaking between tests.
+    adapter_session.store.reset()
     yield
     await drain_background()
     await db.dispose_db()

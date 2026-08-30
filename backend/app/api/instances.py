@@ -8,11 +8,20 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from ..adapters import AdapterError, available_adapters, build_adapter
+from ..adapters import ADAPTERS, AdapterError, available_adapters, build_adapter
+from ..adapters import session as adapter_session
+from ..config import get_settings
 from ..deps import CurrentUser, SessionDep
 from ..models import Instance, InstanceStatus, PushJob
 from ..runtime import get_crypto
-from ..schemas import ImportRequest, InstanceCreate, InstanceOut, InstanceUpdate
+from ..schemas import (
+    ConnectionResult,
+    ConnectionTest,
+    ImportRequest,
+    InstanceCreate,
+    InstanceOut,
+    InstanceUpdate,
+)
 from ..services.importer import import_from_instance
 from ..services.sync import ALL_KINDS, check_instance, push_to_instance, schedule_sync
 
@@ -47,6 +56,42 @@ async def _get(session: SessionDep, instance_id: int) -> Instance:
 @router.get("/adapters")
 async def list_adapters(_: CurrentUser) -> list[str]:
     return available_adapters()
+
+
+@router.post("/test-connection", response_model=ConnectionResult)
+async def test_connection(
+    payload: ConnectionTest, _: CurrentUser, session: SessionDep
+) -> ConnectionResult:
+    """Check a URL and credentials without saving anything.
+
+    Returns the failure in the body rather than as an error status: the caller is a
+    form that wants to show the message inline, not handle an exception.
+    """
+    adapter_cls = ADAPTERS.get(payload.adapter)
+    if adapter_cls is None:
+        return ConnectionResult(ok=False, error=f"Unknown adapter {payload.adapter!r}")
+
+    password = payload.password
+    if not password and payload.instance_id is not None:
+        # Re-testing a saved instance whose password field was left blank.
+        existing = await session.get(Instance, payload.instance_id)
+        if existing is not None and existing.password_encrypted:
+            password = get_crypto().decrypt(existing.password_encrypted)
+
+    adapter = adapter_cls(
+        payload.base_url,
+        payload.username,
+        password,
+        verify_tls=payload.verify_tls,
+        timeout=get_settings().http_timeout,
+    )
+    try:
+        version = await adapter.check()
+    except (AdapterError, ValueError) as exc:
+        return ConnectionResult(ok=False, error=str(exc))
+    finally:
+        await adapter.aclose()
+    return ConnectionResult(ok=True, version=version)
 
 
 @router.get("", response_model=list[InstanceOut])
@@ -88,12 +133,17 @@ async def update_instance(
     instance_id: int, payload: InstanceUpdate, _: CurrentUser, session: SessionDep
 ) -> InstanceOut:
     instance = await _get(session, instance_id)
+    # The cached session belongs to the old URL/user pair; drop it before either moves.
+    previous_key = (instance.base_url, instance.username)
+
     data = payload.model_dump(exclude_unset=True)
     password = data.pop("password", None)
     for field, value in data.items():
         setattr(instance, field, value)
     if password is not None:
         instance.password_encrypted = get_crypto().encrypt(password) if password else ""
+    adapter_session.store.forget(previous_key)
+    adapter_session.store.forget((instance.base_url, instance.username))
     if "enabled" in data:
         instance.status = (
             InstanceStatus.unknown.value if instance.enabled else InstanceStatus.disabled.value
@@ -114,6 +164,7 @@ async def delete_instance(instance_id: int, _: CurrentUser, session: SessionDep)
     jobs = await session.execute(select(PushJob).where(PushJob.instance_id == instance_id))
     for job in jobs.scalars().all():
         await session.delete(job)
+    adapter_session.store.forget((instance.base_url, instance.username))
     await session.delete(instance)
     await session.commit()
 
