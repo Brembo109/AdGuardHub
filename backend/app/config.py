@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -38,8 +39,12 @@ class Settings(BaseSettings):
     static_dir: str = "./static"
 
     @property
+    def database_path(self) -> str:
+        return os.path.join(self.data_dir.rstrip("/"), "adguardhub.db")
+
+    @property
     def database_url(self) -> str:
-        return f"sqlite+aiosqlite:///{self.data_dir.rstrip('/')}/adguardhub.db"
+        return f"sqlite+aiosqlite:///{self.database_path}"
 
 
 @lru_cache

@@ -63,6 +63,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "ADGUARDHUB_SECRET_KEY is not set. A random key is being used, so sessions and "
             "stored instance credentials will NOT survive a restart. Set it before real use."
         )
+    # Printed before anything can fail, so a pasted log always identifies the build
+    # and the user it runs as — the two things a startup problem turns on.
+    logger.info(
+        "AdGuardHub %s starting as uid=%d gid=%d, data dir %s",
+        VERSION,
+        os.getuid(),
+        os.getgid(),
+        get_settings().data_dir,
+    )
     try:
         await init_db()
     except DataDirError as exc:
