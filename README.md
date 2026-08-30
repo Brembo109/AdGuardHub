@@ -92,6 +92,23 @@ Then open <http://localhost> and create the admin account.
 The container listens on **port 80**. If the host already serves something there,
 publish it elsewhere — `-p 8080:80` — the container-side port stays 80.
 
+### Updating
+
+`docker compose up -d` on its own will **not** fetch a newer image: Docker reuses the
+cached one whenever the tag already exists locally. To move to a newer release:
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+To run your own checkout instead of the published image, `docker compose up -d --build`
+builds from the working tree. Either way, the first log line tells you what you got:
+
+```bash
+docker logs adguardhub 2>&1 | head -5
+# INFO adguardhub: AdGuardHub 0.1.0 starting as uid=1000 gid=1000, data dir /data
+```
+
 ### File permissions (PUID / PGID)
 
 A bind mount keeps the *host* directory's ownership, so the container has to run as a
