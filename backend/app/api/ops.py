@@ -1,0 +1,166 @@
+"""Dashboard, retry queue and drift log — the operational surface of the sync engine."""
+
+from __future__ import annotations
+
+from dataclasses import asdict
+
+from fastapi import APIRouter, HTTPException, Query, status
+from sqlalchemy import func, select
+
+from ..deps import CurrentUser, SessionDep
+from ..models import (
+    DriftEvent,
+    FilterList,
+    Instance,
+    InstanceStatus,
+    JobStatus,
+    PushJob,
+    Rule,
+    RuleKind,
+)
+from ..schemas import (
+    DashboardStats,
+    DriftEventOut,
+    PushJobOut,
+    ReconcileReportOut,
+    SyncResult,
+)
+from ..services import querylog
+from ..services.reconcile import reconcile_all
+from ..services.sync import ALL_KINDS, process_retry_queue, sync_all
+
+router = APIRouter(prefix="/api", tags=["ops"])
+
+
+async def _count(session: SessionDep, statement) -> int:
+    return int((await session.execute(statement)).scalar_one() or 0)
+
+
+@router.get("/dashboard", response_model=DashboardStats)
+async def dashboard(_: CurrentUser, session: SessionDep) -> DashboardStats:
+    def instances_where(*conditions):
+        return select(func.count()).select_from(Instance).where(*conditions)
+
+    return DashboardStats(
+        instances_total=await _count(session, select(func.count()).select_from(Instance)),
+        instances_online=await _count(
+            session, instances_where(Instance.status == InstanceStatus.online.value)
+        ),
+        instances_unreachable=await _count(
+            session, instances_where(Instance.status == InstanceStatus.unreachable.value)
+        ),
+        instances_disabled=await _count(session, instances_where(Instance.enabled.is_(False))),
+        rules_total=await _count(session, select(func.count()).select_from(Rule)),
+        rules_allow=await _count(
+            session,
+            select(func.count()).select_from(Rule).where(Rule.kind == RuleKind.allow.value),
+        ),
+        rules_block=await _count(
+            session,
+            select(func.count()).select_from(Rule).where(Rule.kind == RuleKind.block.value),
+        ),
+        filter_lists_total=await _count(session, select(func.count()).select_from(FilterList)),
+        filter_lists_enabled=await _count(
+            session,
+            select(func.count()).select_from(FilterList).where(FilterList.enabled.is_(True)),
+        ),
+        pending_jobs=await _count(
+            session,
+            select(func.count()).select_from(PushJob).where(
+                PushJob.status == JobStatus.pending.value
+            ),
+        ),
+        failed_jobs=await _count(
+            session,
+            select(func.count())
+            .select_from(PushJob)
+            .where(PushJob.status == JobStatus.failed.value),
+        ),
+        recent_drift=await _count(session, select(func.count()).select_from(DriftEvent)),
+        querylog_buffered=len(querylog.buffer),
+    )
+
+
+@router.post("/sync", response_model=SyncResult)
+async def force_sync(_: CurrentUser, session: SessionDep) -> SyncResult:
+    """Push the full central state to every enabled instance right now."""
+    errors = await sync_all(session, ALL_KINDS, "manual full sync")
+    total = await _count(
+        session, select(func.count()).select_from(Instance).where(Instance.enabled.is_(True))
+    )
+    return SyncResult(instances=total, failed=errors)
+
+
+@router.post("/reconcile", response_model=list[ReconcileReportOut])
+async def run_reconcile(
+    _: CurrentUser, session: SessionDep, apply_fixes: bool = True
+) -> list[ReconcileReportOut]:
+    """Run a reconciliation pass now. ``apply_fixes=false`` performs a dry run."""
+    reports = await reconcile_all(session, apply_fixes=apply_fixes)
+    return [
+        ReconcileReportOut(
+            instance_id=report.instance_id,
+            instance_name=report.instance_name,
+            checked=report.checked,
+            error=report.error,
+            corrected=report.corrected,
+            differences=[asdict(difference) for difference in report.differences],
+        )
+        for report in reports
+    ]
+
+
+@router.get("/jobs", response_model=list[PushJobOut])
+async def list_jobs(
+    _: CurrentUser,
+    session: SessionDep,
+    open_only: bool = True,
+    limit: int = Query(100, ge=1, le=500),
+) -> list[PushJobOut]:
+    statement = (
+        select(PushJob, Instance.name)
+        .join(Instance, Instance.id == PushJob.instance_id)
+        .order_by(PushJob.updated_at.desc())
+        .limit(limit)
+    )
+    if open_only:
+        statement = statement.where(PushJob.status != JobStatus.applied.value)
+    rows = (await session.execute(statement)).all()
+    return [
+        PushJobOut(
+            id=job.id,
+            instance_id=job.instance_id,
+            instance_name=name,
+            payload_kind=job.payload_kind,
+            status=job.status,
+            attempts=job.attempts,
+            last_error=job.last_error,
+            reason=job.reason,
+            updated_at=job.updated_at,
+        )
+        for job, name in rows
+    ]
+
+
+@router.post("/jobs/retry")
+async def retry_jobs(_: CurrentUser, session: SessionDep) -> dict[str, int]:
+    return {"recovered": await process_retry_queue(session)}
+
+
+@router.delete("/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+async def delete_job(job_id: int, _: CurrentUser, session: SessionDep) -> None:
+    job = await session.get(PushJob, job_id)
+    if job is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Job not found")
+    await session.delete(job)
+    await session.commit()
+
+
+@router.get("/drift", response_model=list[DriftEventOut])
+async def list_drift(
+    _: CurrentUser, session: SessionDep, limit: int = Query(100, ge=1, le=500)
+) -> list[DriftEvent]:
+    result = await session.execute(
+        select(DriftEvent).order_by(DriftEvent.id.desc()).limit(limit)
+    )
+    return list(result.scalars().all())
