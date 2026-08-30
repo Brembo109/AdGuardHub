@@ -1,0 +1,43 @@
+"""Adapter registry — the seam that keeps a future Pi-hole adapter cheap (spec §3)."""
+
+from __future__ import annotations
+
+from ..config import get_settings
+from ..models import Instance
+from ..security import Crypto
+from .adguard import AdGuardAdapter
+from .base import AdapterError, DnsAdapter, QueryLogEntry, RemoteFilterList, RemoteState
+
+ADAPTERS: dict[str, type[DnsAdapter]] = {"adguard": AdGuardAdapter}
+
+
+def available_adapters() -> list[str]:
+    return sorted(ADAPTERS)
+
+
+def build_adapter(instance: Instance, crypto: Crypto) -> DnsAdapter:
+    """Instantiate the adapter for ``instance``, decrypting its stored credentials."""
+    adapter_cls = ADAPTERS.get(instance.adapter)
+    if adapter_cls is None:
+        raise AdapterError(f"Unknown adapter '{instance.adapter}'")
+    password = crypto.decrypt(instance.password_encrypted) if instance.password_encrypted else ""
+    return adapter_cls(
+        instance.base_url,
+        instance.username,
+        password,
+        verify_tls=instance.verify_tls,
+        timeout=get_settings().http_timeout,
+    )
+
+
+__all__ = [
+    "ADAPTERS",
+    "AdGuardAdapter",
+    "AdapterError",
+    "DnsAdapter",
+    "QueryLogEntry",
+    "RemoteFilterList",
+    "RemoteState",
+    "available_adapters",
+    "build_adapter",
+]
