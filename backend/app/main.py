@@ -16,7 +16,7 @@ from sqlalchemy import select
 from .api import auth, blocklists, instances, ops, querylog, rules
 from .api import settings as settings_api
 from .config import get_settings
-from .db import dispose_db, init_db, session_scope
+from .db import DataDirError, dispose_db, init_db, session_scope
 from .deps import admin_exists
 from .models import User
 from .runtime import using_ephemeral_secret
@@ -63,7 +63,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "ADGUARDHUB_SECRET_KEY is not set. A random key is being used, so sessions and "
             "stored instance credentials will NOT survive a restart. Set it before real use."
         )
-    await init_db()
+    try:
+        await init_db()
+    except DataDirError as exc:
+        # Surface the remedy as a single readable line before uvicorn's traceback.
+        logger.error("Startup aborted: %s", exc)
+        raise
     await bootstrap_admin()
 
     stop = asyncio.Event()
