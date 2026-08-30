@@ -1,12 +1,16 @@
 import { useState } from 'react'
+import { api } from './api/client'
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from './auth'
 import { Banner } from './components/ui'
+import { useResource } from './hooks/useApi'
 import { useEventStream } from './hooks/useEventStream'
+import { isOnboardingDone } from './onboarding'
 import Blocklists from './pages/Blocklists'
 import Dashboard from './pages/Dashboard'
 import Instances from './pages/Instances'
 import Login from './pages/Login'
+import Onboarding from './pages/Onboarding'
 import QueryLog from './pages/QueryLog'
 import Rules from './pages/Rules'
 import Settings from './pages/Settings'
@@ -71,7 +75,8 @@ export default function App() {
         ) : null}
 
         <Routes>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/onboarding" element={<Onboarding />} />
+          <Route path="/" element={<Home />} />
           <Route path="/querylog" element={<QueryLog />} />
           <Route path="/rules" element={<Rules />} />
           <Route path="/subscriptions" element={<Blocklists />} />
@@ -82,6 +87,19 @@ export default function App() {
       </main>
     </div>
   )
+}
+
+/**
+ * A fresh install lands on the walkthrough instead of an empty dashboard; once the
+ * hub has instances (or the operator skipped), the dashboard takes over.
+ */
+function Home() {
+  const stats = useResource(() => api.dashboard())
+  if (stats.loading && !stats.data) return null
+  if (stats.data && stats.data.instances_total === 0 && !isOnboardingDone()) {
+    return <Navigate to="/onboarding" replace />
+  }
+  return <Dashboard />
 }
 
 function ConnectionBadge() {

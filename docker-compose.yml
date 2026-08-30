@@ -1,6 +1,11 @@
 services:
   adguardhub:
     image: ghcr.io/fgrfn/adguardhub:latest
+    # Present so `docker compose up -d --build` builds from this checkout. Without it
+    # that command silently reuses whatever image is already cached locally, which is
+    # the one thing you do not want when you are trying to test a change.
+    # To run the published image instead, use `docker compose pull` (not --build).
+    build: .
     container_name: adguardhub
     restart: unless-stopped
     ports:

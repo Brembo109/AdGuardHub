@@ -7,6 +7,7 @@ import pytest
 
 from app.adapters.adguard import AdGuardAdapter
 from app.adapters.base import AdapterError, RemoteFilterList
+from app.adapters.session import SessionStore
 
 FILTERING_STATUS = {
     "enabled": True,
@@ -20,10 +21,29 @@ FILTERING_STATUS = {
 }
 
 
-def make_adapter(handler, **kwargs) -> AdGuardAdapter:
+def make_adapter(handler, sessions: SessionStore | None = None, **kwargs) -> AdGuardAdapter:
     transport = httpx.MockTransport(handler)
     client = httpx.AsyncClient(base_url="http://adguard.local", transport=transport)
-    return AdGuardAdapter("http://adguard.local", "admin", "pw", client=client, **kwargs)
+    return AdGuardAdapter(
+        "http://adguard.local",
+        "admin",
+        "pw",
+        client=client,
+        # A private store by default, so tests never leak sessions into each other.
+        sessions=sessions if sessions is not None else SessionStore(),
+        **kwargs,
+    )
+
+
+def login_ok(handler):
+    """Wrap a handler so /control/login succeeds and sets a session cookie."""
+
+    async def wrapped(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/control/login":
+            return httpx.Response(200, json={}, headers={"Set-Cookie": "agh_session=abc; Path=/"})
+        return await handler(request)
+
+    return wrapped
 
 
 async def test_check_reads_the_version() -> None:
@@ -31,14 +51,14 @@ async def test_check_reads_the_version() -> None:
         assert request.url.path == "/control/status"
         return httpx.Response(200, json={"version": "v0.107.55"})
 
-    assert await make_adapter(handler).check() == "v0.107.55"
+    assert await make_adapter(login_ok(handler)).check() == "v0.107.55"
 
 
 async def test_pull_rules_and_filter_lists() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=FILTERING_STATUS)
 
-    adapter = make_adapter(handler)
+    adapter = make_adapter(login_ok(handler))
     assert await adapter.pull_rules() == ["||ads.example.com^", "@@||shop.example.com^"]
 
     lists = await adapter.pull_filter_lists()
@@ -56,7 +76,7 @@ async def test_push_rules_replaces_the_whole_set() -> None:
         seen["body"] = request.content
         return httpx.Response(200, json={})
 
-    await make_adapter(handler).push_rules(["||a.com^"])
+    await make_adapter(login_ok(handler)).push_rules(["||a.com^"])
     assert b'"rules"' in seen["body"]
     assert b"||a.com^" in seen["body"]
 
@@ -79,7 +99,7 @@ async def test_push_filter_lists_adds_updates_and_removes() -> None:
         RemoteFilterList("Extra", "https://example.com/extra.txt", True, "blocklist"),
         # the allowlist subscription is dropped entirely
     ]
-    await make_adapter(handler).push_filter_lists(desired)
+    await make_adapter(login_ok(handler)).push_filter_lists(desired)
 
     paths = [path for path, _ in calls]
     assert "/control/filtering/add_url" in paths
@@ -113,7 +133,7 @@ async def test_query_log_parsing_marks_blocked_entries() -> None:
             },
         )
 
-    entries = await make_adapter(handler).query_log(100)
+    entries = await make_adapter(login_ok(handler)).query_log(100)
     assert entries[0].blocked is True
     assert entries[0].rule == "||ads.example.com^"
     assert entries[0].elapsed_ms == 1.5
@@ -139,7 +159,7 @@ async def test_dns_settings_are_limited_to_managed_keys() -> None:
         captured["body"] = json.loads(request.content)
         return httpx.Response(200, json={})
 
-    adapter = make_adapter(handler)
+    adapter = make_adapter(login_ok(handler))
     assert await adapter.pull_dns_settings() == {
         "upstream_dns": ["1.1.1.1"],
         "dnssec_enabled": True,
@@ -149,19 +169,89 @@ async def test_dns_settings_are_limited_to_managed_keys() -> None:
     assert captured["body"] == {"upstream_dns": ["9.9.9.9"]}
 
 
-async def test_a_401_triggers_a_session_login_and_retries() -> None:
+async def test_the_session_is_established_once_not_per_request() -> None:
+    """The bug behind the HTTP 429 reports: a login on every single call.
+
+    Adapters are rebuilt constantly (the query log poller makes one every few
+    seconds per instance), so the cached cookie has to survive across them.
+    """
+    seen: list[str] = []
+    sessions = SessionStore()
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.path)
+        if request.url.path == "/control/login":
+            return httpx.Response(200, json={}, headers={"Set-Cookie": "agh_session=abc"})
+        return httpx.Response(200, json={"version": "v0.107.55"})
+
+    for _ in range(5):
+        # A fresh adapter each time, exactly as the workers build them.
+        await make_adapter(handler, sessions=sessions).check()
+
+    assert seen.count("/control/login") == 1
+    assert seen.count("/control/status") == 5
+
+
+async def test_credentials_are_never_sent_as_basic_auth() -> None:
+    """Rejected Basic-auth requests count against AdGuard's brute-force limit."""
+    headers: list[str | None] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        headers.append(request.headers.get("authorization"))
+        if request.url.path == "/control/login":
+            return httpx.Response(200, json={}, headers={"Set-Cookie": "agh_session=abc"})
+        return httpx.Response(200, json={"version": "v0.107.55"})
+
+    await make_adapter(handler).check()
+    assert all(value is None for value in headers)
+
+
+async def test_an_expired_session_is_renewed_once() -> None:
     seen: list[str] = []
 
     async def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request.url.path)
         if request.url.path == "/control/login":
-            return httpx.Response(200, json={})
+            return httpx.Response(200, json={}, headers={"Set-Cookie": "agh_session=abc"})
         if seen.count("/control/status") == 1:
-            return httpx.Response(401, text="unauthorised")
+            return httpx.Response(401, text="session expired")
         return httpx.Response(200, json={"version": "v0.107.55"})
 
     assert await make_adapter(handler).check() == "v0.107.55"
-    assert seen == ["/control/status", "/control/login", "/control/status"]
+    assert seen == [
+        "/control/login",
+        "/control/status",
+        "/control/login",
+        "/control/status",
+    ]
+
+
+async def test_a_429_login_explains_the_rate_limit_and_backs_off() -> None:
+    attempts: list[str] = []
+    sessions = SessionStore()
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        attempts.append(request.url.path)
+        return httpx.Response(429, text="too many requests")
+
+    with pytest.raises(AdapterError, match="429") as caught:
+        await make_adapter(handler, sessions=sessions).check()
+    assert "brute-force" in str(caught.value)
+    assert "credentials may well be correct" in str(caught.value)
+
+    # The cooldown must stop the next caller from hammering the login endpoint.
+    before = len(attempts)
+    with pytest.raises(AdapterError, match="rate-limiting"):
+        await make_adapter(handler, sessions=sessions).check()
+    assert len(attempts) == before
+
+
+async def test_wrong_credentials_say_so_rather_than_blaming_rate_limits() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(403, text="forbidden")
+
+    with pytest.raises(AdapterError, match="rejected the credentials"):
+        await make_adapter(handler).check()
 
 
 async def test_http_errors_surface_as_adapter_errors() -> None:
@@ -169,7 +259,7 @@ async def test_http_errors_surface_as_adapter_errors() -> None:
         return httpx.Response(500, text="boom")
 
     with pytest.raises(AdapterError, match="500"):
-        await make_adapter(handler).check()
+        await make_adapter(login_ok(handler)).check()
 
 
 async def test_transport_errors_surface_as_adapter_errors() -> None:
@@ -177,4 +267,4 @@ async def test_transport_errors_surface_as_adapter_errors() -> None:
         raise httpx.ConnectError("connection refused")
 
     with pytest.raises(AdapterError, match="connection refused"):
-        await make_adapter(handler).check()
+        await make_adapter(login_ok(handler)).check()

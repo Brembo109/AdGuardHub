@@ -1,5 +1,6 @@
 import type {
   AuthState,
+  ConnectionResult,
   DashboardStats,
   DnsSettings,
   DriftEvent,
@@ -92,6 +93,14 @@ export const api = {
     post<ReconcileReport[]>(`/api/reconcile${query({ apply_fixes: applyFixes })}`),
 
   instances: () => get<Instance[]>('/api/instances'),
+  testConnection: (payload: {
+    base_url: string
+    username?: string
+    password?: string
+    verify_tls?: boolean
+    adapter?: string
+    instance_id?: number
+  }) => post<ConnectionResult>('/api/instances/test-connection', payload),
   adapters: () => get<string[]>('/api/instances/adapters'),
   createInstance: (payload: {
     name: string
