@@ -1,4 +1,5 @@
 import type { ConfigField } from '../api/types'
+import { useT } from '../i18n'
 import { Switch } from './ui'
 
 type Doc = Record<string, unknown>
@@ -19,6 +20,7 @@ export function SectionFields({
   data: Doc
   onChange: (data: Doc) => void
 }) {
+  const t = useT()
   const set = (key: string, value: unknown) => onChange({ ...data, [key]: value })
 
   const booleans = fields.filter((field) => field.type === 'bool')
@@ -39,13 +41,13 @@ export function SectionFields({
               <Switch
                 checked={Boolean(data[field.key])}
                 onChange={(value) => set(field.key, value)}
-                label={field.label}
-                title={field.help}
+                label={t(field.label)}
+                title={t(field.help)}
               />
               {/* Help belongs on the page, not only in a tooltip nobody hovers. */}
               {field.help ? (
                 <div className="hint" style={{ margin: '4px 0 0 45px' }}>
-                  {field.help}
+                  {t(field.help)}
                 </div>
               ) : null}
             </div>
@@ -73,15 +75,16 @@ function Field({
   value: unknown
   onChange: (key: string, value: unknown) => void
 }) {
+  const t = useT()
   const label = (
     <label htmlFor={`f-${field.key}`}>
-      {field.label}
-      {field.unit ? ` (${field.unit})` : ''}
+      {t(field.label)}
+      {field.unit ? ` (${t(field.unit)})` : ''}
     </label>
   )
   const help = field.help ? (
     <div className="hint" style={{ margin: '4px 0 0' }}>
-      {field.help}
+      {t(field.help)}
     </div>
   ) : null
 
@@ -127,7 +130,7 @@ function Field({
         >
           {field.options.map(([optionValue, optionLabel]) => (
             <option key={optionValue} value={optionValue}>
-              {optionLabel}
+              {t(optionLabel)}
             </option>
           ))}
         </select>
@@ -188,6 +191,7 @@ function PairsField({
   onChange: (key: string, value: unknown) => void
   help: React.ReactNode
 }) {
+  const t = useT()
   const items: Rewrite[] = Array.isArray(value)
     ? (value as Rewrite[]).map((item) => ({
         domain: String(item?.domain ?? ''),
@@ -199,12 +203,12 @@ function PairsField({
 
   return (
     <div className="field full">
-      <label>{field.label}</label>
+      <label>{t(field.label)}</label>
       {items.map((item, index) => (
         <div className="row" key={index} style={{ marginBottom: 6 }}>
           <input
             value={item.domain}
-            placeholder="nas.lan"
+            placeholder={t('nas.lan')}
             onChange={(event) =>
               write(items.map((row, i) => (i === index ? { ...row, domain: event.target.value } : row)))
             }
@@ -221,7 +225,7 @@ function PairsField({
             className="small danger fixed"
             onClick={() => write(items.filter((_, i) => i !== index))}
           >
-            Remove
+            {t('Remove')}
           </button>
         </div>
       ))}
@@ -230,7 +234,7 @@ function PairsField({
         className="small"
         onClick={() => write([...items, { domain: '', answer: '' }])}
       >
-        Add rewrite
+        {t('Add rewrite')}
       </button>
       {help}
     </div>
@@ -254,21 +258,23 @@ function ClientsField({
   value: unknown
   onChange: (key: string, value: unknown) => void
 }) {
+  const t = useT()
   const items: ClientEntry[] = Array.isArray(value) ? (value as ClientEntry[]) : []
   const write = (next: ClientEntry[]) => onChange(field.key, next)
 
   return (
     <div className="field full">
-      <label>{field.label}</label>
+      <label>{t(field.label)}</label>
       <p className="hint" style={{ marginBottom: 8 }}>
-        Name and identifiers are edited here; any other per-client setting AdGuard stores is kept
-        as imported and visible in the raw document.
+        {t(
+          'Name and identifiers are edited here; any other per-client setting AdGuard stores is kept as imported and visible in the raw document.',
+        )}
       </p>
       {items.map((client, index) => (
         <div className="row" key={index} style={{ marginBottom: 6 }}>
           <input
             value={client.name ?? ''}
-            placeholder="Living room TV"
+            placeholder={t('Living room TV')}
             onChange={(event) =>
               write(
                 items.map((row, i) => (i === index ? { ...row, name: event.target.value } : row)),
@@ -299,7 +305,7 @@ function ClientsField({
             className="small danger fixed"
             onClick={() => write(items.filter((_, i) => i !== index))}
           >
-            Remove
+            {t('Remove')}
           </button>
         </div>
       ))}
@@ -310,7 +316,7 @@ function ClientsField({
           write([...items, { name: '', ids: [], use_global_settings: true } as ClientEntry])
         }
       >
-        Add client
+        {t('Add client')}
       </button>
     </div>
   )

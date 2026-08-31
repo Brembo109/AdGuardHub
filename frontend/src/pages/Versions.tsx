@@ -4,12 +4,14 @@ import type { Version, VersionDiff } from '../api/types'
 import { Badge, Banner, Card, Empty, PageHeader } from '../components/ui'
 import { formatTime } from '../format'
 import { errorMessage, useResource } from '../hooks/useApi'
+import { useT } from '../i18n'
 
 /**
  * Configuration history. Every change snapshots the central state, so what a sync
  * carried can be inspected after the fact, compared, and rolled back.
  */
 export default function Versions() {
+  const t = useT()
   const versions = useResource<Version[]>(() => api.versions(100))
   const [diff, setDiff] = useState<VersionDiff | null>(null)
   const [compareWith, setCompareWith] = useState<number | ''>('')
@@ -48,9 +50,11 @@ export default function Versions() {
   const restore = (version: Version) => {
     if (
       !confirm(
-        `Roll back to version ${version.id}?\n\n` +
-          "The hub's rules, subscriptions and settings are replaced with that snapshot and " +
-          'pushed to every instance. The rollback itself is recorded, so it can be undone.',
+        t('Roll back to version {id}?', { id: version.id }) +
+          '\n\n' +
+          t(
+            "The hub's rules, subscriptions and settings are replaced with that snapshot and pushed to every instance. The rollback itself is recorded, so it can be undone.",
+          ),
       )
     )
       return
@@ -58,15 +62,23 @@ export default function Versions() {
       const result = await api.restoreVersion(version.id)
       setDiff(null)
       setSelected(null)
-      return `Rolled back to version ${version.id}: ${result.rules} rule(s), ${result.filter_lists} subscription(s), ${result.sections} section(s) — pushing to all instances.`
+      return t(
+        'Rolled back to version {id}: {rules} rule(s), {lists} subscription(s), {sections} section(s) — pushing to all instances.',
+        {
+          id: version.id,
+          rules: result.rules,
+          lists: result.filter_lists,
+          sections: result.sections,
+        },
+      )
     })
   }
 
   return (
     <>
       <PageHeader
-        title="History"
-        description="Every change to the hub is snapshotted. Compare any two points, see exactly what a sync carried, and roll back if it was wrong."
+        title={t('History')}
+        description={t('Every change to the hub is snapshotted. Compare any two points, see exactly what a sync carried, and roll back if it was wrong.')}
       />
 
       {error ? <Banner kind="error">{error}</Banner> : null}
@@ -80,9 +92,9 @@ export default function Versions() {
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>When</th>
-                  <th>Change</th>
-                  <th>By</th>
+                  <th>{t('When')}</th>
+                  <th>{t('Change')}</th>
+                  <th>{t('By')}</th>
                   <th />
                 </tr>
               </thead>
@@ -103,7 +115,7 @@ export default function Versions() {
                         <>
                           {' '}
                           <Badge tone={version.kind === 'restore' ? 'pending' : 'allow'}>
-                            {version.kind}
+                            {t(version.kind)}
                           </Badge>
                         </>
                       ) : null}
@@ -114,14 +126,14 @@ export default function Versions() {
                         onClick={() => show(version, compareWith)}
                         disabled={busy}
                       >
-                        Compare
+                        {t('Compare')}
                       </button>{' '}
                       <button
                         className="small danger"
                         onClick={() => restore(version)}
                         disabled={busy}
                       >
-                        Roll back
+                        {t('Roll back')}
                       </button>
                     </td>
                   </tr>
@@ -131,19 +143,21 @@ export default function Versions() {
           </div>
         ) : (
           <Empty>
-            {versions.loading ? 'Loading…' : 'No history yet — make a change and it appears here.'}
+            {versions.loading
+              ? t('Loading…')
+              : t('No history yet — make a change and it appears here.')}
           </Empty>
         )}
       </Card>
 
       {diff ? (
         <Card
-          title={`Version ${diff.from_id} → ${diff.to_label}`}
+          title={t('Version {id} → {label}', { id: diff.from_id, label: diff.to_label })}
           hint={diff.summary}
         >
           <div className="row" style={{ marginBottom: 12 }}>
             <div className="field fixed" style={{ width: 280, marginBottom: 0 }}>
-              <label htmlFor="against">Compare against</label>
+              <label htmlFor="against">{t('Compare against')}</label>
               <select
                 id="against"
                 value={compareWith}
@@ -154,12 +168,12 @@ export default function Versions() {
                   if (version) void show(version, value)
                 }}
               >
-                <option value="">Current state</option>
+                <option value="">{t('Current state')}</option>
                 {list
                   .filter((item) => item.id !== diff.from_id)
                   .map((item) => (
                     <option key={item.id} value={item.id}>
-                      Version {item.id} — {item.label}
+                      {t('Version {id} — {label}', { id: item.id, label: item.label })}
                     </option>
                   ))}
               </select>
@@ -167,11 +181,11 @@ export default function Versions() {
           </div>
 
           {diff.changes.empty ? (
-            <Empty>Identical — nothing differs between these two points.</Empty>
+            <Empty>{t('Identical — nothing differs between these two points.')}</Empty>
           ) : (
             <>
-              <EntryDiff title="Rules" entry={diff.changes.rules} />
-              <EntryDiff title="Subscriptions" entry={diff.changes.filter_lists} />
+              <EntryDiff title={t('Rules')} entry={diff.changes.rules} />
+              <EntryDiff title={t('Subscriptions')} entry={diff.changes.filter_lists} />
               <SectionDiff sections={diff.changes.sections} />
             </>
           )}
@@ -222,11 +236,12 @@ function SectionDiff({
     }
   >
 }) {
+  const t = useT()
   const names = Object.keys(sections)
   if (!names.length) return null
   return (
     <div>
-      <h3 style={{ fontSize: 14, margin: '0 0 6px' }}>Instance settings</h3>
+      <h3 style={{ fontSize: 14, margin: '0 0 6px' }}>{t('Instance settings')}</h3>
       {names.map((name) => (
         <div key={name} style={{ marginBottom: 12 }}>
           <div style={{ fontWeight: 600, marginBottom: 4 }}>{name}</div>

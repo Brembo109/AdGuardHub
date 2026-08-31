@@ -6,6 +6,7 @@
  */
 
 import { formatCount } from '../format'
+import { useT } from '../i18n'
 
 const W = 880
 const H = 232
@@ -41,9 +42,10 @@ interface SeriesChartProps {
  * over the same baseline rather than stacked — stacking would double the totals.
  */
 export function SeriesChart({ queries, blocked, unit }: SeriesChartProps) {
+  const t = useT()
   const points = Math.max(queries.length, blocked.length)
   if (points < 2) {
-    return <div className="empty">Not enough history yet to draw a chart.</div>
+    return <div className="empty">{t('Not enough history yet to draw a chart.')}</div>
   }
 
   const max = niceMax(Math.max(...queries, ...blocked, 1))
@@ -72,7 +74,9 @@ export function SeriesChart({ queries, blocked, unit }: SeriesChartProps) {
       viewBox={`0 0 ${W} ${H}`}
       style={{ width: '100%', height: 'auto', display: 'block' }}
       role="img"
-      aria-label={`DNS queries and blocked queries per ${unit.replace(/s$/, '')}`}
+      aria-label={t('DNS queries and blocked queries per {unit}', {
+        unit: t(unit.replace(/s$/, '')),
+      })}
     >
       <g stroke="var(--grid)" strokeWidth="1">
         {ticks.map((tick) => (
@@ -139,6 +143,7 @@ export function SeriesChart({ queries, blocked, unit }: SeriesChartProps) {
 
 /** One proportion, with the number as the hero rather than the arc. */
 export function BlockRateRing({ rate }: { rate: number }) {
+  const t = useT()
   const radius = 52
   const circumference = 2 * Math.PI * radius
   const share = Math.max(0, Math.min(100, rate)) / 100
@@ -175,7 +180,7 @@ export function BlockRateRing({ rate }: { rate: number }) {
         {rate.toFixed(1)}%
       </text>
       <text x="75" y="92" textAnchor="middle" fontSize="11.5" fill="var(--dim)">
-        blocked
+        {t('blocked')}
       </text>
     </svg>
   )
@@ -189,7 +194,8 @@ export function RankList({
   entries: { name: string; count: number }[]
   tone: 'a' | 'b'
 }) {
-  if (!entries.length) return <div className="empty">Nothing reported yet.</div>
+  const t = useT()
+  if (!entries.length) return <div className="empty">{t('Nothing reported yet.')}</div>
   const top = entries[0].count || 1
   const colour = tone === 'a' ? 'var(--series-a)' : 'var(--series-b)'
 

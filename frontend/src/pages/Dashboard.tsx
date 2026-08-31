@@ -6,11 +6,13 @@ import { Badge, Banner, Card, Empty, PageHeader } from '../components/ui'
 import { BlockRateRing, RankList, SeriesChart } from '../components/charts'
 import { formatCount, formatTime } from '../format'
 import { errorMessage, useResource } from '../hooks/useApi'
+import { useT } from '../i18n'
 
 /** How often the traffic numbers are re-read. The backend holds them for ~10s. */
 const TRAFFIC_POLL_MS = 15_000
 
 export default function Dashboard() {
+  const t = useT()
   const stats = useResource(() => api.dashboard())
   const traffic = useResource<Traffic>(() => api.traffic())
   const instances = useResource<Instance[]>(() => api.instances())
@@ -45,8 +47,11 @@ export default function Dashboard() {
       const result = await api.sync()
       const failed = Object.keys(result.failed)
       return failed.length
-        ? `Pushed to ${result.instances} instance(s); ${failed.join(', ')} failed and were queued for retry.`
-        : `Pushed the full configuration to ${result.instances} instance(s).`
+        ? t('Pushed to {count} instance(s); {names} failed and were queued for retry.', {
+            count: result.instances,
+            names: failed.join(', '),
+          })
+        : t('Pushed the full configuration to {count} instance(s).', { count: result.instances })
     })
 
   const reconcileNow = () =>
@@ -61,26 +66,34 @@ export default function Dashboard() {
       const unreachable = reports.filter((report) => !report.checked)
 
       if (!withDrift.length && !unreachable.length) {
-        return 'No drift found — every instance matches.'
+        return t('No drift found — every instance matches.')
       }
 
       const names = (list: ReconcileReport[]) => list.map((item) => item.instance_name).join(', ')
       const parts: string[] = []
-      if (corrected.length) parts.push(`corrected ${names(corrected)}`)
+      if (corrected.length) parts.push(t('corrected {names}', { names: names(corrected) }))
       if (failed.length) {
         const detail = failed[0].error ? ` (${failed[0].error})` : ''
-        parts.push(`found drift on ${names(failed)} that could not be applied${detail}`)
+        parts.push(
+          t('found drift on {names} that could not be applied{detail}', {
+            names: names(failed),
+            detail,
+          }),
+        )
       }
-      if (unreachable.length) parts.push(`could not reach ${names(unreachable)}`)
-      return `Reconciliation: ${parts.join('; ')}.`
+      if (unreachable.length)
+        parts.push(t('could not reach {names}', { names: names(unreachable) }))
+      return t('Reconciliation: {parts}.', { parts: parts.join('; ') })
     })
 
   const retryQueue = () =>
     run(async () => {
       const result = await api.retryJobs()
       return result.recovered
-        ? `Retried the queue — ${result.recovered} instance(s) are back in sync.`
-        : 'Nothing in the retry queue could be applied yet.'
+        ? t('Retried the queue — {count} instance(s) are back in sync.', {
+            count: result.recovered,
+          })
+        : t('Nothing in the retry queue could be applied yet.')
     })
 
   const value = stats.data
@@ -90,15 +103,15 @@ export default function Dashboard() {
   return (
     <>
       <PageHeader
-        title="Dashboard"
-        description="AdGuardHub is the single source of truth. Every change here is pushed to all instances immediately; reconciliation catches anything that drifts."
+        title={t('Dashboard')}
+        description={t('AdGuardHub is the single source of truth. Every change here is pushed to all instances immediately; reconciliation catches anything that drifts.')}
         actions={
           <>
             <button onClick={forceSync} disabled={busy}>
-              Push everything now
+              {t('Push everything now')}
             </button>
             <button onClick={reconcileNow} disabled={busy}>
-              Reconcile
+              {t('Reconcile')}
             </button>
           </>
         }
@@ -110,8 +123,9 @@ export default function Dashboard() {
 
       {value && value.instances_total === 0 ? (
         <Banner kind="warn">
-          No instances yet. <Link to="/instances">Add your AdGuard Home instances</Link>, then import
-          one of them as the master to seed the hub.
+          {t('No instances yet.')}{' '}
+          <Link to="/instances">{t('Add your AdGuard Home instances')}</Link>
+          {t(', then import one of them as the master to seed the hub.')}
         </Banner>
       ) : null}
 
@@ -128,42 +142,51 @@ export default function Dashboard() {
             }}
           >
             <div>
-              <h2>Traffic across all nodes</h2>
+              <h2>{t('Traffic across all nodes')}</h2>
               <p className="hint" style={{ margin: '3px 0 0' }}>
-                Summed from every instance that answered.
+                {t('Summed from every instance that answered.')}
               </p>
             </div>
             <Badge tone={silent ? 'pending' : 'applied'}>
-              {live.instances_reporting} of {live.instances_total} nodes reporting
+              {t('{reporting} of {total} nodes reporting', {
+                reporting: live.instances_reporting,
+                total: live.instances_total,
+              })}
             </Badge>
           </div>
 
           {/* A total short by one node looks like a quiet day, so never let it pass silently. */}
           {silent ? (
             <Banner kind="warn">
-              {silent} node{silent > 1 ? 's are' : ' is'} not reporting, so these numbers are lower
-              than what your network actually did.
+              {silent > 1
+                ? t(
+                    '{count} nodes are not reporting, so these numbers are lower than what your network actually did.',
+                    { count: silent },
+                  )
+                : t(
+                    '1 node is not reporting, so these numbers are lower than what your network actually did.',
+                  )}
             </Banner>
           ) : null}
 
           <div className="grid" style={{ marginBottom: 22 }}>
             <div className="stat">
               <div className="value">{formatCount(live.queries)}</div>
-              <div className="label">DNS queries</div>
+              <div className="label">{t('DNS queries')}</div>
             </div>
             <div className="stat">
               <div className="value" style={{ color: 'var(--series-b-ink)' }}>
                 {formatCount(live.blocked)}
               </div>
-              <div className="label">Blocked by filters</div>
+              <div className="label">{t('Blocked by filters')}</div>
             </div>
             <div className="stat">
               <div className="value">{formatCount(live.replaced_safebrowsing)}</div>
-              <div className="label">Blocked by safe browsing</div>
+              <div className="label">{t('Blocked by safe browsing')}</div>
             </div>
             <div className="stat">
               <div className="value">{live.avg_processing_time.toFixed(live.avg_processing_time < 1 ? 3 : 1)} ms</div>
-              <div className="label">Average response time</div>
+              <div className="label">{t('Average response time')}</div>
             </div>
           </div>
 
@@ -180,11 +203,11 @@ export default function Dashboard() {
               <div className="legend">
                 <span>
                   <i style={{ background: 'var(--series-a)' }} />
-                  DNS queries
+                  {t('DNS queries')}
                 </span>
                 <span>
                   <i style={{ background: 'var(--series-b)' }} />
-                  Blocked
+                  {t('Blocked')}
                 </span>
               </div>
               <SeriesChart
@@ -211,8 +234,10 @@ export default function Dashboard() {
                   maxWidth: '30ch',
                 }}
               >
-                {formatCount(live.blocked)} of {formatCount(live.queries)} queries never left the
-                network.
+                {t('{blocked} of {queries} queries never left the network.', {
+                  blocked: formatCount(live.blocked),
+                  queries: formatCount(live.queries),
+                })}
               </p>
             </div>
           </div>
@@ -221,13 +246,13 @@ export default function Dashboard() {
 
       {live && live.instances_reporting > 0 ? (
         <div className="cards-3" style={{ marginBottom: 16 }}>
-          <Card title="Top queried domains">
+          <Card title={t('Top queried domains')}>
             <RankList entries={live.top_queried} tone="a" />
           </Card>
-          <Card title="Top blocked domains">
+          <Card title={t('Top blocked domains')}>
             <RankList entries={live.top_blocked} tone="b" />
           </Card>
-          <Card title="Top clients">
+          <Card title={t('Top clients')}>
             <RankList entries={live.top_clients} tone="a" />
           </Card>
         </div>
@@ -246,14 +271,15 @@ export default function Dashboard() {
             }}
           >
             <div>
-              <h2>Nodes</h2>
+              <h2>{t('Nodes')}</h2>
               <p className="hint" style={{ margin: '3px 0 0' }}>
-                Last successful push{' '}
-                {value?.last_sync_at ? formatTime(value.last_sync_at) : 'never'}.
+                {t('Last successful push {when}.', {
+                  when: value?.last_sync_at ? formatTime(value.last_sync_at) : t('never'),
+                })}
               </p>
             </div>
             <button className="small" onClick={retryQueue} disabled={busy}>
-              Retry queue
+              {t('Retry queue')}
             </button>
           </div>
 
@@ -285,7 +311,7 @@ export default function Dashboard() {
                   <span className="mono" style={{ color: 'var(--dim)', minWidth: 170 }}>
                     {instance.base_url}
                   </span>
-                  <Badge tone={instance.status}>{instance.status}</Badge>
+                  <Badge tone={instance.status}>{t(instance.status)}</Badge>
                   <span style={{ marginLeft: 'auto', color: 'var(--dim)', fontSize: 13 }}>
                     {formatTime(instance.last_synced_at)}
                   </span>
@@ -293,11 +319,11 @@ export default function Dashboard() {
               ))}
             </div>
           ) : (
-            <Empty>No instances configured yet.</Empty>
+            <Empty>{t('No instances configured yet.')}</Empty>
           )}
         </Card>
 
-        <Card title="Hub">
+        <Card title={t('Hub')}>
           {value ? (
             <div
               style={{
@@ -306,53 +332,53 @@ export default function Dashboard() {
                 gap: '16px 12px',
               }}
             >
-              <Figure value={value.rules_total} label="Rules" />
-              <Figure value={value.managed_sections} label="Replicated settings" to="/config" />
-              <Figure value={value.filter_lists_enabled} label="Active subscriptions" />
+              <Figure value={value.rules_total} label={t('Rules')} />
+              <Figure value={value.managed_sections} label={t('Replicated settings')} to="/config" />
+              <Figure value={value.filter_lists_enabled} label={t('Active subscriptions')} />
               <Figure
                 value={value.pending_jobs + value.failed_jobs}
-                label="Queued pushes"
+                label={t('Queued pushes')}
                 alert={value.pending_jobs + value.failed_jobs > 0}
               />
-              <Figure value={value.versions_total} label="Config versions" to="/history" />
-              <Figure value={value.recent_drift} label="Drift events" />
+              <Figure value={value.versions_total} label={t('Config versions')} to="/history" />
+              <Figure value={value.recent_drift} label={t('Drift events')} />
             </div>
           ) : (
-            <Empty>Loading…</Empty>
+            <Empty>{t('Loading…')}</Empty>
           )}
         </Card>
       </div>
 
       {jobs.data && jobs.data.length ? (
         <Card
-          title="Retry queue"
-          hint="A push that could not be delivered waits here and is retried automatically until it lands."
+          title={t('Retry queue')}
+          hint={t('A push that could not be delivered waits here and is retried automatically until it lands.')}
         >
           <div className="table-wrap">
             <table className="stack-on-phone">
               <thead>
                 <tr>
-                  <th>Instance</th>
-                  <th>Payload</th>
-                  <th>Status</th>
-                  <th>Attempts</th>
-                  <th>Last error</th>
-                  <th>Updated</th>
+                  <th>{t('Instance')}</th>
+                  <th>{t('Payload')}</th>
+                  <th>{t('Status')}</th>
+                  <th>{t('Attempts')}</th>
+                  <th>{t('Last error')}</th>
+                  <th>{t('Updated')}</th>
                 </tr>
               </thead>
               <tbody>
                 {jobs.data.map((job) => (
                   <tr key={job.id}>
-                    <td data-label="Instance">{job.instance_name}</td>
-                    <td data-label="Payload">{job.payload_kind}</td>
-                    <td data-label="Status">
-                      <Badge tone={job.status}>{job.status}</Badge>
+                    <td data-label={t('Instance')}>{job.instance_name}</td>
+                    <td data-label={t('Payload')}>{t(job.payload_kind)}</td>
+                    <td data-label={t('Status')}>
+                      <Badge tone={job.status}>{t(job.status)}</Badge>
                     </td>
-                    <td data-label="Attempts">{job.attempts}</td>
-                    <td data-label="Last error" className="mono">
+                    <td data-label={t('Attempts')}>{job.attempts}</td>
+                    <td data-label={t('Last error')} className="mono">
                       {job.last_error || '—'}
                     </td>
-                    <td data-label="Updated">{formatTime(job.updated_at)}</td>
+                    <td data-label={t('Updated')}>{formatTime(job.updated_at)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -362,39 +388,39 @@ export default function Dashboard() {
       ) : null}
 
       <Card
-        title="Drift log"
-        hint="Differences found by reconciliation. Corrections are applied automatically and never happen silently."
+        title={t('Drift log')}
+        hint={t('Differences found by reconciliation. Corrections are applied automatically and never happen silently.')}
       >
         {drift.data && drift.data.length ? (
           <div className="table-wrap">
             <table className="stack-on-phone">
               <thead>
                 <tr>
-                  <th>When</th>
-                  <th>Instance</th>
-                  <th>Payload</th>
-                  <th>Summary</th>
-                  <th>Fixed</th>
+                  <th>{t('When')}</th>
+                  <th>{t('Instance')}</th>
+                  <th>{t('Payload')}</th>
+                  <th>{t('Summary')}</th>
+                  <th>{t('Fixed')}</th>
                 </tr>
               </thead>
               <tbody>
                 {drift.data.map((event) => (
                   <tr key={event.id}>
-                    <td data-label="When">{formatTime(event.created_at)}</td>
-                    <td data-label="Instance">{event.instance_name}</td>
-                    <td data-label="Payload">{event.payload_kind}</td>
-                    <td data-label="Summary">
+                    <td data-label={t('When')}>{formatTime(event.created_at)}</td>
+                    <td data-label={t('Instance')}>{event.instance_name}</td>
+                    <td data-label={t('Payload')}>{t(event.payload_kind)}</td>
+                    <td data-label={t('Summary')}>
                       {event.summary}
                       {event.details && event.details !== '{}' ? (
                         <details className="details">
-                          <summary>details</summary>
+                          <summary>{t('details')}</summary>
                           <pre>{prettyJson(event.details)}</pre>
                         </details>
                       ) : null}
                     </td>
-                    <td data-label="Fixed">
+                    <td data-label={t('Fixed')}>
                       <Badge tone={event.corrected ? 'applied' : 'pending'}>
-                        {event.corrected ? 'corrected' : 'detected'}
+                        {event.corrected ? t('corrected') : t('detected')}
                       </Badge>
                     </td>
                   </tr>
@@ -403,7 +429,7 @@ export default function Dashboard() {
             </table>
           </div>
         ) : (
-          <Empty>No drift recorded yet.</Empty>
+          <Empty>{t('No drift recorded yet.')}</Empty>
         )}
       </Card>
     </>

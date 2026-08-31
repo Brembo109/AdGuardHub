@@ -4,6 +4,7 @@ import type { Rule, RuleKind, RuleOrigin } from '../api/types'
 import { Badge, Banner, Card, Empty, PageHeader } from '../components/ui'
 import { formatTime } from '../format'
 import { errorMessage, useResource } from '../hooks/useApi'
+import { useT } from '../i18n'
 
 type Tab = 'all' | 'block' | 'allow'
 
@@ -13,6 +14,7 @@ type Tab = 'all' | 'block' | 'allow'
  * from the Query log page.
  */
 export default function Rules() {
+  const t = useT()
   const [tab, setTab] = useState<Tab>('all')
   const [search, setSearch] = useState('')
   const kind: RuleKind | undefined = tab === 'all' ? undefined : tab
@@ -44,7 +46,7 @@ export default function Rules() {
     void run(async () => {
       const created = await api.createRule({ text, origin: 'custom' })
       setText('')
-      return `Added ${created.text} — pushing to all instances.`
+      return t('Added {rule} — pushing to all instances.', { rule: created.text })
     })
   }
 
@@ -53,7 +55,7 @@ export default function Rules() {
     void run(async () => {
       const created = await api.allowDomain(domain, 'allowlist')
       setDomain('')
-      return `Allowlisted ${created.text} — pushing to all instances.`
+      return t('Allowlisted {rule} — pushing to all instances.', { rule: created.text })
     })
   }
 
@@ -63,28 +65,32 @@ export default function Rules() {
       const created = await api.bulkRules(bulk, 'custom')
       setBulk('')
       return created.length
-        ? `Imported ${created.length} new rule(s).`
-        : 'Nothing new — every line was a duplicate, blank or a comment.'
+        ? t('Imported {count} new rule(s).', { count: created.length })
+        : t('Nothing new — every line was a duplicate, blank or a comment.')
     })
   }
 
   const toggle = (rule: Rule) =>
     run(async () => {
       await api.updateRule(rule.id, { enabled: !rule.enabled })
-      return `${rule.text} is now ${rule.enabled ? 'disabled' : 'enabled'}.`
+      return rule.enabled
+        ? t('{rule} is now disabled.', { rule: rule.text })
+        : t('{rule} is now enabled.', { rule: rule.text })
     })
 
   const remove = (rule: Rule) =>
     run(async () => {
       await api.deleteRule(rule.id)
-      return `Removed ${rule.text}.`
+      return t('Removed {rule}.', { rule: rule.text })
     })
 
   return (
     <>
       <PageHeader
-        title="Filtering rules"
-        description="The central rule set, in native AdGuard syntax. Every change is pushed to all instances straight away."
+        title={t('Filtering rules')}
+        description={t(
+          'The central rule set, in native AdGuard syntax. Every change is pushed to all instances straight away.',
+        )}
       />
 
       {error ? <Banner kind="error">{error}</Banner> : null}
@@ -92,7 +98,10 @@ export default function Rules() {
       {rules.error ? <Banner kind="error">{rules.error}</Banner> : null}
 
       <div className="row" style={{ alignItems: 'stretch' }}>
-        <Card title="Custom rule" hint="Any AdGuard rule, e.g. ||ads.example.com^ or @@||shop.example.com^">
+        <Card
+          title={t('Custom rule')}
+          hint={t('Any AdGuard rule, e.g. ||ads.example.com^ or @@||shop.example.com^')}
+        >
           <form onSubmit={addRule} className="row">
             <input
               value={text}
@@ -101,12 +110,15 @@ export default function Rules() {
               required
             />
             <button className="primary fixed" type="submit" disabled={busy}>
-              Add
+              {t('Add')}
             </button>
           </form>
         </Card>
 
-        <Card title="Allowlist" hint="A domain to never block; stored as an @@ exception rule.">
+        <Card
+          title={t('Allowlist')}
+          hint={t('A domain to never block; stored as an @@ exception rule.')}
+        >
           <form onSubmit={addAllow} className="row">
             <input
               value={domain}
@@ -115,15 +127,15 @@ export default function Rules() {
               required
             />
             <button className="primary fixed" type="submit" disabled={busy}>
-              Allow
+              {t('Allow')}
             </button>
           </form>
         </Card>
       </div>
 
       <Card
-        title="Bulk import"
-        hint="Paste AdGuard syntax, one rule per line. Blank lines and ! / # comments are skipped."
+        title={t('Bulk import')}
+        hint={t('Paste AdGuard syntax, one rule per line. Blank lines and ! / # comments are skipped.')}
       >
         <form onSubmit={addBulk}>
           <textarea
@@ -132,7 +144,7 @@ export default function Rules() {
             placeholder={'||ads.example.com^\n@@||shop.example.com^'}
           />
           <button type="submit" disabled={busy || !bulk.trim()} style={{ marginTop: 10 }}>
-            Import rules
+            {t('Import rules')}
           </button>
         </form>
       </Card>
@@ -145,13 +157,13 @@ export default function Rules() {
               className={`tab${tab === item ? ' active' : ''}`}
               onClick={() => setTab(item)}
             >
-              {item === 'all' ? 'All' : item === 'block' ? 'Block' : 'Allow'}
+              {item === 'all' ? t('All') : item === 'block' ? t('Block') : t('Allow')}
             </button>
           ))}
           <div style={{ marginLeft: 'auto', paddingBottom: 6, width: 220 }}>
             <input
               value={search}
-              placeholder="Search rules…"
+              placeholder={t('Search rules…')}
               onChange={(event) => setSearch(event.target.value)}
             />
           </div>
@@ -162,10 +174,10 @@ export default function Rules() {
             <table>
               <thead>
                 <tr>
-                  <th>Rule</th>
-                  <th>Kind</th>
-                  <th>Added via</th>
-                  <th>Updated</th>
+                  <th>{t('Rule')}</th>
+                  <th>{t('Kind')}</th>
+                  <th>{t('Added via')}</th>
+                  <th>{t('Updated')}</th>
                   <th />
                 </tr>
               </thead>
@@ -174,16 +186,16 @@ export default function Rules() {
                   <tr key={rule.id} style={{ opacity: rule.enabled ? 1 : 0.55 }}>
                     <td className="mono">{rule.text}</td>
                     <td>
-                      <Badge tone={rule.kind}>{rule.kind}</Badge>
+                      <Badge tone={rule.kind}>{t(rule.kind)}</Badge>
                     </td>
-                    <td>{originLabel(rule.origin)}</td>
+                    <td>{originLabel(rule.origin, t)}</td>
                     <td>{formatTime(rule.updated_at)}</td>
                     <td className="right">
                       <button className="small" onClick={() => toggle(rule)} disabled={busy}>
-                        {rule.enabled ? 'Disable' : 'Enable'}
+                        {rule.enabled ? t('Disable') : t('Enable')}
                       </button>{' '}
                       <button className="small danger" onClick={() => remove(rule)} disabled={busy}>
-                        Delete
+                        {t('Delete')}
                       </button>
                     </td>
                   </tr>
@@ -192,15 +204,15 @@ export default function Rules() {
             </table>
           </div>
         ) : (
-          <Empty>{rules.loading ? 'Loading…' : 'No rules match.'}</Empty>
+          <Empty>{rules.loading ? t('Loading…') : t('No rules match.')}</Empty>
         )}
       </Card>
     </>
   )
 }
 
-function originLabel(origin: RuleOrigin): string {
-  if (origin === 'querylog') return 'Query log'
-  if (origin === 'allowlist') return 'Allowlist'
-  return 'Custom rule'
+function originLabel(origin: RuleOrigin, t: (text: string) => string): string {
+  if (origin === 'querylog') return t('Query log')
+  if (origin === 'allowlist') return t('Allowlist')
+  return t('Custom rule')
 }

@@ -85,6 +85,11 @@ Light and dark both ship, following the operating system by default with a manua
 the top bar. There are no web fonts and no charting library: the hub runs on a local network
 that may have no internet at all, so everything it renders is in the image.
 
+English and German both ship as well. The language follows the browser on first load and is
+switched from the top bar (or from the login card, before there is a top bar); the choice is
+remembered per browser. Nothing about it is server-side, so two people can use the same hub in
+different languages.
+
 ## Architecture
 
 ```
@@ -328,11 +333,24 @@ Checks — the same ones CI runs:
 
 ```bash
 cd backend && ruff check . && pytest
-cd frontend && npm run lint && npm run build
+cd frontend && npm run lint && npm run i18n:check && npm run build
 ```
 
 In production the backend serves the built frontend from `ADGUARDHUB_STATIC_DIR`, so the whole
 thing is one container and one port.
+
+### Translations
+
+Translations are keyed on the English source text, so a call site reads as prose and a missing
+translation falls back to a correct English sentence rather than to a key name. The cost is that
+editing an English string silently unhooks its German, so `npm run i18n:check` walks every
+`t('…')` call site and fails on anything missing from `src/i18n/de.ts` — or still in it but no
+longer used. Strings that reach `t()` through a variable are listed in `src/i18n/dynamic-keys.json`;
+for the ones the backend serves (section titles, field labels and help text in
+`backend/app/adapters/sections.py`) a backend test keeps that list in sync.
+
+Adding a language means a dictionary next to `de.ts`, an entry in `DICTS` and `LANGUAGES`, and
+extending the check to cover it.
 
 ## Project layout
 

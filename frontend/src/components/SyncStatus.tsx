@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import type { DashboardStats, Instance } from '../api/types'
 import { formatTime } from '../format'
 import { useResource } from '../hooks/useApi'
+import { useT } from '../i18n'
 import { IconChevron } from './icons'
 
 type Tone = 'ok' | 'warn' | 'bad'
@@ -11,17 +12,29 @@ type Tone = 'ok' | 'warn' | 'bad'
 function verdict(
   instances: Instance[] | null,
   stats: DashboardStats | null,
+  t: (text: string, vars?: Record<string, string | number>) => string,
 ): { tone: Tone; text: string } {
-  if (!instances || !stats) return { tone: 'ok', text: 'Checking…' }
-  if (instances.length === 0) return { tone: 'warn', text: 'No nodes yet' }
+  if (!instances || !stats) return { tone: 'ok', text: t('Checking…') }
+  if (instances.length === 0) return { tone: 'warn', text: t('No nodes yet') }
 
   const unreachable = instances.filter((item) => item.status === 'unreachable').length
   if (unreachable) {
-    return { tone: 'bad', text: `${unreachable} node${unreachable > 1 ? 's' : ''} unreachable` }
+    return {
+      tone: 'bad',
+      text:
+        unreachable > 1
+          ? t('{count} nodes unreachable', { count: unreachable })
+          : t('1 node unreachable'),
+    }
   }
   const queued = stats.pending_jobs + stats.failed_jobs
-  if (queued) return { tone: 'warn', text: `${queued} push${queued > 1 ? 'es' : ''} queued` }
-  return { tone: 'ok', text: 'All nodes in sync' }
+  if (queued) {
+    return {
+      tone: 'warn',
+      text: queued > 1 ? t('{count} pushes queued', { count: queued }) : t('1 push queued'),
+    }
+  }
+  return { tone: 'ok', text: t('All nodes in sync') }
 }
 
 /**
@@ -31,6 +44,7 @@ function verdict(
  * When that stops being true it has to find the operator, not wait to be looked up.
  */
 export function SyncStatus({ connected, tick }: { connected: boolean; tick: number }) {
+  const t = useT()
   const instances = useResource<Instance[]>(() => api.instances())
   const stats = useResource(() => api.dashboard())
   const [open, setOpen] = useState(false)
@@ -60,7 +74,7 @@ export function SyncStatus({ connected, tick }: { connected: boolean; tick: numb
     }
   }, [open])
 
-  const { tone, text } = verdict(instances.data, stats.data)
+  const { tone, text } = verdict(instances.data, stats.data, t)
 
   return (
     <div className="sync" ref={wrap}>
@@ -68,7 +82,7 @@ export function SyncStatus({ connected, tick }: { connected: boolean; tick: numb
         className={`sync-pill ${tone}`}
         onClick={() => setOpen(!open)}
         aria-expanded={open}
-        title={connected ? 'Live updates connected' : 'Reconnecting to the hub…'}
+        title={connected ? t('Live updates connected') : t('Reconnecting to the hub…')}
       >
         <span className="sync-dot" />
         {text}
@@ -100,7 +114,7 @@ export function SyncStatus({ connected, tick }: { connected: boolean; tick: numb
             ))
           ) : (
             <div className="sync-row" style={{ color: 'var(--dim)' }}>
-              No instances configured yet.
+              {t('No instances configured yet.')}
             </div>
           )}
 
@@ -118,10 +132,10 @@ export function SyncStatus({ connected, tick }: { connected: boolean; tick: numb
           >
             <span>
               <span className={`live-dot${connected ? ' on' : ''}`} />
-              {connected ? 'live' : 'reconnecting…'}
+              {connected ? t('live') : t('reconnecting…')}
             </span>
             <Link to="/instances" onClick={() => setOpen(false)}>
-              Manage nodes
+              {t('Manage nodes')}
             </Link>
           </div>
         </div>

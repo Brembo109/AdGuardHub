@@ -7,12 +7,14 @@ import { Badge, Banner, Card, Empty, PageHeader } from '../components/ui'
 import { IconWarning } from '../components/icons'
 import { formatTime } from '../format'
 import { errorMessage, useResource } from '../hooks/useApi'
+import { useT } from '../i18n'
 
 /**
  * The instance-level settings AdGuardHub replicates. Everything the master exposes
  * is here except DHCP, which is per-host state and would be wrong to copy.
  */
 export default function Config() {
+  const t = useT()
   const sections = useResource<ConfigSection[]>(() => api.configSections())
   const [open, setOpen] = useState<string | null>(null)
   const [draft, setDraft] = useState<Record<string, unknown>>({})
@@ -38,15 +40,19 @@ export default function Config() {
 
   const confirmRisk = (section: ConfigSection, action: string) =>
     !section.risky ||
-    confirm(`${action}\n\n${section.notes}\n\nContinue?`)
+    confirm(`${action}\n\n${section.notes}\n\n` + t('Continue?'))
 
   const toggle = (section: ConfigSection) => {
-    if (!section.managed && !confirmRisk(section, `Start replicating ${section.title}?`)) return
+    if (
+      !section.managed &&
+      !confirmRisk(section, t('Start replicating {title}?', { title: t(section.title) }))
+    )
+      return
     return run(async () => {
       await api.updateSection(section.name, { managed: !section.managed })
       return section.managed
-        ? `${section.title} is no longer pushed; instances keep their own.`
-        : `${section.title} is now pushed to every instance.`
+        ? t('{title} is no longer pushed; instances keep their own.', { title: t(section.title) })
+        : t('{title} is now pushed to every instance.', { title: t(section.title) })
     })
   }
 
@@ -65,19 +71,24 @@ export default function Config() {
       try {
         payload = JSON.parse(raw)
       } catch {
-        setError('That is not valid JSON.')
+        setError(t('That is not valid JSON.'))
         return
       }
     }
     // Only ask when the change actually switches something on — a confirmation on
     // every save would be clicked through without being read.
     const turningOn = Boolean(payload.enabled) && !section.data.enabled
-    if (turningOn && !confirmRisk(section, `Switch ${section.title} on for every instance?`)) {
+    if (
+      turningOn &&
+      !confirmRisk(section, t('Switch {title} on for every instance?', { title: t(section.title) }))
+    ) {
       return
     }
     return run(async () => {
       await api.updateSection(section.name, { data: payload })
-      return `${section.title} saved${section.managed ? ' and pushed to every instance' : ''}.`
+      return section.managed
+        ? t('{title} saved and pushed to every instance.', { title: t(section.title) })
+        : t('{title} saved.', { title: t(section.title) })
     })
   }
 
@@ -103,8 +114,8 @@ export default function Config() {
   return (
     <>
       <PageHeader
-        title="Instance settings"
-        description="What the hub replicates to every node. A replicated area is owned by the hub — change it here, and reconciliation puts it back if a node drifts. DHCP is never touched: leases and interface bindings belong to the individual host."
+        title={t('Instance settings')}
+        description={t('What the hub replicates to every node. A replicated area is owned by the hub — change it here, and reconciliation puts it back if a node drifts. DHCP is never touched: leases and interface bindings belong to the individual host.')}
       />
 
       {error ? <Banner kind="error">{error}</Banner> : null}
@@ -113,12 +124,15 @@ export default function Config() {
 
       {elsewhere.length ? (
         <p style={{ margin: '0 0 16px', color: 'var(--dim)', fontSize: 13 }}>
-          {elsewhere.map((item) => item.title).join(', ')} {elsewhere.length > 1 ? 'have' : 'has'}{' '}
-          a page of {elsewhere.length > 1 ? 'their' : 'its' } own:{' '}
+          {elsewhere.length > 1
+            ? t('{titles} have pages of their own:', {
+                titles: elsewhere.map((item) => t(item.title)).join(', '),
+              })
+            : t('{title} has a page of its own:', { title: t(elsewhere[0].title) })}{' '}
           {elsewhere.map((item, index) => (
             <span key={item.name}>
               {index ? ', ' : ''}
-              <Link to={`/${item.name}`}>{item.title}</Link>
+              <Link to={`/${item.name}`}>{t(item.title)}</Link>
             </span>
           ))}
           .
@@ -127,8 +141,9 @@ export default function Config() {
 
       {list.length && managed === 0 ? (
         <Banner kind="warn">
-          No settings are being replicated yet. Import an instance as the master on the Instances
-          page — that adopts every area it exposes and switches them on.
+          {t(
+            'No settings are being replicated yet. Import an instance as the master on the Instances page — that adopts every area it exposes and switches them on.',
+          )}
         </Banner>
       ) : null}
 
@@ -152,10 +167,10 @@ export default function Config() {
                   color: 'var(--dim)',
                 }}
               >
-                Areas
+                {t('Areas')}
               </span>
               <span style={{ fontSize: 12, color: 'var(--dim)' }}>
-                {managed} of {list.length} replicated
+                {t('{managed} of {total} replicated', { managed, total: list.length })}
               </span>
             </div>
 
@@ -169,7 +184,7 @@ export default function Config() {
                   onClick={() => select(section)}
                 >
                   <span className={`dot${section.managed ? '' : ' off'}`} />
-                  {section.title}
+                  {t(section.title)}
                   {section.risky && !section.managed ? (
                     <span style={{ color: 'var(--danger-ink)', display: 'inline-flex' }}>
                       <IconWarning size={14} />
@@ -196,11 +211,11 @@ export default function Config() {
             >
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 <span className="dot" style={dotStyle('var(--accent)')} />
-                replicated
+                {t('replicated')}
               </span>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 <span className="dot" style={dotStyle('var(--danger)')} />
-                left to each node
+                {t('left to each node')}
               </span>
             </div>
           </Card>
@@ -221,18 +236,21 @@ export default function Config() {
               >
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
-                    <h2 style={{ fontSize: 16 }}>{current.title}</h2>
+                    <h2 style={{ fontSize: 16 }}>{t(current.title)}</h2>
                     <Badge tone={current.managed ? 'replicated' : 'pending'}>
-                      {current.managed ? 'replicated' : 'not replicated'}
+                      {current.managed ? t('replicated') : t('not replicated')}
                     </Badge>
                   </div>
                   <p className="hint" style={{ margin: '4px 0 0' }}>
-                    {current.description}
+                    {t(current.description)}
                   </p>
                   <p className="hint" style={{ margin: '3px 0 0' }}>
                     {current.has_data
-                      ? `${current.keys.length} setting(s) · updated ${formatTime(current.updated_at)}`
-                      : 'Nothing imported yet — import an instance as the master first.'}
+                      ? t('{count} setting(s) · updated {when}', {
+                          count: current.keys.length,
+                          when: formatTime(current.updated_at),
+                        })
+                      : t('Nothing imported yet — import an instance as the master first.')}
                   </p>
                 </div>
                 <div className="actions">
@@ -244,7 +262,7 @@ export default function Config() {
                         try {
                           setDraft(JSON.parse(raw))
                         } catch {
-                          setError('That is not valid JSON — fix it before switching back.')
+                          setError(t('That is not valid JSON — fix it before switching back.'))
                           return
                         }
                       } else {
@@ -254,34 +272,34 @@ export default function Config() {
                     }}
                     disabled={busy || !current.has_data}
                   >
-                    {showRaw ? 'Back to the form' : 'Edit raw document'}
+                    {showRaw ? t('Back to the form') : t('Edit raw document')}
                   </button>
                   <button
                     className={`small${current.managed ? '' : ' primary'}`}
                     onClick={() => toggle(current)}
                     disabled={busy || !current.has_data}
                   >
-                    {current.managed ? 'Stop replicating' : 'Replicate'}
+                    {current.managed ? t('Stop replicating') : t('Replicate')}
                   </button>
                 </div>
               </div>
 
               {current.skipped_reason ? (
-                <Banner kind="warn">Not pushed: {current.skipped_reason}</Banner>
+                <Banner kind="warn">{t('Not pushed: {reason}', { reason: current.skipped_reason })}</Banner>
               ) : null}
               {current.notes ? (
                 <Banner kind={current.risky ? 'error' : 'warn'}>
-                  {current.risky ? <strong>Before you enable this: </strong> : null}
-                  {current.notes}
+                  {current.risky ? <strong>{t('Before you enable this:')} </strong> : null}
+                  {t(current.notes)}
                 </Banner>
               ) : null}
 
               {!current.has_data ? (
-                <Empty>Nothing imported yet — import an instance as the master first.</Empty>
+                <Empty>{t('Nothing imported yet — import an instance as the master first.')}</Empty>
               ) : showRaw ? (
                 <>
                   <label htmlFor={`data-${current.name}`}>
-                    Section document — exactly what is pushed to each instance
+                    {t('Section document — exactly what is pushed to each instance')}
                   </label>
                   <textarea
                     id={`data-${current.name}`}
@@ -294,7 +312,7 @@ export default function Config() {
               ) : current.fields.length ? (
                 <SectionFields fields={current.fields} data={draft} onChange={setDraft} />
               ) : (
-                <p className="hint">This section has no editable fields of its own.</p>
+                <p className="hint">{t('This section has no editable fields of its own.')}</p>
               )}
 
               {current.has_data ? (
@@ -310,15 +328,19 @@ export default function Config() {
                   }}
                 >
                   <button className="primary" onClick={() => save(current)} disabled={busy}>
-                    {current.managed ? 'Save and push' : 'Save'}
+                    {current.managed ? t('Save and push') : t('Save')}
                   </button>
                   <button onClick={() => select(current)} disabled={busy}>
-                    Discard changes
+                    {t('Discard changes')}
                   </button>
                   <p style={{ margin: '0 0 0 6px', color: 'var(--dim)', fontSize: 12.5 }}>
                     {current.managed
-                      ? 'Saving writes a new hub version and pushes this area to every instance immediately.'
-                      : 'This area is stored in the hub but not pushed. Switch on Replicate to send it.'}
+                      ? t(
+                          'Saving writes a new hub version and pushes this area to every instance immediately.',
+                        )
+                      : t(
+                          'This area is stored in the hub but not pushed. Switch on Replicate to send it.',
+                        )}
                   </p>
                 </div>
               ) : null}
@@ -326,7 +348,7 @@ export default function Config() {
           ) : null}
         </div>
       ) : (
-        <Empty>{sections.loading ? 'Loading…' : 'No configuration sections.'}</Empty>
+        <Empty>{sections.loading ? t('Loading…') : t('No configuration sections.')}</Empty>
       )}
     </>
   )

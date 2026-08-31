@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api/client'
 import type { HubSettings } from '../api/types'
+import { useT } from '../i18n'
 import { Banner, Card, Empty } from './ui'
 import { errorMessage, useResource } from '../hooks/useApi'
 
@@ -46,6 +47,7 @@ const TIMERS: NumberFieldSpec[] = [
 
 /** Timers and limits, editable at runtime — no container restart, no compose edit. */
 export function HubSettingsForm() {
+  const t = useT()
   const settings = useResource<HubSettings>(() => api.hubSettings())
   const [draft, setDraft] = useState<HubSettings | null>(null)
   const [error, setError] = useState('')
@@ -55,8 +57,8 @@ export function HubSettingsForm() {
   const value = draft ?? settings.data
   if (!value) {
     return (
-      <Card title="Sync & timers">
-        <Empty>{settings.error || 'Loading…'}</Empty>
+      <Card title={t('Sync & timers')}>
+        <Empty>{settings.error || t('Loading…')}</Empty>
       </Card>
     )
   }
@@ -83,7 +85,7 @@ export function HubSettingsForm() {
         })
         setDraft(null)
         settings.setData(saved)
-        setMessage('Saved — the workers pick this up on their next cycle.')
+        setMessage(t('Saved — the workers pick this up on their next cycle.'))
       } catch (caught) {
         setError(errorMessage(caught))
       } finally {
@@ -94,8 +96,8 @@ export function HubSettingsForm() {
 
   return (
     <Card
-      title="Sync & timers"
-      hint="Applied on the next worker cycle. Out-of-range values are clamped rather than rejected."
+      title={t('Sync & timers')}
+      hint={t('Applied on the next worker cycle. Out-of-range values are clamped rather than rejected.')}
     >
       {error ? <Banner kind="error">{error}</Banner> : null}
       {message ? <Banner kind="ok">{message}</Banner> : null}
@@ -107,12 +109,13 @@ export function HubSettingsForm() {
             checked={value.reconcile_enabled}
             onChange={(event) => update({ reconcile_enabled: event.target.checked })}
           />
-          Run reconciliation on a timer
+          {t('Run reconciliation on a timer')}
         </label>
         {!value.reconcile_enabled ? (
           <Banner kind="warn">
-            Drift will not be detected or corrected automatically while this is off. Changes you
-            make here are still pushed immediately; only the safety net is paused.
+            {t(
+              'Drift will not be detected or corrected automatically while this is off. Changes you make here are still pushed immediately; only the safety net is paused.',
+            )}
           </Banner>
         ) : null}
 
@@ -122,7 +125,7 @@ export function HubSettingsForm() {
             checked={value.querylog_enabled}
             onChange={(event) => update({ querylog_enabled: event.target.checked })}
           />
-          Poll the instances for query log entries
+          {t('Poll the instances for query log entries')}
         </label>
 
         <label className="checkbox">
@@ -131,11 +134,12 @@ export function HubSettingsForm() {
             checked={value.external_api_enabled}
             onChange={(event) => update({ external_api_enabled: event.target.checked })}
           />
-          Serve the AdGuard-compatible API at <code>/control</code>
+          {t('Serve the AdGuard-compatible API at')} <code>/control</code>
         </label>
         <p className="hint" style={{ margin: '0 0 8px 26px' }}>
-          Lets apps and integrations built for AdGuard Home point at the hub instead of at one
-          node — they sign in with this admin account, and what they change is pushed everywhere.
+          {t(
+            'Lets apps and integrations built for AdGuard Home point at the hub instead of at one node — they sign in with this admin account, and what they change is pushed everywhere.',
+          )}
         </p>
 
         <div className="row" style={{ marginTop: 10 }}>
@@ -144,7 +148,7 @@ export function HubSettingsForm() {
             return (
               <div className="field" key={field.key} style={{ flex: '1 1 220px' }}>
                 <label htmlFor={field.key}>
-                  {field.label} ({field.unit})
+                  {t(field.label)} ({t(field.unit)})
                 </label>
                 <input
                   id={field.key}
@@ -157,7 +161,7 @@ export function HubSettingsForm() {
                   }
                 />
                 <div className="hint" style={{ margin: '4px 0 0' }}>
-                  {field.hint} Allowed {min}–{max}.
+                  {t(field.hint)} {t('Allowed {min}–{max}.', { min, max })}
                 </div>
               </div>
             )
@@ -166,11 +170,11 @@ export function HubSettingsForm() {
 
         <div className="actions" style={{ marginTop: 12 }}>
           <button className="primary" type="submit" disabled={busy}>
-            Save settings
+            {t('Save settings')}
           </button>
           {draft ? (
             <button type="button" onClick={() => setDraft(null)} disabled={busy}>
-              Discard changes
+              {t('Discard changes')}
             </button>
           ) : null}
         </div>
