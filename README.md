@@ -14,6 +14,36 @@
   <img src="https://img.shields.io/badge/stack-FastAPI%20%2B%20React-4C9A6A" alt="stack" />
 </p>
 
+<p align="center">
+  <img src="./docs/screenshots/dashboard-light.png" width="900" alt="The AdGuardHub dashboard: traffic summed across every node, top domains and clients, and the hub's own sync state" />
+</p>
+
+<p align="center">
+  <sub>Screenshots are from a local demo against two test instances, so the numbers are made up — the interface is not.</sub>
+</p>
+
+<details>
+<summary>More screenshots — dark theme, query log, instance settings</summary>
+
+<br />
+
+Same dashboard, dark theme. Both ship; the default follows the operating system.
+
+<img src="./docs/screenshots/dashboard-dark.png" width="900" alt="The dashboard in the dark theme" />
+
+The aggregated query log. Every node's queries in one stream, newest first; a row opens onto
+the rule that matched, and allowing or blocking from here writes one rule that reaches every
+node at once.
+
+<img src="./docs/screenshots/querylog.png" width="900" alt="The query log with one row expanded, showing the matched rule and the allow action" />
+
+Instance settings. The left column answers the page's real question — what the hub owns, and
+what is left to each node.
+
+<img src="./docs/screenshots/instance-settings.png" width="900" alt="Instance settings, with the encryption section selected and its certificate warning shown" />
+
+</details>
+
 ---
 
 ## The problem
