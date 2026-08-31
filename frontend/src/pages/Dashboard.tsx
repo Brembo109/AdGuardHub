@@ -40,13 +40,26 @@ export default function Dashboard() {
   const reconcileNow = () =>
     run(async () => {
       const reports: ReconcileReport[] = await api.reconcile(true)
-      const corrected = reports.filter((report) => report.corrected)
+      // Report what was *found*, not just what was corrected: a difference that could
+      // not be pushed away still belongs in the message, or the drift log below it
+      // contradicts what this line says.
+      const withDrift = reports.filter((report) => report.differences.length > 0)
+      const corrected = withDrift.filter((report) => report.corrected)
+      const failed = withDrift.filter((report) => report.checked && !report.corrected)
       const unreachable = reports.filter((report) => !report.checked)
-      if (!corrected.length && !unreachable.length) return 'No drift found — every instance matches.'
+
+      if (!withDrift.length && !unreachable.length) {
+        return 'No drift found — every instance matches.'
+      }
+
+      const names = (list: ReconcileReport[]) => list.map((item) => item.instance_name).join(', ')
       const parts: string[] = []
-      if (corrected.length) parts.push(`corrected ${corrected.map((r) => r.instance_name).join(', ')}`)
-      if (unreachable.length)
-        parts.push(`could not reach ${unreachable.map((r) => r.instance_name).join(', ')}`)
+      if (corrected.length) parts.push(`corrected ${names(corrected)}`)
+      if (failed.length) {
+        const detail = failed[0].error ? ` (${failed[0].error})` : ''
+        parts.push(`found drift on ${names(failed)} that could not be applied${detail}`)
+      }
+      if (unreachable.length) parts.push(`could not reach ${names(unreachable)}`)
       return `Reconciliation: ${parts.join('; ')}.`
     })
 

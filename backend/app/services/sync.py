@@ -15,7 +15,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..adapters import AdapterError, DnsAdapter, RemoteFilterList, build_adapter
-from ..config import get_settings
 from ..db import session_scope
 from ..models import (
     FilterList,
@@ -28,6 +27,7 @@ from ..models import (
     utcnow,
 )
 from ..runtime import get_crypto
+from . import hubsettings
 from .config import managed_sections
 from .events import bus
 from .notify import EVENT_INSTANCE_UNREACHABLE, EVENT_PUSH_FAILED, notify
@@ -299,10 +299,9 @@ async def check_instance(session: AsyncSession, instance: Instance) -> str:
 
 
 async def retry_worker(stop: asyncio.Event) -> None:  # pragma: no cover - background loop
-    interval = get_settings().retry_interval
     while not stop.is_set():
         try:
-            await asyncio.wait_for(stop.wait(), timeout=interval)
+            await asyncio.wait_for(stop.wait(), timeout=hubsettings.current().retry_interval)
             return
         except TimeoutError:
             pass

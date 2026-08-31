@@ -192,3 +192,15 @@ export interface VersionRestoreResult {
   sections: number
   pushed: boolean
 }
+
+export interface HubSettings {
+  reconcile_enabled: boolean
+  reconcile_interval: number
+  retry_interval: number
+  querylog_enabled: boolean
+  querylog_poll_interval: number
+  querylog_buffer_size: number
+  http_timeout: number
+  /** Accepted [min, max] per field, so the form can bound its inputs. */
+  limits: Record<string, [number, number]>
+}

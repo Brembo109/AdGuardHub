@@ -141,6 +141,24 @@ class ConfigSection(Base):
     )
 
 
+class HubSettings(Base):
+    """Singleton (id=1) of the operational settings editable from the UI."""
+
+    __tablename__ = "hub_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    reconcile_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    reconcile_interval: Mapped[int] = mapped_column(Integer, default=300)
+    retry_interval: Mapped[int] = mapped_column(Integer, default=30)
+    querylog_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    querylog_poll_interval: Mapped[int] = mapped_column(Integer, default=5)
+    querylog_buffer_size: Mapped[int] = mapped_column(Integer, default=2000)
+    http_timeout: Mapped[int] = mapped_column(Integer, default=10)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
 class ConfigVersion(Base):
     """A point-in-time snapshot of everything AdGuardHub manages.
 

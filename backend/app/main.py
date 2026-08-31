@@ -21,6 +21,7 @@ from .deps import admin_exists
 from .models import User
 from .runtime import using_ephemeral_secret
 from .security import hash_password
+from .services import hubsettings
 from .services.querylog import querylog_worker
 from .services.reconcile import reconcile_worker
 from .services.sync import retry_worker
@@ -79,6 +80,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.error("Startup aborted: %s", exc)
         raise
     await bootstrap_admin()
+    # Seed the runtime settings from the environment, then let the UI own them.
+    async with session_scope() as session:
+        await hubsettings.load(session)
 
     stop = asyncio.Event()
     workers = [

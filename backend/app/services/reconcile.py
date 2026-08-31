@@ -17,10 +17,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..adapters import AdapterError, RemoteFilterList, build_adapter
-from ..config import get_settings
 from ..db import session_scope
 from ..models import DriftEvent, Instance, InstanceStatus, PayloadKind, utcnow
 from ..runtime import get_crypto
+from . import hubsettings
 from .events import bus
 from .notify import EVENT_INSTANCE_UNREACHABLE, EVENT_RECONCILE_FIX, notify
 from .sync import desired_filter_lists, desired_rules, desired_sections, push_kind
@@ -149,6 +149,17 @@ def diff_settings(
     return Difference(PayloadKind.settings.value, "; ".join(parts), payload)
 
 
+def is_correctable(difference: Difference) -> bool:
+    """Whether pushing can actually resolve this difference.
+
+    A settings difference that is only "the instance does not implement this area"
+    cannot be pushed away, and must not be treated as drift.
+    """
+    if difference.payload_kind != PayloadKind.settings.value:
+        return True
+    return bool(set(difference.details) - {"_unsupported"})
+
+
 async def reconcile_instance(
     session: AsyncSession, instance: Instance, *, apply_fixes: bool = True
 ) -> InstanceReport:
@@ -187,15 +198,13 @@ async def reconcile_instance(
     ]
     report.differences = [item for item in candidates if item is not None]
 
-    correctable = [
-        difference
-        for difference in report.differences
-        if set(difference.details) - {"_unsupported"} or difference.payload_kind != "settings"
-    ]
+    correctable = [item for item in report.differences if is_correctable(item)]
+    fixed: set[str] = set()
     if correctable and apply_fixes:
         try:
             for difference in correctable:
                 await push_kind(session, adapter, PayloadKind(difference.payload_kind))
+                fixed.add(difference.payload_kind)
             report.corrected = True
             instance.last_synced_at = utcnow()
         except (AdapterError, ValueError) as exc:
@@ -204,6 +213,10 @@ async def reconcile_instance(
     await adapter.aclose()
 
     for difference in report.differences:
+        if not is_correctable(difference):
+            # A section this AdGuard build does not implement is a standing capability
+            # gap, not drift. Logging it would append the same entry on every run.
+            continue
         session.add(
             DriftEvent(
                 instance_id=instance.id,
@@ -211,14 +224,15 @@ async def reconcile_instance(
                 payload_kind=difference.payload_kind,
                 summary=difference.summary,
                 details=json.dumps(difference.details, default=str),
-                corrected=report.corrected,
+                # Per difference: a later push can fail after an earlier one succeeded.
+                corrected=difference.payload_kind in fixed,
             )
         )
     await session.commit()
 
-    if report.differences:
+    if correctable:
         await bus.publish("drift", {"instance": instance.name, "report": asdict(report)})
-        headline = "; ".join(difference.summary for difference in report.differences)
+        headline = "; ".join(difference.summary for difference in correctable)
         await notify(
             EVENT_RECONCILE_FIX,
             f"Drift {'corrected' if report.corrected else 'detected'} on {instance.name}",
@@ -238,13 +252,15 @@ async def reconcile_all(session: AsyncSession, *, apply_fixes: bool = True) -> l
 
 
 async def reconcile_worker(stop: asyncio.Event) -> None:  # pragma: no cover - background loop
-    interval = get_settings().reconcile_interval
     while not stop.is_set():
+        settings = hubsettings.current()
         try:
-            await asyncio.wait_for(stop.wait(), timeout=interval)
+            await asyncio.wait_for(stop.wait(), timeout=settings.reconcile_interval)
             return
         except TimeoutError:
             pass
+        if not hubsettings.current().reconcile_enabled:
+            continue
         try:
             async with session_scope() as session:
                 await reconcile_all(session)

@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
-from ..config import get_settings
 from ..models import Instance
 from ..security import Crypto
 from .adguard import AdGuardAdapter
 from .base import AdapterError, DnsAdapter, QueryLogEntry, RemoteFilterList, RemoteState
 
 ADAPTERS: dict[str, type[DnsAdapter]] = {"adguard": AdGuardAdapter}
+
+
+def _http_timeout() -> float:
+    """Imported lazily: services import adapters, so a top-level import would cycle."""
+    from ..services.hubsettings import current
+
+    return float(current().http_timeout)
 
 
 def available_adapters() -> list[str]:
@@ -26,7 +32,7 @@ def build_adapter(instance: Instance, crypto: Crypto) -> DnsAdapter:
         instance.username,
         password,
         verify_tls=instance.verify_tls,
-        timeout=get_settings().http_timeout,
+        timeout=_http_timeout(),
     )
 
 

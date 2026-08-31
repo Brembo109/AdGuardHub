@@ -274,6 +274,28 @@ class VersionRestoreResult(BaseModel):
     pushed: bool
 
 
+class HubSettingsOut(BaseModel):
+    reconcile_enabled: bool
+    reconcile_interval: int
+    retry_interval: int
+    querylog_enabled: bool
+    querylog_poll_interval: int
+    querylog_buffer_size: int
+    http_timeout: int
+    # Accepted ranges, so the form can bound its inputs rather than guess.
+    limits: dict[str, list[int]]
+
+
+class HubSettingsUpdate(BaseModel):
+    reconcile_enabled: bool | None = None
+    reconcile_interval: int | None = None
+    retry_interval: int | None = None
+    querylog_enabled: bool | None = None
+    querylog_poll_interval: int | None = None
+    querylog_buffer_size: int | None = None
+    http_timeout: int | None = None
+
+
 # -- notifiers -------------------------------------------------------------
 
 

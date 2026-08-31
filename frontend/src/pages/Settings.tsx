@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { api } from '../api/client'
 import type { Notifier, NotifierType } from '../api/types'
 import { useAuth } from '../auth'
+import { HubSettingsForm } from '../components/HubSettingsForm'
 import { Banner, Card, Empty, PageHeader } from '../components/ui'
 import { errorMessage, useResource } from '../hooks/useApi'
 
@@ -43,12 +44,13 @@ export default function Settings() {
     <>
       <PageHeader
         title="Settings"
-        description="Notification targets and your own credentials. The settings replicated to your instances live under Instance settings."
+        description="How the hub itself behaves, notification targets, and your own credentials. The settings replicated to your instances live under Instance settings."
       />
 
       {error ? <Banner kind="error">{error}</Banner> : null}
       {message ? <Banner kind="ok">{message}</Banner> : null}
 
+      <HubSettingsForm />
       <NotifierSection
         notifiers={notifiers.data ?? []}
         events={meta.data?.events ?? []}
