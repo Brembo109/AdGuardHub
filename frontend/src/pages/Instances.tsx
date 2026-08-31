@@ -94,14 +94,19 @@ export default function Instances() {
     if (
       !confirm(
         `Import ${instance.name}'s configuration as the hub's state?\n\n` +
-          'This replaces every rule and subscription in AdGuardHub, then pushes the result to all ' +
-          'other instances — overwriting whatever they currently have.',
+          'This replaces every rule, subscription and instance setting in AdGuardHub, then ' +
+          'pushes the result to all other instances — overwriting whatever they currently have.\n\n' +
+          'Encryption is the exception: it is adopted but left switched off, because enabling it ' +
+          'on a node without a valid certificate would make that node unreachable.',
       )
     )
       return
     void run(async () => {
       const result = await api.importInstance(instance.id, { replace: true })
-      return `Imported ${result.rules_imported} rule(s) and ${result.filter_lists_imported} subscription(s) from ${result.instance}; pushing to the other instances now.`
+      const review = result.sections_needing_review.length
+        ? ` ${result.sections_needing_review.join(', ')} was adopted but left switched off — enabling it can make a node unreachable, so review it under Instance settings first.`
+        : ''
+      return `Imported ${result.rules_imported} rule(s), ${result.filter_lists_imported} subscription(s) and ${result.sections_imported.length} settings area(s) from ${result.instance}; pushing to the other instances now.${review}`
     })
   }
 

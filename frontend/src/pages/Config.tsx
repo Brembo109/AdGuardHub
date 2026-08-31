@@ -34,13 +34,19 @@ export default function Config() {
     }
   }
 
-  const toggle = (section: ConfigSection) =>
-    run(async () => {
+  const confirmRisk = (section: ConfigSection, action: string) =>
+    !section.risky ||
+    confirm(`${action}\n\n${section.notes}\n\nContinue?`)
+
+  const toggle = (section: ConfigSection) => {
+    if (!section.managed && !confirmRisk(section, `Start replicating ${section.title}?`)) return
+    return run(async () => {
       await api.updateSection(section.name, { managed: !section.managed })
       return section.managed
         ? `${section.title} is no longer pushed; instances keep their own.`
         : `${section.title} is now pushed to every instance.`
     })
+  }
 
   const startEdit = (section: ConfigSection) => {
     setOpen(open === section.name ? null : section.name)
@@ -50,20 +56,28 @@ export default function Config() {
     setError('')
   }
 
-  const save = (section: ConfigSection) =>
-    run(async () => {
-      let payload = draft
-      if (showRaw) {
-        try {
-          payload = JSON.parse(raw)
-        } catch {
-          throw new Error('That is not valid JSON.')
-        }
+  const save = (section: ConfigSection) => {
+    let payload = draft
+    if (showRaw) {
+      try {
+        payload = JSON.parse(raw)
+      } catch {
+        setError('That is not valid JSON.')
+        return
       }
+    }
+    // Only ask when the change actually switches something on — a confirmation on
+    // every save would be clicked through without being read.
+    const turningOn = Boolean(payload.enabled) && !section.data.enabled
+    if (turningOn && !confirmRisk(section, `Switch ${section.title} on for every instance?`)) {
+      return
+    }
+    return run(async () => {
       await api.updateSection(section.name, { data: payload })
       setOpen(null)
       return `${section.title} saved${section.managed ? ' and pushed to every instance' : ''}.`
     })
+  }
 
   const list = sections.data ?? []
   const managed = list.filter((item) => item.managed).length
@@ -114,9 +128,12 @@ export default function Config() {
                     : 'Nothing imported yet — import an instance as the master first.'}
                 </p>
                 {section.skipped_reason ? (
-                  <Banner kind="warn">
-                    Not pushed: {section.skipped_reason}
-                    {section.notes ? <div style={{ marginTop: 6 }}>{section.notes}</div> : null}
+                  <Banner kind="warn">Not pushed: {section.skipped_reason}</Banner>
+                ) : null}
+                {section.notes ? (
+                  <Banner kind={section.risky ? 'error' : 'warn'}>
+                    {section.risky ? <strong>Before you enable this: </strong> : null}
+                    {section.notes}
                   </Banner>
                 ) : null}
               </div>

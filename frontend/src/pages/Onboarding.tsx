@@ -53,15 +53,20 @@ export default function Onboarding() {
     if (
       !confirm(
         `Use ${instance.name} as the master?\n\n` +
-          "Its rules and subscriptions become AdGuardHub's state, and every other instance is " +
-          'overwritten with them on the next push.',
+          "Its rules, subscriptions and instance settings become AdGuardHub's state, and every " +
+          'other instance is overwritten with them on the next push.\n\n' +
+          'Encryption is adopted but left switched off: enabling it on a node without a valid ' +
+          'certificate would make that node unreachable.',
       )
     )
       return
     void run(async () => {
       const result = await api.importInstance(instance.id, { replace: true })
       setStep(3)
-      return `Imported ${result.rules_imported} rule(s) and ${result.filter_lists_imported} subscription(s) from ${result.instance}.`
+      const review = result.sections_needing_review.length
+        ? ` ${result.sections_needing_review.join(', ')} was adopted but left switched off — review it under Instance settings before enabling it.`
+        : ''
+      return `Imported ${result.rules_imported} rule(s), ${result.filter_lists_imported} subscription(s) and ${result.sections_imported.length} settings area(s) from ${result.instance}.${review}`
     })
   }
 

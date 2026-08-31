@@ -129,6 +129,8 @@ export interface ImportResult {
   filter_lists_imported: number
   sections_imported: string[]
   sections_unsupported: string[]
+  /** Adopted but left switched off — enabling them can lock a node out. */
+  sections_needing_review: string[]
   replaced: boolean
 }
 
@@ -157,6 +159,8 @@ export interface ConfigSection {
   title: string
   description: string
   notes: string
+  /** Enabling this can lock the operator out of a node; the UI warns and confirms. */
+  risky: boolean
   fields: ConfigField[]
   managed: boolean
   has_data: boolean

@@ -53,7 +53,11 @@ class SectionSpec:
     # sending them alone. Required where the endpoint replaces the whole object,
     # so the node's own settings survive a push.
     merge_on_push: bool = False
+    # Shown on the section at all times, not only when something went wrong.
     notes: str = ""
+    # Switching this on can cut the operator off from the node. The UI shows the
+    # notes as a warning and asks for confirmation before enabling.
+    risky: bool = False
     fields: tuple[FieldSpec, ...] = ()
 
 
@@ -177,9 +181,15 @@ SPECS: tuple[SectionSpec, ...] = (
         # which merges. Sending "enabled" alone would wipe the target's certificate.
         merge_on_push=True,
         notes=(
-            "A node with no certificate of its own will reject being switched on; that "
-            "shows up as an error on this section."
+            "Install and verify a working certificate on every node before switching this "
+            "on. AdGuard Home does not check that a node can actually serve HTTPS: if one "
+            "has no valid certificate, enabling encryption can make it unreachable — "
+            "including its own web interface, because it redirects to HTTPS. Recovering "
+            "then needs shell access to that host to turn TLS off in AdGuardHome.yaml and "
+            "restart it. Each node keeps its own certificate; only the on/off state is "
+            "replicated."
         ),
+        risky=True,
         fields=(FieldSpec("enabled", "Encryption enabled", "bool"),),
     ),
     SectionSpec(
