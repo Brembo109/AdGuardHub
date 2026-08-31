@@ -27,6 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         username: null,
         setup_required: false,
         ephemeral_secret: false,
+        onboarding_done: false,
       })
     } finally {
       setLoading(false)

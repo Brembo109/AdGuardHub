@@ -35,18 +35,27 @@ export function SectionFields({
           }}
         >
           {booleans.map((field) => (
-            <Switch
-              key={field.key}
-              checked={Boolean(data[field.key])}
-              onChange={(value) => set(field.key, value)}
-              label={field.label}
-              title={field.help}
-            />
+            <div key={field.key}>
+              <Switch
+                checked={Boolean(data[field.key])}
+                onChange={(value) => set(field.key, value)}
+                label={field.label}
+                title={field.help}
+              />
+              {/* Help belongs on the page, not only in a tooltip nobody hovers. */}
+              {field.help ? (
+                <div className="hint" style={{ margin: '4px 0 0 45px' }}>
+                  {field.help}
+                </div>
+              ) : null}
+            </div>
           ))}
         </div>
       ) : null}
 
-      <div className="row" style={{ marginTop: booleans.length ? 12 : 0 }}>
+      {/* A grid, not a flex row: flex-end alignment left labels and help text
+          sitting at different heights across a group, which reads as sloppy. */}
+      <div className="fields-grid" style={{ marginTop: booleans.length ? 16 : 0 }}>
         {others.map((field) => (
           <Field key={field.key} field={field} value={data[field.key]} onChange={set} />
         ))}
@@ -79,7 +88,7 @@ function Field({
   if (field.type === 'lines') {
     const lines = Array.isArray(value) ? (value as unknown[]).map(String).join('\n') : ''
     return (
-      <div className="field" style={{ flex: '1 1 260px' }}>
+      <div className="field wide">
         {label}
         <textarea
           id={`f-${field.key}`}
@@ -105,7 +114,7 @@ function Field({
     // Options are strings; keep the stored type (AdGuard uses numbers for some).
     const current = value === undefined || value === null ? '' : String(value)
     return (
-      <div className="field" style={{ flex: '0 1 240px' }}>
+      <div className="field">
         {label}
         <select
           id={`f-${field.key}`}
@@ -129,7 +138,7 @@ function Field({
 
   if (field.type === 'int') {
     return (
-      <div className="field" style={{ flex: '0 1 200px' }}>
+      <div className="field">
         {label}
         <input
           id={`f-${field.key}`}
@@ -151,7 +160,7 @@ function Field({
   }
 
   return (
-    <div className="field" style={{ flex: '1 1 240px' }}>
+    <div className="field">
       {label}
       <input
         id={`f-${field.key}`}
@@ -189,7 +198,7 @@ function PairsField({
   const write = (next: Rewrite[]) => onChange(field.key, next)
 
   return (
-    <div className="field" style={{ flex: '1 1 100%' }}>
+    <div className="field full">
       <label>{field.label}</label>
       {items.map((item, index) => (
         <div className="row" key={index} style={{ marginBottom: 6 }}>
@@ -249,7 +258,7 @@ function ClientsField({
   const write = (next: ClientEntry[]) => onChange(field.key, next)
 
   return (
-    <div className="field" style={{ flex: '1 1 100%' }}>
+    <div className="field full">
       <label>{field.label}</label>
       <p className="hint" style={{ marginBottom: 8 }}>
         Name and identifiers are edited here; any other per-client setting AdGuard stores is kept

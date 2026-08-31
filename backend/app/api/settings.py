@@ -42,6 +42,12 @@ def _validate_events(events: list[str]) -> str:
     return ",".join(events)
 
 
+@router.post("/onboarding-complete", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+async def onboarding_complete(_: CurrentUser, session: SessionDep) -> None:
+    """The first-run walkthrough is done, or the operator chose to skip it."""
+    await hubsettings.finish_onboarding(session)
+
+
 @router.get("/notifiers/meta")
 async def notifier_meta(_: CurrentUser) -> dict[str, list[str]]:
     return {"types": list(NOTIFIER_TYPES), "events": list(KNOWN_EVENTS)}

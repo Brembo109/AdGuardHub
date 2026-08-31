@@ -5,7 +5,6 @@ import type { Instance } from '../api/types'
 import { useAuth } from '../auth'
 import { InstanceForm } from '../components/InstanceForm'
 import { BLANK_DRAFT, type InstanceDraft } from '../components/instanceDraft'
-import { markOnboardingDone } from '../onboarding'
 import { Badge, Banner, Card, PageHeader } from '../components/ui'
 import { errorMessage, useResource } from '../hooks/useApi'
 
@@ -18,7 +17,7 @@ type Step = 1 | 2 | 3
  */
 export default function Onboarding() {
   const navigate = useNavigate()
-  const { state } = useAuth()
+  const { state, refresh } = useAuth()
   const instances = useResource<Instance[]>(() => api.instances())
   const [step, setStep] = useState<Step>(1)
   const [draft, setDraft] = useState<InstanceDraft>({ ...BLANK_DRAFT })
@@ -70,10 +69,19 @@ export default function Onboarding() {
     })
   }
 
-  const finish = () => {
-    markOnboardingDone()
-    navigate('/')
-  }
+  const finish = () =>
+    void (async () => {
+      try {
+        await api.finishOnboarding()
+      } catch (caught) {
+        setError(errorMessage(caught))
+        return
+      }
+      // The shell decides where "/" goes from the auth state, so re-read it
+      // before navigating or the redirect sends us straight back here.
+      await refresh()
+      navigate('/')
+    })()
 
   return (
     <>

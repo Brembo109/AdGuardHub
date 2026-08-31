@@ -254,6 +254,35 @@ label {
   margin-bottom: 12px;
 }
 
+/* Settings fields inside a group. A grid keeps every label and help line on the
+   same baseline; a flex row with flex-end alignment did not. */
+.fields-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 4px 22px;
+  align-items: start;
+}
+
+.fields-grid .field {
+  margin-bottom: 12px;
+  min-width: 0;
+}
+
+/* Textareas of hostnames need the room; pair lists and client tables need it all. */
+.fields-grid .field.wide {
+  grid-column: span 2;
+}
+
+.fields-grid .field.full {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 700px) {
+  .fields-grid .field.wide {
+    grid-column: 1 / -1;
+  }
+}
+
 .checkbox {
   display: flex;
   align-items: center;

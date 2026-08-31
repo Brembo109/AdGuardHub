@@ -173,6 +173,7 @@ export const api = {
     post<{ ok: string; error: string }>(`/api/settings/notifiers/${id}/test`),
 
   hubSettings: () => get<HubSettings>('/api/settings/hub'),
+  finishOnboarding: () => post<void>('/api/settings/onboarding-complete'),
   saveHubSettings: (payload: Partial<Omit<HubSettings, 'limits'>>) =>
     put<HubSettings>('/api/settings/hub', payload),
 

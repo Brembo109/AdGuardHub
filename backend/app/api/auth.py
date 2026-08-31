@@ -11,6 +11,7 @@ from ..models import User
 from ..runtime import get_sessions, using_ephemeral_secret
 from ..schemas import AuthState, LoginRequest, PasswordChange, SetupRequest
 from ..security import hash_password, verify_password
+from ..services import hubsettings
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -38,6 +39,7 @@ async def auth_state(request: Request, session: SessionDep) -> AuthState:
         username=username,
         setup_required=setup_required,
         ephemeral_secret=using_ephemeral_secret(),
+        onboarding_done=await hubsettings.onboarding_done(session),
     )
 
 

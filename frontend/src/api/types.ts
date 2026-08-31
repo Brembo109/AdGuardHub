@@ -8,6 +8,8 @@ export interface AuthState {
   username: string | null
   setup_required: boolean
   ephemeral_secret: boolean
+  /** False until the first-run walkthrough is finished or skipped. */
+  onboarding_done: boolean
 }
 
 export interface Instance {
@@ -177,6 +179,8 @@ export interface ConfigField {
   help: string
   unit: string
   options: [string, string][]
+  /** Heading this field belongs under, defined in sections.py. */
+  group: string
 }
 
 export interface ConfigSection {
@@ -186,6 +190,8 @@ export interface ConfigSection {
   notes: string
   /** Enabling this can lock the operator out of a node; the UI warns and confirms. */
   risky: boolean
+  /** This area has a page of its own; the combined list links there instead. */
+  own_page: boolean
   fields: ConfigField[]
   managed: boolean
   has_data: boolean

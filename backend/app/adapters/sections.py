@@ -33,6 +33,9 @@ class FieldSpec:
     unit: str = ""
     # "select" only: (value, label) pairs.
     options: tuple[tuple[str, str], ...] = ()
+    # Heading this field belongs under. Grouping lives here rather than in the
+    # page, so a field added below cannot quietly land outside every group.
+    group: str = ""
 
 
 @dataclass(frozen=True)
@@ -55,6 +58,9 @@ class SectionSpec:
     merge_on_push: bool = False
     # Shown on the section at all times, not only when something went wrong.
     notes: str = ""
+    # This area is big enough to deserve its own page, so the combined settings
+    # list leaves it out and links there instead.
+    own_page: bool = False
     # Switching this on can cut the operator off from the node. The UI shows the
     # notes as a warning and asks for confirmation before enabling.
     risky: bool = False
@@ -72,6 +78,7 @@ SPECS: tuple[SectionSpec, ...] = (
         strategy="document",
         get_path="/control/dns_info",
         set_path="/control/dns_config",
+        own_page=True,
         keys=(
             "upstream_dns",
             "upstream_dns_file",
@@ -103,45 +110,81 @@ SPECS: tuple[SectionSpec, ...] = (
             "ratelimit_whitelist",
         ),
         fields=(
-            FieldSpec("protection_enabled", "Filtering enabled", "bool",
-                      "Turning this off stops all filtering on the instance."),
             FieldSpec("upstream_dns", "Upstream DNS servers", "lines",
-                      "One per line, in AdGuard syntax."),
-            FieldSpec("upstream_mode", "Upstream mode", "select", options=(
-                ("", "Load balance"),
-                ("parallel", "Parallel requests"),
-                ("fastest_addr", "Fastest IP address"),
-            )),
+                      "One per line, in AdGuard syntax. A line like "
+                      "[/example.lan/]192.168.1.1 routes just that domain.",
+                      group="Upstream DNS servers"),
+            FieldSpec("upstream_mode", "Upstream mode", "select",
+                      "How the upstreams above are used for each query.",
+                      options=(
+                          ("", "Load balance"),
+                          ("parallel", "Parallel requests"),
+                          ("fastest_addr", "Fastest IP address"),
+                      ), group="Upstream DNS servers"),
             FieldSpec("bootstrap_dns", "Bootstrap DNS servers", "lines",
-                      "Used to resolve the hostnames of encrypted upstreams."),
+                      "Used to resolve the hostnames of encrypted upstreams. "
+                      "Plain IP addresses only — these cannot themselves need DNS.",
+                      group="Upstream DNS servers"),
             FieldSpec("fallback_dns", "Fallback DNS servers", "lines",
-                      "Used when the upstreams fail."),
-            FieldSpec("dnssec_enabled", "Enable DNSSEC", "bool"),
-            FieldSpec("disable_ipv6", "Disable IPv6 answers", "bool"),
-            FieldSpec("blocking_mode", "Blocking mode", "select", options=(
-                ("default", "Default"),
-                ("refused", "REFUSED"),
-                ("nxdomain", "NXDOMAIN"),
-                ("null_ip", "Null IP"),
-                ("custom_ip", "Custom IP"),
-            )),
+                      "Used when the upstreams above fail or time out.",
+                      group="Upstream DNS servers"),
+
+            FieldSpec("use_private_ptr_resolvers", "Use private reverse DNS resolvers", "bool",
+                      "Resolve PTR queries for local addresses with the servers below.",
+                      group="Private reverse DNS"),
+            FieldSpec("local_ptr_upstreams", "Private reverse DNS servers", "lines",
+                      "Left empty, AdGuard uses the addresses your OS is configured with.",
+                      group="Private reverse DNS"),
+            FieldSpec("private_upstream", "Private DNS upstreams", "lines",
+                      group="Private reverse DNS"),
+            FieldSpec("resolve_clients", "Resolve client names via rDNS", "bool",
+                      "Turns client IPs into hostnames in the query log.",
+                      group="Private reverse DNS"),
+
+            FieldSpec("protection_enabled", "Filtering enabled", "bool",
+                      "Turning this off stops all filtering on every instance.",
+                      group="DNS server configuration"),
+            FieldSpec("blocking_mode", "Blocking mode", "select",
+                      "What a blocked query is answered with.",
+                      options=(
+                          ("default", "Default"),
+                          ("refused", "REFUSED"),
+                          ("nxdomain", "NXDOMAIN"),
+                          ("null_ip", "Null IP"),
+                          ("custom_ip", "Custom IP"),
+                      ), group="DNS server configuration"),
             FieldSpec("blocking_ipv4", "Blocking IPv4", "text",
-                      "Only used with the custom IP blocking mode."),
+                      "Only used with the custom IP blocking mode.",
+                      group="DNS server configuration"),
             FieldSpec("blocking_ipv6", "Blocking IPv6", "text",
-                      "Only used with the custom IP blocking mode."),
-            FieldSpec("blocked_response_ttl", "Blocked response TTL", "int", unit="seconds"),
+                      "Only used with the custom IP blocking mode.",
+                      group="DNS server configuration"),
+            FieldSpec("blocked_response_ttl", "Blocked response TTL", "int",
+                      "How long clients may cache a blocked answer.",
+                      unit="seconds", group="DNS server configuration"),
             FieldSpec("ratelimit", "Rate limit", "int",
-                      "Requests per second per client; 0 disables it.", unit="req/s"),
-            FieldSpec("cache_size", "Cache size", "int", unit="bytes"),
-            FieldSpec("cache_ttl_min", "Minimum cached TTL", "int", unit="seconds"),
-            FieldSpec("cache_ttl_max", "Maximum cached TTL", "int", unit="seconds"),
+                      "Requests per second per client; 0 disables it.",
+                      unit="req/s", group="DNS server configuration"),
+
+            FieldSpec("cache_size", "Cache size", "int",
+                      unit="bytes", group="DNS cache configuration"),
+            FieldSpec("cache_ttl_min", "Minimum cached TTL", "int",
+                      "Answers with a shorter TTL are held this long anyway.",
+                      unit="seconds", group="DNS cache configuration"),
+            FieldSpec("cache_ttl_max", "Maximum cached TTL", "int",
+                      unit="seconds", group="DNS cache configuration"),
             FieldSpec("cache_optimistic", "Optimistic caching", "bool",
-                      "Serve expired entries while refreshing them in the background."),
-            FieldSpec("resolve_clients", "Resolve client names via rDNS", "bool"),
-            FieldSpec("use_private_ptr_resolvers", "Use private reverse DNS resolvers", "bool"),
-            FieldSpec("local_ptr_upstreams", "Private reverse DNS servers", "lines"),
-            FieldSpec("private_upstream", "Private DNS upstreams", "lines"),
-            FieldSpec("edns_cs_enabled", "Enable EDNS client subnet", "bool"),
+                      "Serve expired entries while refreshing them in the background.",
+                      group="DNS cache configuration"),
+
+            FieldSpec("dnssec_enabled", "Enable DNSSEC", "bool",
+                      "Set the DO bit and check the AD bit on answers.", group="DNS options"),
+            FieldSpec("disable_ipv6", "Disable IPv6 answers", "bool",
+                      "Drop AAAA queries. Only useful on a network without IPv6.",
+                      group="DNS options"),
+            FieldSpec("edns_cs_enabled", "Enable EDNS client subnet", "bool",
+                      "Passes part of the client address to the upstream.",
+                      group="DNS options"),
         ),
     ),
     SectionSpec(
