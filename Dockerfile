@@ -13,16 +13,10 @@ RUN npm run build
 # --- Stage 2: runtime ------------------------------------------------------
 FROM python:3.12-slim
 
-# The release tag, passed by the Release workflow (--build-arg ADGUARDHUB_VERSION=0.2.0).
-# Left empty for a local build, which then reports itself as "dev" rather than
-# borrowing a release number it was not cut from.
-ARG ADGUARDHUB_VERSION=""
-
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     ADGUARDHUB_DATA_DIR=/data \
-    ADGUARDHUB_STATIC_DIR=/app/static \
-    ADGUARDHUB_VERSION=${ADGUARDHUB_VERSION}
+    ADGUARDHUB_STATIC_DIR=/app/static
 
 WORKDIR /app
 
@@ -44,6 +38,15 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh && mkdir -p /data
 # owns the mount (Unraid: PUID=99, PGID=100).
 ENV PUID=1000 \
     PGID=1000
+
+# The release tag, passed by the Release workflow (--build-arg ADGUARDHUB_VERSION=0.2.0).
+# Deliberately the last thing that changes between releases: everything above it —
+# apt, pip, the frontend build — is identical from one tag to the next and stays
+# cached, so cutting a release rebuilds a layer rather than an image. Empty for a
+# local build, which then reports "dev" rather than borrowing a release number it
+# was not cut from.
+ARG ADGUARDHUB_VERSION=""
+ENV ADGUARDHUB_VERSION=${ADGUARDHUB_VERSION}
 
 VOLUME ["/data"]
 

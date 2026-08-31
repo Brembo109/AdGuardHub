@@ -40,6 +40,18 @@ def test_the_dockerfile_still_passes_the_build_arg_through() -> None:
     assert "ADGUARDHUB_VERSION=${ADGUARDHUB_VERSION}" in dockerfile
 
 
+def test_the_version_is_set_after_the_expensive_layers() -> None:
+    """Otherwise every release rebuilds apt and pip for a one-line change.
+
+    The version differs on each release by definition, so wherever it lands in
+    the file, everything below it is rebuilt. Tidying it up next to the other
+    ENVs at the top would be an easy and invisible way to turn a layer rebuild
+    back into a full image rebuild.
+    """
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert dockerfile.index("ARG ADGUARDHUB_VERSION") > dockerfile.index("pip install")
+
+
 def test_the_release_workflow_still_passes_the_tag() -> None:
     workflow = (ROOT / ".github" / "workflows" / "docker-publish.yml").read_text(encoding="utf-8")
     assert "build-args:" in workflow
