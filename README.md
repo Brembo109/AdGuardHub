@@ -159,11 +159,11 @@ All settings are environment variables prefixed with `ADGUARDHUB_`.
 | `ADGUARDHUB_RETRY_INTERVAL` | `30` | Seconds between retry-queue passes. |
 | `ADGUARDHUB_QUERYLOG_POLL_INTERVAL` | `5` | Seconds between query log polls. |
 | `ADGUARDHUB_QUERYLOG_BUFFER_SIZE` | `2000` | Entries kept in the in-memory log buffer. |
-
-The four timers above only seed the initial values. Once the hub has started they are edited
-under *Settings → Sync & timers* and take effect on the next worker cycle — no restart.
 | `ADGUARDHUB_SESSION_MAX_AGE` | `1209600` | Session lifetime in seconds. |
 | `ADGUARDHUB_HTTP_TIMEOUT` | `10` | Per-request timeout when talking to instances. |
+
+The four interval/buffer timers only seed the initial values. Once the hub has started they are
+edited under *Settings → Sync & timers* and take effect on the next worker cycle — no restart.
 
 ## What gets replicated
 
@@ -187,11 +187,17 @@ copying them between nodes would be actively wrong.
 Importing an instance as the master adopts every area it exposes and switches replication on.
 An area a given AdGuard version does not implement is skipped rather than failing the sync.
 
-> **On TLS.** Only the on/off decision is replicated. Each node terminates TLS itself, with its
-> own certificate and hostname, so those are left alone: the push reads the target's current TLS
-> settings and overlays just `enabled`, because `/control/tls/configure` replaces the whole object
-> and a partial write would erase the node's certificate. A node with no certificate of its own
-> will refuse to be switched on, which shows up as an error on that section.
+> **On TLS — read before switching it on.** Install and verify a working certificate on **every**
+> node first. AdGuard Home does not check that a node can actually serve HTTPS: if one has no
+> valid certificate, enabling encryption can make it unreachable — including its own web
+> interface, because it redirects to HTTPS. Recovering then needs shell access to that host to
+> turn TLS off in `AdGuardHome.yaml` and restart it.
+>
+> Because of that, encryption is the one area an import adopts but leaves **switched off**; you
+> enable it deliberately, and the UI confirms first. Only the on/off state is replicated: each
+> node keeps its own certificate and hostname, and the push reads the target's current TLS
+> settings and overlays just `enabled` — `/control/tls/configure` replaces the whole object, so a
+> partial write would erase the node's certificate.
 
 ## Version history
 

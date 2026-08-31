@@ -162,3 +162,44 @@ async def test_dashboard_reports_the_last_sync(auth_client: httpx.AsyncClient) -
     assert stats["last_sync_at"] is not None
     assert stats["instances_synced"] == 1
     assert stats["versions_total"] >= 1
+
+
+async def test_a_risky_section_is_adopted_but_not_switched_on(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """Encryption must not start replicating just because a master had it on.
+
+    Enabling it on a node without a certificate makes that node unreachable, and an
+    import is not an informed decision about that.
+    """
+    master = await add_instance(auth_client, "a", A)
+    await add_instance(auth_client, "b", B)
+    FakeAdapter.state_for(A).sections = {
+        "tls": {"enabled": True},
+        "dns": {"upstream_dns": ["1.1.1.1"]},
+    }
+
+    result = (await auth_client.post(f"/api/instances/{master}/import", json={})).json()
+    assert result["sections_needing_review"] == ["tls"]
+    await drain_background()
+
+    listed = {item["name"]: item for item in (await auth_client.get("/api/config/sections")).json()}
+    # Adopted, so the value is there to review…
+    assert listed["tls"]["data"] == {"enabled": True}
+    # …but not replicated, and never pushed.
+    assert listed["tls"]["managed"] is False
+    assert "tls" not in FakeAdapter.state_for(B).sections
+
+    # A section without that hazard is switched on as before.
+    assert listed["dns"]["managed"] is True
+    assert FakeAdapter.state_for(B).sections["dns"] == {"upstream_dns": ["1.1.1.1"]}
+
+
+async def test_the_risky_section_carries_its_warning(auth_client: httpx.AsyncClient) -> None:
+    listed = {item["name"]: item for item in (await auth_client.get("/api/config/sections")).json()}
+    tls = listed["tls"]
+    assert tls["risky"] is True
+    assert "certificate" in tls["notes"]
+    assert "unreachable" in tls["notes"]
+    # Only TLS is flagged; the warning must stay meaningful.
+    assert [name for name, item in listed.items() if item["risky"]] == ["tls"]

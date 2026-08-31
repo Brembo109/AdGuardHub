@@ -242,6 +242,7 @@ class ConfigSectionOut(BaseModel):
     title: str
     description: str
     notes: str
+    risky: bool
     fields: list[ConfigFieldOut]
     managed: bool
     has_data: bool
