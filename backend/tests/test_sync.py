@@ -200,19 +200,20 @@ async def test_a_section_the_instance_lacks_does_not_fail_the_push(
     assert FakeAdapter.state_for(A).sections["dns"] == {"upstream_dns": ["1.1.1.1"]}
 
 
-async def test_incomplete_tls_is_not_pushed(auth_client: httpx.AsyncClient) -> None:
-    """AdGuard never returns a stored key; pushing without it would disable TLS."""
+async def test_only_the_tls_on_off_state_travels(auth_client: httpx.AsyncClient) -> None:
+    """Each node terminates TLS with its own certificate; only the decision syncs."""
     await add_instance(auth_client, "a", A)
     await auth_client.patch(
-        "/api/config/sections/tls",
-        json={"managed": True, "data": {"enabled": True, "server_name": "dns.lan"}},
+        "/api/config/sections/tls", json={"managed": True, "data": {"enabled": True}}
     )
     await drain_background()
 
-    assert "tls" not in FakeAdapter.state_for(A).sections
+    assert FakeAdapter.state_for(A).sections["tls"] == {"enabled": True}
+
     listed = (await auth_client.get("/api/config/sections")).json()
-    sections = {item["name"]: item for item in listed}
-    assert "private key" in sections["tls"]["skipped_reason"]
+    tls = next(item for item in listed if item["name"] == "tls")
+    assert tls["keys"] == ["enabled"]
+    assert tls["skipped_reason"] == ""
 
 
 async def test_manual_full_sync_reports_failures(auth_client: httpx.AsyncClient) -> None:

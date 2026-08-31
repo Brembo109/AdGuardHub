@@ -33,9 +33,10 @@ class SectionSpec:
     # "toggle" only: endpoints that flip the flag.
     enable_path: str = ""
     disable_path: str = ""
-    # Push this section only when the operator opts in, because it can carry
-    # material the API does not hand back in full (see push_guard).
-    sensitive: bool = False
+    # Read the target's current document and overlay ``keys`` onto it instead of
+    # sending them alone. Required where the endpoint replaces the whole object,
+    # so the node's own settings survive a push.
+    merge_on_push: bool = False
     notes: str = ""
 
 
@@ -100,28 +101,19 @@ SPECS: tuple[SectionSpec, ...] = (
     SectionSpec(
         name="tls",
         title="Encryption (TLS)",
-        description="HTTPS, DoT and DoQ settings, including the certificate and key.",
+        description="Whether encryption is switched on. Certificates stay per node.",
         strategy="document",
         get_path="/control/tls/status",
         set_path="/control/tls/configure",
-        keys=(
-            "enabled",
-            "server_name",
-            "force_https",
-            "port_https",
-            "port_dns_over_tls",
-            "port_dns_over_quic",
-            "certificate_chain",
-            "private_key",
-            "certificate_path",
-            "private_key_path",
-            "allow_unencrypted_doh",
-        ),
-        sensitive=True,
+        # Only the on/off decision travels: each node terminates TLS itself, with its
+        # own certificate and hostname, so copying those between nodes is meaningless.
+        keys=("enabled",),
+        # /control/tls/configure replaces the whole object, unlike /control/dns_config
+        # which merges. Sending "enabled" alone would wipe the target's certificate.
+        merge_on_push=True,
         notes=(
-            "AdGuard Home does not return a stored private key over the API. This section "
-            "is only pushed when the master exposes usable key material — inline "
-            "certificate_chain plus private_key, or both file paths."
+            "A node with no certificate of its own will reject being switched on; that "
+            "shows up as an error on this section."
         ),
     ),
     SectionSpec(
@@ -210,23 +202,3 @@ class SectionState:
     name: str
     managed: bool = False
     data: dict[str, Any] = field(default_factory=dict)
-
-
-def push_guard(name: str, data: dict[str, Any]) -> str:
-    """Return a reason to skip pushing this section, or "" when it is safe.
-
-    Pushing a TLS document whose private key the API withheld would disable
-    encryption on the target rather than replicate it.
-    """
-    if name != "tls":
-        return ""
-    if not data.get("enabled"):
-        return ""
-    has_inline = bool(data.get("certificate_chain")) and bool(data.get("private_key"))
-    has_paths = bool(data.get("certificate_path")) and bool(data.get("private_key_path"))
-    if has_inline or has_paths:
-        return ""
-    return (
-        "the master did not expose the private key (AdGuard Home never returns a stored "
-        "key), so pushing would turn encryption off on the target"
-    )

@@ -148,7 +148,6 @@ export interface ConfigSection {
   title: string
   description: string
   notes: string
-  sensitive: boolean
   managed: boolean
   has_data: boolean
   keys: string[]

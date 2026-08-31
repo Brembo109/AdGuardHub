@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from ..adapters.sections import SPECS, push_guard
+from ..adapters.sections import SPECS
 from ..deps import CurrentUser, SessionDep
 from ..models import PayloadKind
 from ..schemas import (
@@ -37,7 +37,6 @@ async def list_sections(_: CurrentUser, session: SessionDep) -> list[ConfigSecti
                 title=spec.title,
                 description=spec.description,
                 notes=spec.notes,
-                sensitive=spec.sensitive,
                 managed=row.managed,
                 has_data=bool(data),
                 keys=sorted(data),
@@ -72,12 +71,11 @@ async def update_section(
         title=spec.title,
         description=spec.description,
         notes=spec.notes,
-        sensitive=spec.sensitive,
         managed=row.managed,
         has_data=bool(data),
         keys=sorted(data),
         data=data,
-        skipped_reason=skipped.get(name, "") or push_guard(name, data),
+        skipped_reason=skipped.get(name, ""),
         updated_at=row.updated_at,
     )
 

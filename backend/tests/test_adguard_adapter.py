@@ -178,6 +178,48 @@ async def test_section_push_sends_only_managed_keys() -> None:
     assert captured["body"] == {"upstream_dns": ["9.9.9.9"], "ratelimit": 20}
 
 
+async def test_tls_push_keeps_the_targets_own_certificate() -> None:
+    """/control/tls/configure replaces the whole object, so the push has to merge.
+
+    Sending {"enabled": true} alone would wipe the node's certificate and hostname.
+    """
+    target = {
+        "enabled": False,
+        "server_name": "node-b.lan",
+        "certificate_path": "/etc/ssl/node-b.crt",
+        "private_key_path": "/etc/ssl/node-b.key",
+        "port_https": 443,
+        "private_key_saved": True,
+    }
+    captured: dict[str, object] = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return httpx.Response(200, json=target)
+        import json
+
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json={})
+
+    await make_adapter(login_ok(handler)).push_section("tls", {"enabled": True})
+
+    body = captured["body"]
+    assert body["enabled"] is True
+    assert body["server_name"] == "node-b.lan"
+    assert body["certificate_path"] == "/etc/ssl/node-b.crt"
+    assert body["private_key_path"] == "/etc/ssl/node-b.key"
+
+
+async def test_tls_pull_reads_only_the_enabled_flag() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"enabled": True, "server_name": "master.lan", "private_key_saved": True},
+        )
+
+    assert await make_adapter(login_ok(handler)).pull_section("tls") == {"enabled": True}
+
+
 async def test_a_section_the_instance_lacks_reads_as_none() -> None:
     """AdGuard versions differ; a missing endpoint must not fail the whole sync."""
 

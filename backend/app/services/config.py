@@ -14,7 +14,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..adapters.sections import SECTION_NAMES, SPEC_BY_NAME, push_guard
+from ..adapters.sections import SECTION_NAMES, SPEC_BY_NAME
 from ..models import ConfigSection, FilterList, ListKind, Rule, RuleKind, RuleOrigin
 
 
@@ -65,8 +65,8 @@ async def set_section(
 async def managed_sections(session: AsyncSession) -> dict[str, dict[str, Any]]:
     """Sections that should be pushed, in the declared order.
 
-    A section whose push would do damage rather than replicate (an incomplete TLS
-    document, say) is left out — ``skipped_sections`` reports why.
+    A managed section with nothing imported yet is left out rather than pushed as an
+    empty document — ``skipped_sections`` reports why.
     """
     rows = await all_sections(session)
     result: dict[str, dict[str, Any]] = {}
@@ -75,27 +75,22 @@ async def managed_sections(session: AsyncSession) -> dict[str, dict[str, Any]]:
         if row is None or not row.managed:
             continue
         data = loads(row.data)
-        if not data or push_guard(name, data):
+        if not data:
             continue
         result[name] = data
     return result
 
 
 async def skipped_sections(session: AsyncSession) -> dict[str, str]:
-    """Managed sections that cannot safely be pushed, mapped to the reason."""
+    """Managed sections that cannot be pushed yet, mapped to the reason."""
     rows = await all_sections(session)
     skipped: dict[str, str] = {}
     for name in SECTION_NAMES:
         row = rows.get(name)
         if row is None or not row.managed:
             continue
-        data = loads(row.data)
-        if not data:
+        if not loads(row.data):
             skipped[name] = "nothing imported for this section yet"
-            continue
-        reason = push_guard(name, data)
-        if reason:
-            skipped[name] = reason
     return skipped
 
 

@@ -171,7 +171,7 @@ Under *Instance settings*, each area can be replicated or left to the instance:
 | DNS & upstreams | Upstream/bootstrap/fallback resolvers, upstream mode, DNSSEC, cache, rate limits, blocking mode |
 | Clients | Persistent clients and their per-client filtering settings |
 | Access control | Allowed/disallowed clients, blocked hostnames |
-| Encryption (TLS) | HTTPS/DoT/DoQ settings, certificate and key |
+| Encryption (TLS) | Whether encryption is on — certificates stay per node |
 | DNS rewrites | Custom domain-to-answer rewrites |
 | Blocked services | Globally blocked services and their schedule |
 | Filtering | Filtering on/off and the list refresh interval |
@@ -184,10 +184,11 @@ copying them between nodes would be actively wrong.
 Importing an instance as the master adopts every area it exposes and switches replication on.
 An area a given AdGuard version does not implement is skipped rather than failing the sync.
 
-> **One caveat on TLS.** AdGuard Home never returns a stored private key over its API. If the
-> master only reports `private_key_saved`, AdGuardHub will *not* push the TLS section — doing so
-> would turn encryption off on the target rather than replicate it. The section shows why it was
-> skipped; paste the certificate and key into it to replicate them, or manage TLS per node.
+> **On TLS.** Only the on/off decision is replicated. Each node terminates TLS itself, with its
+> own certificate and hostname, so those are left alone: the push reads the target's current TLS
+> settings and overlays just `enabled`, because `/control/tls/configure` replaces the whole object
+> and a partial write would erase the node's certificate. A node with no certificate of its own
+> will refuse to be switched on, which shows up as an error on that section.
 
 ## Version history
 

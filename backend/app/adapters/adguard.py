@@ -276,6 +276,13 @@ class AdGuardAdapter(DnsAdapter):
         payload = self._select(spec, data)
         if not payload:
             return
+        if spec.merge_on_push:
+            # This endpoint replaces the whole object, so send the target's current
+            # document with only the managed keys overlaid — anything the node owns
+            # (a certificate, its hostname) has to survive the push.
+            current = await self._section_json(spec)
+            if isinstance(current, dict):
+                payload = {**current, **payload}
         await self._request(spec.set_method, spec.set_path, json=payload)
 
     async def _push_clients(self, desired: list[dict[str, Any]]) -> None:

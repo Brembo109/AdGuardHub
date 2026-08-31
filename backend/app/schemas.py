@@ -226,7 +226,6 @@ class ConfigSectionOut(BaseModel):
     title: str
     description: str
     notes: str
-    sensitive: bool
     managed: bool
     has_data: bool
     keys: list[str]
