@@ -143,11 +143,21 @@ export interface ConnectionResult {
   error: string
 }
 
+export interface ConfigField {
+  key: string
+  label: string
+  type: 'bool' | 'int' | 'text' | 'lines' | 'select' | 'pairs' | 'clients'
+  help: string
+  unit: string
+  options: [string, string][]
+}
+
 export interface ConfigSection {
   name: string
   title: string
   description: string
   notes: string
+  fields: ConfigField[]
   managed: boolean
   has_data: boolean
   keys: string[]
@@ -191,4 +201,17 @@ export interface VersionRestoreResult {
   filter_lists: number
   sections: number
   pushed: boolean
+}
+
+export interface HubSettings {
+  reconcile_enabled: boolean
+  reconcile_interval: number
+  retry_interval: number
+  querylog_enabled: boolean
+  querylog_poll_interval: number
+  querylog_buffer_size: number
+  http_timeout: number
+  external_api_enabled: boolean
+  /** Accepted [min, max] per field, so the form can bound its inputs. */
+  limits: Record<string, [number, number]>
 }

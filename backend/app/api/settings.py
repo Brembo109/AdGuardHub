@@ -1,4 +1,4 @@
-"""Notification targets (spec §10) and managed DNS settings (spec §3)."""
+"""Operational settings and notification targets (spec §10)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,14 @@ from sqlalchemy import select
 
 from ..deps import CurrentUser, SessionDep
 from ..models import NotifierTarget
-from ..schemas import NotifierCreate, NotifierOut, NotifierUpdate
+from ..schemas import (
+    HubSettingsOut,
+    HubSettingsUpdate,
+    NotifierCreate,
+    NotifierOut,
+    NotifierUpdate,
+)
+from ..services import hubsettings
 from ..services.notify import KNOWN_EVENTS, NOTIFIER_TYPES, test_target
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -97,3 +104,23 @@ async def test_notifier(target_id: int, _: CurrentUser, session: SessionDep) -> 
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Notifier not found")
     error = await test_target(session, target)
     return {"ok": "false" if error else "true", "error": error}
+
+
+def _hub_out(values: hubsettings.RuntimeSettings) -> HubSettingsOut:
+    return HubSettingsOut(
+        **vars(values),
+        limits={field: list(bounds) for field, bounds in hubsettings.LIMITS.items()},
+    )
+
+
+@router.get("/hub", response_model=HubSettingsOut)
+async def get_hub_settings(_: CurrentUser, session: SessionDep) -> HubSettingsOut:
+    return _hub_out(await hubsettings.load(session))
+
+
+@router.put("/hub", response_model=HubSettingsOut)
+async def put_hub_settings(
+    payload: HubSettingsUpdate, _: CurrentUser, session: SessionDep
+) -> HubSettingsOut:
+    """Timers and limits take effect on the next worker cycle — no restart needed."""
+    return _hub_out(await hubsettings.update(session, payload.model_dump(exclude_unset=True)))

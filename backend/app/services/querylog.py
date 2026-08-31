@@ -19,6 +19,7 @@ from ..config import get_settings
 from ..db import session_scope
 from ..models import Instance
 from ..runtime import get_crypto
+from . import hubsettings
 from .events import bus
 
 logger = logging.getLogger(__name__)
@@ -77,6 +78,14 @@ class QueryLogBuffer:
         entries.sort(key=lambda entry: entry["time"], reverse=True)
         return entries[:limit]
 
+    def resize(self, maxlen: int) -> None:
+        """Change the retained-entry cap, keeping the newest entries."""
+        if maxlen == self._entries.maxlen:
+            return
+        kept = list(self._entries)[-maxlen:]
+        self._entries = deque(kept, maxlen=maxlen)
+        self._keys = {_entry_key(entry["instance"], entry) for entry in kept}
+
     async def clear(self) -> None:
         async with self._lock:
             self._entries.clear()
@@ -115,14 +124,16 @@ async def poll_once() -> int:
 
 
 async def querylog_worker(stop: asyncio.Event) -> None:  # pragma: no cover - background loop
-    interval = get_settings().querylog_poll_interval
     while not stop.is_set():
+        settings = hubsettings.current()
+        if settings.querylog_enabled:
+            try:
+                await poll_once()
+            except Exception:
+                logger.exception("Query log poll failed")
         try:
-            await poll_once()
-        except Exception:
-            logger.exception("Query log poll failed")
-        try:
-            await asyncio.wait_for(stop.wait(), timeout=interval)
+            # Re-read the interval every cycle: it is editable at runtime.
+            await asyncio.wait_for(stop.wait(), timeout=settings.querylog_poll_interval)
             return
         except TimeoutError:
             continue

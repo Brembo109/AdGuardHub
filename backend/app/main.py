@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
-from .api import auth, blocklists, config, instances, ops, querylog, rules
+from .api import auth, blocklists, config, control, instances, ops, querylog, rules
 from .api import settings as settings_api
 from .config import get_settings
 from .db import DataDirError, dispose_db, init_db, session_scope
@@ -21,6 +21,7 @@ from .deps import admin_exists
 from .models import User
 from .runtime import using_ephemeral_secret
 from .security import hash_password
+from .services import hubsettings
 from .services.querylog import querylog_worker
 from .services.reconcile import reconcile_worker
 from .services.sync import retry_worker
@@ -79,6 +80,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.error("Startup aborted: %s", exc)
         raise
     await bootstrap_admin()
+    # Seed the runtime settings from the environment, then let the UI own them.
+    async with session_scope() as session:
+        await hubsettings.load(session)
 
     stop = asyncio.Event()
     workers = [
@@ -108,6 +112,8 @@ app.include_router(settings_api.router)
 app.include_router(ops.router)
 app.include_router(config.router)
 app.include_router(config.versions_router)
+# Registered before the SPA fallback so /control/* is not swallowed by it.
+app.include_router(control.router)
 
 
 @app.get("/api/health")

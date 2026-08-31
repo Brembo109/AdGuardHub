@@ -27,6 +27,13 @@ class SetupRequest(BaseModel):
     password: str = Field(min_length=8)
 
 
+class ControlLogin(BaseModel):
+    """AdGuard Home's login body, which names the field ``name``."""
+
+    name: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=1)
+
+
 class PasswordChange(BaseModel):
     current_password: str = Field(min_length=1)
     new_password: str = Field(min_length=8)
@@ -221,11 +228,21 @@ class FilterListOut(ORMModel):
 # -- DNS settings ----------------------------------------------------------
 
 
+class ConfigFieldOut(BaseModel):
+    key: str
+    label: str
+    type: str
+    help: str
+    unit: str
+    options: list[list[str]]
+
+
 class ConfigSectionOut(BaseModel):
     name: str
     title: str
     description: str
     notes: str
+    fields: list[ConfigFieldOut]
     managed: bool
     has_data: bool
     keys: list[str]
@@ -272,6 +289,30 @@ class VersionRestoreResult(BaseModel):
     filter_lists: int
     sections: int
     pushed: bool
+
+
+class HubSettingsOut(BaseModel):
+    reconcile_enabled: bool
+    reconcile_interval: int
+    retry_interval: int
+    querylog_enabled: bool
+    querylog_poll_interval: int
+    querylog_buffer_size: int
+    http_timeout: int
+    external_api_enabled: bool
+    # Accepted ranges, so the form can bound its inputs rather than guess.
+    limits: dict[str, list[int]]
+
+
+class HubSettingsUpdate(BaseModel):
+    reconcile_enabled: bool | None = None
+    reconcile_interval: int | None = None
+    retry_interval: int | None = None
+    querylog_enabled: bool | None = None
+    querylog_poll_interval: int | None = None
+    querylog_buffer_size: int | None = None
+    http_timeout: int | None = None
+    external_api_enabled: bool | None = None
 
 
 # -- notifiers -------------------------------------------------------------

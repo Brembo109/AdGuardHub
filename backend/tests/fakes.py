@@ -18,6 +18,7 @@ class FakeInstanceState:
         self.offline = False
         self.push_calls = 0
         self.unsupported_sections: set[str] = set()
+        self.stats: dict[str, Any] = {}
 
 
 class FakeAdapter(DnsAdapter):
@@ -89,6 +90,10 @@ class FakeAdapter(DnsAdapter):
             raise AdapterError(f"{name} is not supported by {self.base_url}", status=404)
         self.state.sections[name] = dict(data)
         self.state.push_calls += 1
+
+    async def stats(self) -> dict[str, Any]:
+        self._guard()
+        return dict(self.state.stats)
 
     async def query_log(self, limit: int) -> list[QueryLogEntry]:
         self._guard()

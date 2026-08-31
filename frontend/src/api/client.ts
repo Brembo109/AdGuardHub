@@ -5,6 +5,7 @@ import type {
   DashboardStats,
   DriftEvent,
   FilterList,
+  HubSettings,
   ImportResult,
   Instance,
   ListKind,
@@ -61,6 +62,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 const get = <T,>(path: string) => request<T>(path)
 const post = <T,>(path: string, body?: unknown) =>
   request<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) })
+const put = <T,>(path: string, body: unknown) =>
+  request<T>(path, { method: 'PUT', body: JSON.stringify(body) })
 const patch = <T,>(path: string, body: unknown) =>
   request<T>(path, { method: 'PATCH', body: JSON.stringify(body) })
 const del = (path: string) => request<void>(path, { method: 'DELETE' })
@@ -166,6 +169,10 @@ export const api = {
   deleteNotifier: (id: number) => del(`/api/settings/notifiers/${id}`),
   testNotifier: (id: number) =>
     post<{ ok: string; error: string }>(`/api/settings/notifiers/${id}/test`),
+
+  hubSettings: () => get<HubSettings>('/api/settings/hub'),
+  saveHubSettings: (payload: Partial<Omit<HubSettings, 'limits'>>) =>
+    put<HubSettings>('/api/settings/hub', payload),
 
   configSections: () => get<ConfigSection[]>('/api/config/sections'),
   updateSection: (name: string, payload: { managed?: boolean; data?: Record<string, unknown> }) =>

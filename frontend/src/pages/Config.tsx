@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api/client'
 import type { ConfigSection } from '../api/types'
+import { SectionFields } from '../components/SectionFields'
 import { Badge, Banner, Card, Empty, PageHeader } from '../components/ui'
 import { formatTime } from '../format'
 import { errorMessage, useResource } from '../hooks/useApi'
@@ -12,7 +13,9 @@ import { errorMessage, useResource } from '../hooks/useApi'
 export default function Config() {
   const sections = useResource<ConfigSection[]>(() => api.configSections())
   const [open, setOpen] = useState<string | null>(null)
-  const [draft, setDraft] = useState('')
+  const [draft, setDraft] = useState<Record<string, unknown>>({})
+  const [raw, setRaw] = useState('')
+  const [showRaw, setShowRaw] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
@@ -41,21 +44,25 @@ export default function Config() {
 
   const startEdit = (section: ConfigSection) => {
     setOpen(open === section.name ? null : section.name)
-    setDraft(JSON.stringify(section.data, null, 2))
+    setDraft(section.data)
+    setRaw(JSON.stringify(section.data, null, 2))
+    setShowRaw(false)
     setError('')
   }
 
   const save = (section: ConfigSection) =>
     run(async () => {
-      let parsed: Record<string, unknown>
-      try {
-        parsed = JSON.parse(draft)
-      } catch {
-        throw new Error('That is not valid JSON.')
+      let payload = draft
+      if (showRaw) {
+        try {
+          payload = JSON.parse(raw)
+        } catch {
+          throw new Error('That is not valid JSON.')
+        }
       }
-      await api.updateSection(section.name, { data: parsed })
+      await api.updateSection(section.name, { data: payload })
       setOpen(null)
-      return `${section.title} saved${section.managed ? ' and pushed' : ''}.`
+      return `${section.title} saved${section.managed ? ' and pushed to every instance' : ''}.`
     })
 
   const list = sections.data ?? []
@@ -104,7 +111,7 @@ export default function Config() {
                 <p className="hint" style={{ marginBottom: 0 }}>
                   {section.has_data
                     ? `${section.keys.length} setting(s) · updated ${formatTime(section.updated_at)}`
-                    : 'Nothing imported yet.'}
+                    : 'Nothing imported yet — import an instance as the master first.'}
                 </p>
                 {section.skipped_reason ? (
                   <Banner kind="warn">
@@ -132,20 +139,48 @@ export default function Config() {
             </div>
 
             {open === section.name ? (
-              <div style={{ marginTop: 14 }}>
-                <label htmlFor={`data-${section.name}`}>
-                  Section document — this is exactly what is pushed to each instance
-                </label>
-                <textarea
-                  id={`data-${section.name}`}
-                  value={draft}
-                  spellCheck={false}
-                  style={{ minHeight: 260 }}
-                  onChange={(event) => setDraft(event.target.value)}
-                />
-                <div className="actions" style={{ marginTop: 10 }}>
+              <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+                {showRaw ? (
+                  <>
+                    <label htmlFor={`data-${section.name}`}>
+                      Section document — exactly what is pushed to each instance
+                    </label>
+                    <textarea
+                      id={`data-${section.name}`}
+                      value={raw}
+                      spellCheck={false}
+                      style={{ minHeight: 260 }}
+                      onChange={(event) => setRaw(event.target.value)}
+                    />
+                  </>
+                ) : section.fields.length ? (
+                  <SectionFields fields={section.fields} data={draft} onChange={setDraft} />
+                ) : (
+                  <p className="hint">This section has no editable fields of its own.</p>
+                )}
+
+                <div className="actions" style={{ marginTop: 12 }}>
                   <button className="primary" onClick={() => save(section)} disabled={busy}>
                     Save
+                  </button>
+                  <button
+                    onClick={() => {
+                      // Switching views carries the edits across, so neither is a dead end.
+                      if (showRaw) {
+                        try {
+                          setDraft(JSON.parse(raw))
+                        } catch {
+                          setError('That is not valid JSON — fix it before switching back.')
+                          return
+                        }
+                      } else {
+                        setRaw(JSON.stringify(draft, null, 2))
+                      }
+                      setShowRaw(!showRaw)
+                    }}
+                    disabled={busy}
+                  >
+                    {showRaw ? 'Back to the form' : 'Edit raw document'}
                   </button>
                   <button onClick={() => setOpen(null)} disabled={busy}>
                     Cancel
