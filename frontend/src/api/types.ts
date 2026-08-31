@@ -20,6 +20,8 @@ export interface Instance {
   verify_tls: boolean
   enabled: boolean
   status: 'unknown' | 'online' | 'unreachable' | 'disabled'
+  /** AdGuard Home's own version, as last reported by the instance. */
+  version: string
   last_error: string
   last_seen_at: string | null
   last_synced_at: string | null

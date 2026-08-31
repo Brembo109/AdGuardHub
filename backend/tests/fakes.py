@@ -28,6 +28,7 @@ class FakeAdapter(DnsAdapter):
     """Every adapter instance for the same base_url shares one state object."""
 
     name = "fake"
+    VERSION = "v0.107.fake"
     states: ClassVar[dict[str, FakeInstanceState]] = {}
 
     def __init__(
@@ -58,7 +59,7 @@ class FakeAdapter(DnsAdapter):
 
     async def check(self) -> str:
         self._guard()
-        return "v0.107.fake"
+        return self.VERSION
 
     async def pull_rules(self) -> list[str]:
         self._guard()

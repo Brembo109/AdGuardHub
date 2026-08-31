@@ -86,6 +86,8 @@ class Instance(Base):
     verify_tls: Mapped[bool] = mapped_column(Boolean, default=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     status: Mapped[str] = mapped_column(String(20), default=InstanceStatus.unknown.value)
+    # The AdGuard Home version reported by /control/status, refreshed on every probe.
+    version: Mapped[str] = mapped_column(String(40), default="")
     last_error: Mapped[str] = mapped_column(Text, default="")
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

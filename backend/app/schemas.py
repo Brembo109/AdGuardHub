@@ -125,6 +125,8 @@ class InstanceOut(ORMModel):
     verify_tls: bool
     enabled: bool
     status: str
+    # AdGuard Home's own version, as last reported by the instance.
+    version: str
     last_error: str
     last_seen_at: datetime | None
     last_synced_at: datetime | None

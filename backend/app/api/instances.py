@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from ..adapters import ADAPTERS, AdapterError, available_adapters, build_adapter
+from ..adapters import ADAPTERS, AdapterError, available_adapters
 from ..adapters import session as adapter_session
 from ..adapters.sections import SECTION_NAMES
 from ..config import get_settings
@@ -24,6 +24,7 @@ from ..schemas import (
     InstanceUpdate,
 )
 from ..services.aggregate import invalidate_stats_cache
+from ..services.events import bus
 from ..services.importer import import_from_instance
 from ..services.sync import ALL_KINDS, check_instance, push_to_instance, schedule_sync
 from ..services.versions import record as _record
@@ -42,11 +43,21 @@ def to_out(instance: Instance) -> InstanceOut:
         verify_tls=instance.verify_tls,
         enabled=instance.enabled,
         status=instance.status,
+        version=instance.version,
         last_error=instance.last_error,
         last_seen_at=instance.last_seen_at,
         last_synced_at=instance.last_synced_at,
         created_at=instance.created_at,
     )
+
+
+async def _announce_list() -> None:
+    """The set of instances changed — open browsers hold a copy of it.
+
+    Without this the top bar's status element keeps whatever list it loaded on
+    page load, so adding the first node leaves it reading "No nodes yet".
+    """
+    await bus.publish("instances", {})
 
 
 async def _get(session: SessionDep, instance_id: int) -> Instance:
@@ -129,6 +140,7 @@ async def create_instance(
         raise HTTPException(status.HTTP_409_CONFLICT, "An instance with that name exists") from exc
     # The dashboard's "n of m nodes reporting" is now stale by one node.
     invalidate_stats_cache()
+    await _announce_list()
     await check_instance(session, instance)
     return to_out(instance)
 
@@ -159,6 +171,7 @@ async def update_instance(
         await session.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, "An instance with that name exists") from exc
     invalidate_stats_cache()
+    await _announce_list()
     if instance.enabled:
         await check_instance(session, instance)
     return to_out(instance)
@@ -174,23 +187,22 @@ async def delete_instance(instance_id: int, _: CurrentUser, session: SessionDep)
     await session.delete(instance)
     await session.commit()
     invalidate_stats_cache()
+    await _announce_list()
 
 
 @router.post("/{instance_id}/test")
 async def test_instance(instance_id: int, _: CurrentUser, session: SessionDep) -> dict[str, str]:
-    """Probe connectivity and credentials without changing anything on the instance."""
+    """Probe connectivity and credentials without changing anything on the instance.
+
+    Goes through check_instance rather than probing separately: a failed test used
+    to leave the instance marked online, so the operator watched the test fail and
+    the card still claimed the node was fine.
+    """
     instance = await _get(session, instance_id)
-    adapter = build_adapter(instance, get_crypto())
-    try:
-        version = await adapter.check()
-    except (AdapterError, ValueError) as exc:
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
-    finally:
-        await adapter.aclose()
-    instance.status = InstanceStatus.online.value
-    instance.last_error = ""
-    await session.commit()
-    return {"ok": "true", "version": version}
+    error = await check_instance(session, instance)
+    if error:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, error)
+    return {"ok": "true", "version": instance.version}
 
 
 @router.post("/{instance_id}/push")

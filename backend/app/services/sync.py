@@ -273,9 +273,10 @@ async def check_instance(session: AsyncSession, instance: Instance) -> str:
         instance.status = InstanceStatus.disabled.value
         await session.commit()
         return ""
+    was = instance.status
     adapter = build_adapter(instance, get_crypto())
     try:
-        await adapter.check()
+        version = await adapter.check()
     except (AdapterError, ValueError) as exc:
         was_online = instance.status == InstanceStatus.online.value
         instance.status = InstanceStatus.unreachable.value
@@ -287,15 +288,35 @@ async def check_instance(session: AsyncSession, instance: Instance) -> str:
                 f"{instance.name} is unreachable",
                 f"AdGuardHub can no longer reach {instance.base_url}: {exc}",
             )
+        await _announce_status(instance, changed=was != instance.status)
         return str(exc)
     finally:
         await adapter.aclose()
 
     instance.status = InstanceStatus.online.value
+    # check() already asked /control/status for it; throwing it away meant the UI
+    # could never say which AdGuard version a node is running.
+    instance.version = version
     instance.last_error = ""
     instance.last_seen_at = datetime.now(UTC)
     await session.commit()
+    await _announce_status(instance, changed=was != instance.status)
     return ""
+
+
+async def _announce_status(instance: Instance, *, changed: bool) -> None:
+    """Let open browsers know, so the status pill does not sit on a stale list."""
+    if not changed:
+        return
+    await bus.publish(
+        "instance.status",
+        {
+            "id": instance.id,
+            "name": instance.name,
+            "status": instance.status,
+            "error": instance.last_error,
+        },
+    )
 
 
 async def retry_worker(stop: asyncio.Event) -> None:  # pragma: no cover - background loop

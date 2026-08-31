@@ -257,8 +257,10 @@ function NodeCard({
 
       <div className="node-facts">
         <div>
-          <div className="dl">Adapter</div>
-          <div style={{ fontSize: 13 }}>{instance.adapter}</div>
+          <div className="dl">Version</div>
+          <div style={{ fontSize: 13 }}>
+            {instance.version || <span style={{ color: 'var(--faint)' }}>unknown</span>}
+          </div>
         </div>
         <div>
           <div className="dl">Last synced</div>

@@ -8,6 +8,7 @@ is no maintenance mode in v1: a correction is always applied, but never silently
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 from dataclasses import asdict, dataclass, field
@@ -190,6 +191,11 @@ async def reconcile_instance(
     instance.status = InstanceStatus.online.value
     instance.last_error = ""
     instance.last_seen_at = utcnow()
+    # /control/status is the cheapest call AdGuard has, and reconciliation is the
+    # only thing that talks to every node on a timer. Without this the reported
+    # version would only ever refresh when the operator pressed Test by hand.
+    with contextlib.suppress(AdapterError, ValueError):
+        instance.version = await adapter.check()
 
     candidates = [
         diff_rules(await desired_rules(session), state.rules),
