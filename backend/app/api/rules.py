@@ -11,6 +11,7 @@ from ..models import PayloadKind, Rule, RuleKind, RuleOrigin
 from ..schemas import BulkRulesRequest, DomainRuleRequest, RuleCreate, RuleOut, RuleUpdate
 from ..services.rules import allow_rule_for_domain, block_rule_for_domain, classify, is_comment
 from ..services.sync import schedule_sync
+from ..services.versions import record as _record
 
 router = APIRouter(prefix="/api/rules", tags=["rules"])
 
@@ -50,7 +51,7 @@ async def _add_rule(
 
 @router.get("", response_model=list[RuleOut])
 async def list_rules(
-    _: CurrentUser,
+    user: CurrentUser,
     session: SessionDep,
     kind: RuleKind | None = None,
     origin: RuleOrigin | None = None,
@@ -68,7 +69,7 @@ async def list_rules(
 
 
 @router.post("", response_model=RuleOut, status_code=status.HTTP_201_CREATED)
-async def create_rule(payload: RuleCreate, _: CurrentUser, session: SessionDep) -> Rule:
+async def create_rule(payload: RuleCreate, user: CurrentUser, session: SessionDep) -> Rule:
     if is_comment(payload.text):
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY, "Comments are not stored as rules"
@@ -78,13 +79,14 @@ async def create_rule(payload: RuleCreate, _: CurrentUser, session: SessionDep) 
     )
     if not created and rule.text == payload.text:
         raise HTTPException(status.HTTP_409_CONFLICT, "That rule already exists")
+    await record_version(session, f"rule added: {rule.text}", user)
     schedule_sync(RULE_KINDS, f"rule added: {rule.text}")
     return rule
 
 
 @router.patch("/{rule_id}", response_model=RuleOut)
 async def update_rule(
-    rule_id: int, payload: RuleUpdate, _: CurrentUser, session: SessionDep
+    rule_id: int, payload: RuleUpdate, user: CurrentUser, session: SessionDep
 ) -> Rule:
     rule = await session.get(Rule, rule_id)
     if rule is None:
@@ -102,25 +104,27 @@ async def update_rule(
     except IntegrityError as exc:
         await session.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, "That rule already exists") from exc
+    await record_version(session, f"rule updated: {rule.text}", user)
     schedule_sync(RULE_KINDS, f"rule updated: {rule.text}")
     return rule
 
 
 @router.delete("/{rule_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
-async def delete_rule(rule_id: int, _: CurrentUser, session: SessionDep) -> None:
+async def delete_rule(rule_id: int, user: CurrentUser, session: SessionDep) -> None:
     rule = await session.get(Rule, rule_id)
     if rule is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Rule not found")
     text = rule.text
     await session.delete(rule)
     await session.commit()
+    await record_version(session, f"rule removed: {text}", user)
     schedule_sync(RULE_KINDS, f"rule removed: {text}")
 
 
 @router.post("/allow", response_model=RuleOut)
 async def allow_domain(
     payload: DomainRuleRequest,
-    _: CurrentUser,
+    user: CurrentUser,
     session: SessionDep,
     origin: RuleOrigin = Query(RuleOrigin.allowlist),
 ) -> Rule:
@@ -129,14 +133,15 @@ async def allow_domain(
         session, allow_rule_for_domain(payload.domain), origin, payload.comment
     )
     if created:
-        schedule_sync(RULE_KINDS, f"allowlisted {payload.domain}")
+        await record_version(session, f"allowlisted {payload.domain}", user)
+    schedule_sync(RULE_KINDS, f"allowlisted {payload.domain}")
     return rule
 
 
 @router.post("/block", response_model=RuleOut)
 async def block_domain(
     payload: DomainRuleRequest,
-    _: CurrentUser,
+    user: CurrentUser,
     session: SessionDep,
     origin: RuleOrigin = Query(RuleOrigin.custom),
 ) -> Rule:
@@ -144,13 +149,14 @@ async def block_domain(
         session, block_rule_for_domain(payload.domain), origin, payload.comment
     )
     if created:
-        schedule_sync(RULE_KINDS, f"blocked {payload.domain}")
+        await record_version(session, f"blocked {payload.domain}", user)
+    schedule_sync(RULE_KINDS, f"blocked {payload.domain}")
     return rule
 
 
 @router.post("/bulk", response_model=list[RuleOut])
 async def bulk_import(
-    payload: BulkRulesRequest, _: CurrentUser, session: SessionDep
+    payload: BulkRulesRequest, user: CurrentUser, session: SessionDep
 ) -> list[Rule]:
     """Paste a block of AdGuard syntax; blank lines and ``!``/``#`` comments are skipped."""
     created: list[Rule] = []
@@ -162,5 +168,11 @@ async def bulk_import(
         if was_created:
             created.append(rule)
     if created:
-        schedule_sync(RULE_KINDS, f"{len(created)} rule(s) imported")
+        await record_version(session, f"{len(created)} rule(s) imported", user)
+    schedule_sync(RULE_KINDS, f"{len(created)} rule(s) imported")
     return created
+
+
+async def record_version(session: SessionDep, label: str, user: CurrentUser) -> None:
+    """Snapshot the central state so the change can be diffed and rolled back."""
+    await _record(session, label, author=user.username)

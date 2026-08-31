@@ -552,3 +552,27 @@ details.details pre {
   border-top-right-radius: 0;
   margin-bottom: 0;
 }
+
+/* -- diffs & sync summary ------------------------------------------------ */
+
+.diff-add {
+  color: var(--accent-bright);
+}
+
+.diff-remove {
+  color: var(--danger);
+}
+
+.diff-change {
+  color: var(--warn);
+}
+
+tr.selected {
+  background: rgba(76, 154, 106, 0.1);
+}
+
+.sync-line {
+  display: flex;
+  gap: 42px;
+  flex-wrap: wrap;
+}

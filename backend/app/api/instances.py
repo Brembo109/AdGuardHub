@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ..adapters import ADAPTERS, AdapterError, available_adapters, build_adapter
 from ..adapters import session as adapter_session
+from ..adapters.sections import SECTION_NAMES
 from ..config import get_settings
 from ..deps import CurrentUser, SessionDep
 from ..models import Instance, InstanceStatus, PushJob
@@ -24,6 +25,7 @@ from ..schemas import (
 )
 from ..services.importer import import_from_instance
 from ..services.sync import ALL_KINDS, check_instance, push_to_instance, schedule_sync
+from ..services.versions import record as _record
 
 router = APIRouter(prefix="/api/instances", tags=["instances"])
 
@@ -196,16 +198,29 @@ async def push_instance(instance_id: int, _: CurrentUser, session: SessionDep) -
 
 @router.post("/{instance_id}/import")
 async def import_instance(
-    instance_id: int, payload: ImportRequest, _: CurrentUser, session: SessionDep
+    instance_id: int, payload: ImportRequest, user: CurrentUser, session: SessionDep
 ) -> dict[str, object]:
     """Adopt this instance's configuration as the hub's state (spec §7)."""
     instance = await _get(session, instance_id)
     try:
         result = await import_from_instance(
-            session, instance, replace=payload.replace, include_dns=payload.include_dns
+            session,
+            instance,
+            replace=payload.replace,
+            sections=tuple(payload.sections) if payload.sections else SECTION_NAMES,
         )
     except (AdapterError, ValueError) as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+    await record_version(
+        session, f"imported configuration from {instance.name}", user, kind="import"
+    )
     if payload.push_after_import:
         schedule_sync(ALL_KINDS, f"initial import from {instance.name}")
     return asdict(result)
+
+
+async def record_version(
+    session: SessionDep, label: str, user: CurrentUser, kind: str = "change"
+) -> None:
+    """Snapshot the central state so the change can be diffed and rolled back."""
+    await _record(session, label, author=user.username, kind=kind)

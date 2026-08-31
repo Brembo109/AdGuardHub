@@ -8,20 +8,12 @@ import httpx
 
 from . import session
 from .base import AdapterError, DnsAdapter, QueryLogEntry, RemoteFilterList
+from .sections import SECTION_NAMES, SPEC_BY_NAME, SectionSpec
 from .session import SessionKey, SessionStore
 
 # AdGuard's query log "reason" values that mean the answer was actually filtered.
 _ALLOWED_REASONS = {"NotFilteredWhiteList", "NotFilteredNotFound", "NotFilteredError", ""}
 
-# Managed keys of /control/dns_info. Anything else on the instance is left alone.
-DNS_KEYS = (
-    "upstream_dns",
-    "bootstrap_dns",
-    "fallback_dns",
-    "upstream_mode",
-    "dnssec_enabled",
-    "protection_enabled",
-)
 
 
 class AdGuardAdapter(DnsAdapter):
@@ -139,7 +131,10 @@ class AdGuardAdapter(DnsAdapter):
             )
         if response.status_code >= 400:
             detail = response.text.strip()[:200]
-            raise AdapterError(f"{method} {path} returned HTTP {response.status_code}: {detail}")
+            raise AdapterError(
+                f"{method} {path} returned HTTP {response.status_code}: {detail}",
+                status=response.status_code,
+            )
         return response
 
     async def _get_json(self, path: str, **kwargs: Any) -> Any:
@@ -217,17 +212,115 @@ class AdGuardAdapter(DnsAdapter):
             },
         )
 
-    async def pull_dns_settings(self) -> dict[str, Any]:
-        data = await self._get_json("/control/dns_info")
-        if not isinstance(data, dict):
-            return {}
-        return {key: data[key] for key in DNS_KEYS if key in data}
 
-    async def push_dns_settings(self, settings: dict[str, Any]) -> None:
-        payload = {key: value for key, value in settings.items() if key in DNS_KEYS}
+    # -- configuration sections ------------------------------------------
+
+    def supported_sections(self) -> tuple[str, ...]:
+        return SECTION_NAMES
+
+    @staticmethod
+    def _select(spec: SectionSpec, data: dict[str, Any]) -> dict[str, Any]:
+        if not spec.keys:
+            return dict(data)
+        return {key: data[key] for key in spec.keys if key in data}
+
+    async def _section_json(self, spec: SectionSpec) -> Any | None:
+        """Read a section's endpoint, mapping "not implemented" to ``None``.
+
+        AdGuard versions differ in which areas they expose; a missing one must be
+        skipped rather than fail the whole sync.
+        """
+        try:
+            return await self._get_json(spec.get_path)
+        except AdapterError as exc:
+            if exc.status in (404, 405, 501):
+                return None
+            raise
+
+    async def pull_section(self, name: str) -> dict[str, Any] | None:
+        spec = SPEC_BY_NAME.get(name)
+        if spec is None:
+            raise AdapterError(f"Unknown configuration section {name!r}")
+
+        raw = await self._section_json(spec)
+        if raw is None:
+            return None
+
+        if spec.strategy == "toggle":
+            return {"enabled": bool(raw.get("enabled"))}
+        if spec.strategy == "clients":
+            return {"clients": list(raw.get("clients") or [])}
+        if spec.strategy == "rewrites":
+            items = raw if isinstance(raw, list) else raw.get("items") or []
+            return {"items": [dict(item) for item in items]}
+        if not isinstance(raw, dict):
+            return None
+        return self._select(spec, raw)
+
+    async def push_section(self, name: str, data: dict[str, Any]) -> None:
+        spec = SPEC_BY_NAME.get(name)
+        if spec is None:
+            raise AdapterError(f"Unknown configuration section {name!r}")
+
+        if spec.strategy == "toggle":
+            path = spec.enable_path if data.get("enabled") else spec.disable_path
+            await self._request("POST", path)
+            return
+        if spec.strategy == "clients":
+            await self._push_clients(list(data.get("clients") or []))
+            return
+        if spec.strategy == "rewrites":
+            await self._push_rewrites(list(data.get("items") or []))
+            return
+
+        payload = self._select(spec, data)
         if not payload:
             return
-        await self._request("POST", "/control/dns_config", json=payload)
+        if spec.merge_on_push:
+            # This endpoint replaces the whole object, so send the target's current
+            # document with only the managed keys overlaid — anything the node owns
+            # (a certificate, its hostname) has to survive the push.
+            current = await self._section_json(spec)
+            if isinstance(current, dict):
+                payload = {**current, **payload}
+        await self._request(spec.set_method, spec.set_path, json=payload)
+
+    async def _push_clients(self, desired: list[dict[str, Any]]) -> None:
+        """Make the persistent client list match ``desired`` exactly."""
+        current_raw = await self._section_json(SPEC_BY_NAME["clients"])
+        current = {
+            str(item.get("name")): item for item in (current_raw or {}).get("clients") or []
+        }
+        wanted = {str(item.get("name")): item for item in desired if item.get("name")}
+
+        for client_name, client in wanted.items():
+            if client_name in current:
+                if current[client_name] != client:
+                    await self._request(
+                        "POST",
+                        "/control/clients/update",
+                        json={"name": client_name, "data": client},
+                    )
+            else:
+                await self._request("POST", "/control/clients/add", json=client)
+
+        for client_name in current.keys() - wanted.keys():
+            await self._request("POST", "/control/clients/delete", json={"name": client_name})
+
+    async def _push_rewrites(self, desired: list[dict[str, Any]]) -> None:
+        current_raw = await self._section_json(SPEC_BY_NAME["rewrites"])
+        raw_items = current_raw if isinstance(current_raw, list) else []
+        current = {(item.get("domain"), item.get("answer")) for item in raw_items}
+        wanted = {(item.get("domain"), item.get("answer")) for item in desired}
+
+        for domain, answer in wanted - current:
+            await self._request(
+                "POST", "/control/rewrite/add", json={"domain": domain, "answer": answer}
+            )
+        for domain, answer in current - wanted:
+            await self._request(
+                "POST", "/control/rewrite/delete", json={"domain": domain, "answer": answer}
+            )
 
     async def query_log(self, limit: int) -> list[QueryLogEntry]:
         data = await self._get_json("/control/querylog", params={"limit": limit})

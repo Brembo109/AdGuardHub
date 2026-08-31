@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import httpx
+import pytest
 
 from app.services.sync import drain_background
 
@@ -36,8 +37,16 @@ async def test_credentials_are_encrypted_and_never_returned(
 
     async with session_scope() as session:
         instance = (await session.execute(select(Instance))).scalars().one()
+
+    # Not a substring check: the ciphertext is base64, so it contains any given short
+    # string by chance often enough to make that assertion flaky. What matters is that
+    # the stored value is not the plaintext and only the right key recovers it.
+    from app.security import Crypto
+
     assert instance.password_encrypted != "pw"
-    assert "pw" not in instance.password_encrypted
+    assert Crypto("test-secret-key").decrypt(instance.password_encrypted) == "pw"
+    with pytest.raises(ValueError):
+        Crypto("a-different-key").decrypt(instance.password_encrypted)
 
 
 async def test_rule_is_pushed_to_every_instance(auth_client: httpx.AsyncClient) -> None:
@@ -141,20 +150,70 @@ async def test_filter_list_subscriptions_are_pushed(auth_client: httpx.AsyncClie
     assert FakeAdapter.state_for(A).filter_lists[0].enabled is False
 
 
-async def test_dns_settings_only_pushed_when_managed(auth_client: httpx.AsyncClient) -> None:
+async def test_sections_are_only_pushed_when_managed(auth_client: httpx.AsyncClient) -> None:
     await add_instance(auth_client, "a", A)
 
-    await auth_client.put("/api/settings/dns", json={"managed": False, "upstream_dns": "1.1.1.1"})
+    await auth_client.patch(
+        "/api/config/sections/dns",
+        json={"managed": False, "data": {"upstream_dns": ["1.1.1.1"]}},
+    )
     await auth_client.post("/api/sync")
-    assert FakeAdapter.state_for(A).dns == {}
+    assert FakeAdapter.state_for(A).sections == {}
 
-    await auth_client.put(
-        "/api/settings/dns",
-        json={"managed": True, "upstream_dns": "1.1.1.1\n9.9.9.9", "dnssec_enabled": True},
+    await auth_client.patch("/api/config/sections/dns", json={"managed": True})
+    await drain_background()
+    assert FakeAdapter.state_for(A).sections["dns"] == {"upstream_dns": ["1.1.1.1"]}
+
+
+async def test_every_managed_section_reaches_the_instance(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """The point of naming a master: the second node gets the whole configuration."""
+    await add_instance(auth_client, "a", A)
+    wanted = {
+        "dns": {"upstream_dns": ["9.9.9.9"], "dnssec_enabled": True},
+        "clients": {"clients": [{"name": "laptop", "ids": ["192.168.1.5"]}]},
+        "access": {"allowed_clients": [], "disallowed_clients": ["1.2.3.4"]},
+        "safesearch": {"enabled": True, "google": True},
+        "rewrites": {"items": [{"domain": "nas.lan", "answer": "192.168.1.9"}]},
+    }
+    for name, data in wanted.items():
+        await auth_client.patch(
+            f"/api/config/sections/{name}", json={"managed": True, "data": data}
+        )
+    await drain_background()
+
+    for name, data in wanted.items():
+        assert FakeAdapter.state_for(A).sections[name] == data
+
+
+async def test_a_section_the_instance_lacks_does_not_fail_the_push(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    await add_instance(auth_client, "a", A)
+    FakeAdapter.state_for(A).unsupported_sections = {"tls"}
+
+    await auth_client.patch(
+        "/api/config/sections/dns", json={"managed": True, "data": {"upstream_dns": ["1.1.1.1"]}}
     )
     await drain_background()
-    assert FakeAdapter.state_for(A).dns["upstream_dns"] == ["1.1.1.1", "9.9.9.9"]
-    assert FakeAdapter.state_for(A).dns["dnssec_enabled"] is True
+    assert FakeAdapter.state_for(A).sections["dns"] == {"upstream_dns": ["1.1.1.1"]}
+
+
+async def test_only_the_tls_on_off_state_travels(auth_client: httpx.AsyncClient) -> None:
+    """Each node terminates TLS with its own certificate; only the decision syncs."""
+    await add_instance(auth_client, "a", A)
+    await auth_client.patch(
+        "/api/config/sections/tls", json={"managed": True, "data": {"enabled": True}}
+    )
+    await drain_background()
+
+    assert FakeAdapter.state_for(A).sections["tls"] == {"enabled": True}
+
+    listed = (await auth_client.get("/api/config/sections")).json()
+    tls = next(item for item in listed if item["name"] == "tls")
+    assert tls["keys"] == ["enabled"]
+    assert tls["skipped_reason"] == ""
 
 
 async def test_manual_full_sync_reports_failures(auth_client: httpx.AsyncClient) -> None:

@@ -7,6 +7,7 @@ import { useResource } from './hooks/useApi'
 import { useEventStream } from './hooks/useEventStream'
 import { isOnboardingDone } from './onboarding'
 import Blocklists from './pages/Blocklists'
+import Config from './pages/Config'
 import Dashboard from './pages/Dashboard'
 import Instances from './pages/Instances'
 import Login from './pages/Login'
@@ -14,6 +15,7 @@ import Onboarding from './pages/Onboarding'
 import QueryLog from './pages/QueryLog'
 import Rules from './pages/Rules'
 import Settings from './pages/Settings'
+import Versions from './pages/Versions'
 
 const NAV = [
   { to: '/', label: 'Dashboard' },
@@ -21,6 +23,8 @@ const NAV = [
   { to: '/rules', label: 'Rules' },
   { to: '/subscriptions', label: 'Subscriptions' },
   { to: '/instances', label: 'Instances' },
+  { to: '/config', label: 'Instance settings' },
+  { to: '/history', label: 'History' },
   { to: '/settings', label: 'Settings' },
 ]
 
@@ -81,6 +85,8 @@ export default function App() {
           <Route path="/rules" element={<Rules />} />
           <Route path="/subscriptions" element={<Blocklists />} />
           <Route path="/instances" element={<Instances />} />
+          <Route path="/config" element={<Config />} />
+          <Route path="/history" element={<Versions />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

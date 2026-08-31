@@ -6,16 +6,9 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
 from ..deps import CurrentUser, SessionDep
-from ..models import NotifierTarget, PayloadKind
-from ..schemas import (
-    DnsSettingsIn,
-    DnsSettingsOut,
-    NotifierCreate,
-    NotifierOut,
-    NotifierUpdate,
-)
+from ..models import NotifierTarget
+from ..schemas import NotifierCreate, NotifierOut, NotifierUpdate
 from ..services.notify import KNOWN_EVENTS, NOTIFIER_TYPES, test_target
-from ..services.sync import get_dns_settings, schedule_sync
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -104,19 +97,3 @@ async def test_notifier(target_id: int, _: CurrentUser, session: SessionDep) -> 
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Notifier not found")
     error = await test_target(session, target)
     return {"ok": "false" if error else "true", "error": error}
-
-
-@router.get("/dns", response_model=DnsSettingsOut)
-async def get_dns(_: CurrentUser, session: SessionDep) -> DnsSettingsOut:
-    return DnsSettingsOut.model_validate(await get_dns_settings(session))
-
-
-@router.put("/dns", response_model=DnsSettingsOut)
-async def put_dns(payload: DnsSettingsIn, _: CurrentUser, session: SessionDep) -> DnsSettingsOut:
-    settings = await get_dns_settings(session)
-    for field, value in payload.model_dump().items():
-        setattr(settings, field, value)
-    await session.commit()
-    if settings.managed:
-        schedule_sync((PayloadKind.dns,), "DNS settings updated")
-    return DnsSettingsOut.model_validate(settings)

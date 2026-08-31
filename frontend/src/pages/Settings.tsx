@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { api } from '../api/client'
-import type { DnsSettings, Notifier, NotifierType } from '../api/types'
+import type { Notifier, NotifierType } from '../api/types'
 import { useAuth } from '../auth'
 import { Banner, Card, Empty, PageHeader } from '../components/ui'
 import { errorMessage, useResource } from '../hooks/useApi'
@@ -20,7 +20,6 @@ const URL_HINTS: Record<NotifierType, string> = {
 export default function Settings() {
   const notifiers = useResource<Notifier[]>(() => api.notifiers())
   const meta = useResource(() => api.notifierMeta())
-  const dns = useResource<DnsSettings>(() => api.dnsSettings())
 
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -44,7 +43,7 @@ export default function Settings() {
     <>
       <PageHeader
         title="Settings"
-        description="Notification targets, optional DNS settings sync, and your own credentials."
+        description="Notification targets and your own credentials. The settings replicated to your instances live under Instance settings."
       />
 
       {error ? <Banner kind="error">{error}</Banner> : null}
@@ -57,7 +56,6 @@ export default function Settings() {
         run={run}
         reload={notifiers.reload}
       />
-      <DnsSection settings={dns.data} busy={busy} run={run} reload={dns.reload} />
       <PasswordSection busy={busy} run={run} />
     </>
   )
@@ -251,123 +249,6 @@ function NotifierSection({
           <Empty>No notification targets configured.</Empty>
         )}
       </div>
-    </Card>
-  )
-}
-
-function DnsSection({
-  settings,
-  busy,
-  run,
-  reload,
-}: {
-  settings: DnsSettings | null
-  busy: boolean
-  run: Runner
-  reload: () => Promise<void>
-}) {
-  const [draft, setDraft] = useState<DnsSettings | null>(null)
-  const value = draft ?? settings
-
-  if (!value) {
-    return (
-      <Card title="DNS settings">
-        <Empty>Loading…</Empty>
-      </Card>
-    )
-  }
-
-  const update = (patch: Partial<DnsSettings>) => setDraft({ ...value, ...patch })
-
-  const save = (event: React.FormEvent) => {
-    event.preventDefault()
-    void run(async () => {
-      // `updated_at` is server-owned and not part of the write payload.
-      const payload = {
-        managed: value.managed,
-        upstream_dns: value.upstream_dns,
-        bootstrap_dns: value.bootstrap_dns,
-        fallback_dns: value.fallback_dns,
-        upstream_mode: value.upstream_mode,
-        dnssec_enabled: value.dnssec_enabled,
-        protection_enabled: value.protection_enabled,
-      }
-      await api.saveDnsSettings(payload)
-      setDraft(null)
-      return payload.managed
-        ? 'DNS settings saved and pushed to every instance.'
-        : 'DNS settings saved. Instances keep their own DNS configuration.'
-    }, reload)
-  }
-
-  return (
-    <Card
-      title="Instance DNS settings"
-      hint="Optional. While managed, reconciliation also corrects these on every instance; while unmanaged, each instance keeps whatever it has."
-    >
-      <form onSubmit={save}>
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={value.managed}
-            onChange={(event) => update({ managed: event.target.checked })}
-          />
-          Manage DNS settings from AdGuardHub
-        </label>
-
-        <div className="row">
-          <div className="field">
-            <label htmlFor="upstream">Upstream DNS (one per line)</label>
-            <textarea
-              id="upstream"
-              value={value.upstream_dns}
-              disabled={!value.managed}
-              onChange={(event) => update({ upstream_dns: event.target.value })}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="bootstrap">Bootstrap DNS (one per line)</label>
-            <textarea
-              id="bootstrap"
-              value={value.bootstrap_dns}
-              disabled={!value.managed}
-              onChange={(event) => update({ bootstrap_dns: event.target.value })}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="fallback">Fallback DNS (one per line)</label>
-            <textarea
-              id="fallback"
-              value={value.fallback_dns}
-              disabled={!value.managed}
-              onChange={(event) => update({ fallback_dns: event.target.value })}
-            />
-          </div>
-        </div>
-
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={value.dnssec_enabled}
-            disabled={!value.managed}
-            onChange={(event) => update({ dnssec_enabled: event.target.checked })}
-          />
-          Enable DNSSEC
-        </label>
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={value.protection_enabled}
-            disabled={!value.managed}
-            onChange={(event) => update({ protection_enabled: event.target.checked })}
-          />
-          Filtering protection enabled
-        </label>
-
-        <button className="primary" type="submit" disabled={busy}>
-          Save DNS settings
-        </button>
-      </form>
     </Card>
   )
 }
