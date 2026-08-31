@@ -79,6 +79,7 @@ export function HubSettingsForm() {
           querylog_poll_interval: value.querylog_poll_interval,
           querylog_buffer_size: value.querylog_buffer_size,
           http_timeout: value.http_timeout,
+          external_api_enabled: value.external_api_enabled,
         })
         setDraft(null)
         settings.setData(saved)
@@ -123,6 +124,19 @@ export function HubSettingsForm() {
           />
           Poll the instances for query log entries
         </label>
+
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={value.external_api_enabled}
+            onChange={(event) => update({ external_api_enabled: event.target.checked })}
+          />
+          Serve the AdGuard-compatible API at <code>/control</code>
+        </label>
+        <p className="hint" style={{ margin: '0 0 8px 26px' }}>
+          Lets apps and integrations built for AdGuard Home point at the hub instead of at one
+          node — they sign in with this admin account, and what they change is pushed everywhere.
+        </p>
 
         <div className="row" style={{ marginTop: 10 }}>
           {TIMERS.map((field) => {

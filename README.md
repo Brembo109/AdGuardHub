@@ -159,6 +159,9 @@ All settings are environment variables prefixed with `ADGUARDHUB_`.
 | `ADGUARDHUB_RETRY_INTERVAL` | `30` | Seconds between retry-queue passes. |
 | `ADGUARDHUB_QUERYLOG_POLL_INTERVAL` | `5` | Seconds between query log polls. |
 | `ADGUARDHUB_QUERYLOG_BUFFER_SIZE` | `2000` | Entries kept in the in-memory log buffer. |
+
+The four timers above only seed the initial values. Once the hub has started they are edited
+under *Settings → Sync & timers* and take effect on the next worker cycle — no restart.
 | `ADGUARDHUB_SESSION_MAX_AGE` | `1209600` | Session lifetime in seconds. |
 | `ADGUARDHUB_HTTP_TIMEOUT` | `10` | Per-request timeout when talking to instances. |
 
@@ -202,6 +205,26 @@ snapshot. Under *History* you can:
   rollback itself is recorded so it can be undone in turn
 
 History is capped at the most recent 200 versions to keep the database small.
+
+## AdGuard-compatible API
+
+Apps and integrations built for AdGuard Home speak `/control/*`. AdGuardHub serves that
+surface too, so you can point an existing client — an iOS/Android remote, a script, a Home
+Assistant integration — at the hub instead of at one node:
+
+- **configuration reads** come from the hub's own state, so what a client sees is what the
+  hub enforces;
+- **writes go through the hub**: a rule added from your phone lands in the central model,
+  is pushed to every instance, and shows up in the history like any other change;
+- **statistics** are summed across the instances (with the average response time weighted by
+  query count, not naively averaged), and the query log is the aggregated one, with the
+  answering node in each entry's `client_info`.
+
+Sign in with the AdGuardHub admin account — the same credentials as the web UI. The surface
+can be switched off under *Settings → Sync & timers*.
+
+Two honest limits: DHCP is not offered (the hub never manages it), and `filtering/refresh` is
+a no-op because the hub tracks subscription URLs rather than their contents.
 
 ## Notifications
 

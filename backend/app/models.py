@@ -154,6 +154,7 @@ class HubSettings(Base):
     querylog_poll_interval: Mapped[int] = mapped_column(Integer, default=5)
     querylog_buffer_size: Mapped[int] = mapped_column(Integer, default=2000)
     http_timeout: Mapped[int] = mapped_column(Integer, default=10)
+    external_api_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )

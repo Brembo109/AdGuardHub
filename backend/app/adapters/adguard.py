@@ -322,6 +322,10 @@ class AdGuardAdapter(DnsAdapter):
                 "POST", "/control/rewrite/delete", json={"domain": domain, "answer": answer}
             )
 
+    async def stats(self) -> dict[str, Any]:
+        data = await self._get_json("/control/stats")
+        return data if isinstance(data, dict) else {}
+
     async def query_log(self, limit: int) -> list[QueryLogEntry]:
         data = await self._get_json("/control/querylog", params={"limit": limit})
         rows = data.get("data") if isinstance(data, dict) else None

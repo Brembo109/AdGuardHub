@@ -87,6 +87,10 @@ class DnsAdapter(ABC):
         """Return the most recent query log entries, newest first."""
 
     @abstractmethod
+    async def stats(self) -> dict[str, Any]:
+        """Return the backend's own statistics document."""
+
+    @abstractmethod
     async def pull_section(self, name: str) -> dict[str, Any] | None:
         """Read one configuration section, or ``None`` if the backend lacks it."""
 
