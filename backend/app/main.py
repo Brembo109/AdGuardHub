@@ -29,7 +29,19 @@ from .services.sync import retry_worker
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("adguardhub")
 
-VERSION = "0.1.0"
+def build_version() -> str:
+    """The release this build was cut from.
+
+    The Release workflow passes the git tag into the image build, which bakes it
+    in as ADGUARDHUB_VERSION. Nothing in the source tree carries a number, so a
+    version here can never drift out of step with the tags the way a hand-edited
+    constant does — and a build that came from no tag says so rather than
+    claiming to be the last release someone happened to write down.
+    """
+    return os.environ.get("ADGUARDHUB_VERSION", "").strip() or "dev"
+
+
+VERSION = build_version()
 
 
 async def bootstrap_admin() -> None:

@@ -31,6 +31,10 @@ jobs:
         with:
           context: .
           push: true
+          # Bakes the tag into the image, so the running container reports the
+          # release it came from — in its startup log, /api/health and the UI.
+          build-args: |
+            ADGUARDHUB_VERSION=${{ steps.version.outputs.version }}
           tags: |
             ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
             ghcr.io/${{ github.repository }}:latest

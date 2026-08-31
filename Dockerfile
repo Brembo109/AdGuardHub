@@ -39,6 +39,15 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh && mkdir -p /data
 ENV PUID=1000 \
     PGID=1000
 
+# The release tag, passed by the Release workflow (--build-arg ADGUARDHUB_VERSION=0.2.0).
+# Deliberately the last thing that changes between releases: everything above it —
+# apt, pip, the frontend build — is identical from one tag to the next and stays
+# cached, so cutting a release rebuilds a layer rather than an image. Empty for a
+# local build, which then reports "dev" rather than borrowing a release number it
+# was not cut from.
+ARG ADGUARDHUB_VERSION=""
+ENV ADGUARDHUB_VERSION=${ADGUARDHUB_VERSION}
+
 VOLUME ["/data"]
 
 # The container listens on 80; publish it wherever you like (-p 8080:80). Docker

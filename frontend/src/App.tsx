@@ -6,6 +6,7 @@ import { IconMenu, IconMonitor, IconMoon, IconSun } from './components/icons'
 import { Banner } from './components/ui'
 import { useEventStream } from './hooks/useEventStream'
 import { useTheme } from './hooks/useTheme'
+import { LANGUAGES, useI18n } from './i18n'
 import Blocklists from './pages/Blocklists'
 import Config from './pages/Config'
 import Dashboard from './pages/Dashboard'
@@ -38,6 +39,7 @@ const SYNC_EVENTS = new Set(['instance.status', 'instances', 'sync', 'retry', 'd
 export default function App() {
   const { state, loading, logout } = useAuth()
   const { theme, cycle } = useTheme()
+  const { t, language, setLanguage } = useI18n()
   const [tick, setTick] = useState(0)
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -49,7 +51,7 @@ export default function App() {
   if (loading) {
     return (
       <div className="login-shell">
-        <div style={{ color: 'var(--dim)' }}>Loading…</div>
+        <div style={{ color: 'var(--dim)' }}>{t('Loading…')}</div>
       </div>
     )
   }
@@ -69,7 +71,7 @@ export default function App() {
         <button
           className="icon-button burger"
           onClick={() => setMenuOpen(!menuOpen)}
-          aria-label="Menu"
+          aria-label={t('Menu')}
           aria-expanded={menuOpen}
         >
           <IconMenu />
@@ -84,7 +86,7 @@ export default function App() {
               onClick={() => setMenuOpen(false)}
               className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
             >
-              {item.label}
+              {t(item.label)}
             </NavLink>
           ))}
         </div>
@@ -92,15 +94,30 @@ export default function App() {
         <div className="band-right">
           <SyncStatus connected={connected} tick={tick} />
           <button
+            className="icon-button lang"
+            onClick={() =>
+              setLanguage(
+                LANGUAGES[(LANGUAGES.findIndex((item) => item.code === language) + 1) %
+                  LANGUAGES.length].code,
+              )
+            }
+            title={t('Language: {name}. Click to change.', {
+              name: LANGUAGES.find((item) => item.code === language)?.label ?? language,
+            })}
+            aria-label={t('Language')}
+          >
+            {language.toUpperCase()}
+          </button>
+          <button
             className="icon-button"
             onClick={cycle}
-            title={`Theme: ${theme}. Click to change.`}
-            aria-label={`Theme: ${theme}`}
+            title={t('Theme: {name}. Click to change.', { name: t(theme) })}
+            aria-label={t('Theme')}
           >
             <ThemeIcon />
           </button>
           <span className="band-user">{state.username}</span>
-          <button className="icon-button" onClick={() => void logout()} title="Sign out">
+          <button className="icon-button" onClick={() => void logout()} title={t('Sign out')}>
             <svg
               width="18"
               height="18"
@@ -121,9 +138,10 @@ export default function App() {
       <main className="main">
         {state.ephemeral_secret ? (
           <Banner kind="warn">
-            <strong>ADGUARDHUB_SECRET_KEY is not set.</strong> A random key is in use, so your login
-            session and the stored instance credentials will be lost on the next restart. Set the
-            variable and re-enter the instance passwords.
+            <strong>{t('ADGUARDHUB_SECRET_KEY is not set.')}</strong>{' '}
+            {t(
+              'A random key is in use, so your login session and the stored instance credentials will be lost on the next restart. Set the variable and re-enter the instance passwords.',
+            )}
           </Banner>
         ) : null}
 

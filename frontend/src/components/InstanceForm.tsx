@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from '../api/client'
+import { useT } from '../i18n'
 import type { InstanceDraft } from './instanceDraft'
 import { errorMessage } from '../hooks/useApi'
 import { Banner } from './ui'
@@ -27,6 +28,7 @@ export function InstanceForm({
   existingId?: number
   requireName?: boolean
 }) {
+  const t = useT()
   const [testing, setTesting] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null)
 
@@ -43,7 +45,7 @@ export function InstanceForm({
       })
       setResult(
         outcome.ok
-          ? { ok: true, message: `Connected — AdGuard Home ${outcome.version}.` }
+          ? { ok: true, message: t('Connected — AdGuard Home {version}.', { version: outcome.version }) }
           : { ok: false, message: outcome.error },
       )
     } catch (caught) {
@@ -63,18 +65,18 @@ export function InstanceForm({
       <div className="row">
         {requireName ? (
           <div className="field">
-            <label htmlFor="if-name">Name</label>
+            <label htmlFor="if-name">{t('Name')}</label>
             <input
               id="if-name"
               value={draft.name}
-              placeholder="adguard-primary"
+              placeholder={t('adguard-primary')}
               onChange={(event) => onChange({ ...draft, name: event.target.value })}
               required
             />
           </div>
         ) : null}
         <div className="field">
-          <label htmlFor="if-url">Base URL</label>
+          <label htmlFor="if-url">{t('Base URL')}</label>
           <input
             id="if-url"
             value={draft.base_url}
@@ -84,7 +86,7 @@ export function InstanceForm({
           />
         </div>
         <div className="field">
-          <label htmlFor="if-user">Admin username</label>
+          <label htmlFor="if-user">{t('Admin username')}</label>
           <input
             id="if-user"
             value={draft.username}
@@ -94,7 +96,9 @@ export function InstanceForm({
         </div>
         <div className="field">
           <label htmlFor="if-pass">
-            Admin password{existingId ? ' (blank keeps the current one)' : ''}
+            {existingId
+              ? t('Admin password (blank keeps the current one)')
+              : t('Admin password')}
           </label>
           <input
             id="if-pass"
@@ -112,7 +116,7 @@ export function InstanceForm({
           checked={draft.verify_tls}
           onChange={(event) => onChange({ ...draft, verify_tls: event.target.checked })}
         />
-        Verify the TLS certificate (turn off for a self-signed HTTPS instance)
+        {t('Verify the TLS certificate (turn off for a self-signed HTTPS instance)')}
       </label>
 
       {result ? (
@@ -121,14 +125,14 @@ export function InstanceForm({
 
       <div className="actions">
         <button type="button" onClick={test} disabled={testing || busy || !draft.base_url}>
-          {testing ? 'Testing…' : 'Test connection'}
+          {testing ? t('Testing…') : t('Test connection')}
         </button>
         <button className="primary" type="submit" disabled={busy}>
           {submitLabel}
         </button>
         {onCancel ? (
           <button type="button" onClick={onCancel} disabled={busy}>
-            Cancel
+            {t('Cancel')}
           </button>
         ) : null}
       </div>

@@ -80,6 +80,7 @@ function query(params: Record<string, string | boolean | number | undefined>): s
 }
 
 export const api = {
+  health: () => get<{ status: string; version: string }>('/api/health'),
   authState: () => get<AuthState>('/api/auth/state'),
   setup: (username: string, password: string) =>
     post<AuthState>('/api/auth/setup', { username, password }),

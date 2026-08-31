@@ -5,6 +5,7 @@ import { useAuth } from '../auth'
 import { HubSettingsForm } from '../components/HubSettingsForm'
 import { Banner, Card, Empty, PageHeader } from '../components/ui'
 import { errorMessage, useResource } from '../hooks/useApi'
+import { useT } from '../i18n'
 
 const EVENT_LABELS: Record<string, string> = {
   'reconcile.fixed': 'Reconciliation applied a fix',
@@ -19,6 +20,7 @@ const URL_HINTS: Record<NotifierType, string> = {
 }
 
 export default function Settings() {
+  const t = useT()
   const notifiers = useResource<Notifier[]>(() => api.notifiers())
   const meta = useResource(() => api.notifierMeta())
 
@@ -43,8 +45,8 @@ export default function Settings() {
   return (
     <>
       <PageHeader
-        title="Settings"
-        description="How the hub itself behaves, notification targets, and your own credentials. The settings replicated to your instances live under Instance settings."
+        title={t('Settings')}
+        description={t('How the hub itself behaves, notification targets, and your own credentials. The settings replicated to your instances live under Instance settings.')}
       />
 
       {error ? <Banner kind="error">{error}</Banner> : null}
@@ -59,7 +61,26 @@ export default function Settings() {
         reload={notifiers.reload}
       />
       <PasswordSection busy={busy} run={run} />
+      <BuildLine />
     </>
+  )
+}
+
+/**
+ * Which build is actually running.
+ *
+ * Released images carry the tag they were cut from; anything else says "dev".
+ * Without this the only way to answer "did my update land?" is the container's
+ * startup log, which is exactly what you do not have when you are asking.
+ */
+function BuildLine() {
+  const t = useT()
+  const health = useResource(() => api.health())
+  if (!health.data) return null
+  return (
+    <p style={{ textAlign: 'center', color: 'var(--faint)', fontSize: 12.5, margin: '18px 0 0' }}>
+      {t('AdGuardHub {version}', { version: health.data.version })}
+    </p>
   )
 }
 
@@ -78,6 +99,7 @@ function NotifierSection({
   run: Runner
   reload: () => Promise<void>
 }) {
+  const t = useT()
   const [form, setForm] = useState<{
     name: string
     type: NotifierType
@@ -91,7 +113,7 @@ function NotifierSection({
     void run(async () => {
       const created = await api.createNotifier(form)
       setForm({ name: '', type: 'homeassistant', url: '', token: '', events: [] })
-      return `Added notifier ${created.name}.`
+      return t('Added notifier {name}.', { name: created.name })
     }, reload)
   }
 
@@ -105,13 +127,13 @@ function NotifierSection({
 
   return (
     <Card
-      title="Notifications"
-      hint="Zero or more targets can be active at once. Leave every event unticked to receive all of them."
+      title={t('Notifications')}
+      hint={t('Zero or more targets can be active at once. Leave every event unticked to receive all of them.')}
     >
       <form onSubmit={submit}>
         <div className="row">
           <div className="field">
-            <label htmlFor="n-name">Name</label>
+            <label htmlFor="n-name">{t('Name')}</label>
             <input
               id="n-name"
               value={form.name}
@@ -120,7 +142,7 @@ function NotifierSection({
             />
           </div>
           <div className="field fixed" style={{ width: 170 }}>
-            <label htmlFor="n-type">Type</label>
+            <label htmlFor="n-type">{t('Type')}</label>
             <select
               id="n-type"
               value={form.type}
@@ -132,7 +154,7 @@ function NotifierSection({
             </select>
           </div>
           <div className="field" style={{ flex: '2 1 320px' }}>
-            <label htmlFor="n-url">Webhook URL</label>
+            <label htmlFor="n-url">{t('Webhook URL')}</label>
             <input
               id="n-url"
               value={form.url}
@@ -143,7 +165,7 @@ function NotifierSection({
           </div>
           <div className="field">
             <label htmlFor="n-token">
-              {form.type === 'gotify' ? 'Application token' : 'Bearer token (optional)'}
+              {form.type === 'gotify' ? t('Application token') : t('Bearer token (optional)')}
             </label>
             <input
               id="n-token"
@@ -163,13 +185,13 @@ function NotifierSection({
                 checked={form.events.includes(name)}
                 onChange={() => toggleEvent(name)}
               />
-              {EVENT_LABELS[name] ?? name}
+              {t(EVENT_LABELS[name] ?? name)}
             </label>
           ))}
         </div>
 
         <button className="primary" type="submit" disabled={busy}>
-          Add notifier
+          {t('Add notifier')}
         </button>
       </form>
 
@@ -179,10 +201,10 @@ function NotifierSection({
             <table>
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Type</th>
-                  <th>URL</th>
-                  <th>Events</th>
+                  <th>{t('Name')}</th>
+                  <th>{t('Type')}</th>
+                  <th>{t('URL')}</th>
+                  <th>{t('Events')}</th>
                   <th />
                 </tr>
               </thead>
@@ -194,8 +216,8 @@ function NotifierSection({
                     <td className="mono">{target.url}</td>
                     <td>
                       {target.events.length
-                        ? target.events.map((name) => EVENT_LABELS[name] ?? name).join(', ')
-                        : 'all events'}
+                        ? target.events.map((name) => t(EVENT_LABELS[name] ?? name)).join(', ')
+                        : t('all events')}
                       {target.last_error ? (
                         <div className="mono" style={{ color: 'var(--danger)', marginTop: 4 }}>
                           {target.last_error}
@@ -210,12 +232,12 @@ function NotifierSection({
                           void run(async () => {
                             const result = await api.testNotifier(target.id)
                             return result.error
-                              ? `Test failed: ${result.error}`
-                              : `Test notification sent to ${target.name}.`
+                              ? t('Test failed: {error}', { error: result.error })
+                              : t('Test notification sent to {name}.', { name: target.name })
                           }, reload)
                         }
                       >
-                        Test
+                        {t('Test')}
                       </button>{' '}
                       <button
                         className="small"
@@ -223,11 +245,13 @@ function NotifierSection({
                         onClick={() =>
                           void run(async () => {
                             await api.updateNotifier(target.id, { enabled: !target.enabled })
-                            return `${target.name} ${target.enabled ? 'disabled' : 'enabled'}.`
+                            return target.enabled
+                              ? t('{name} disabled.', { name: target.name })
+                              : t('{name} enabled.', { name: target.name })
                           }, reload)
                         }
                       >
-                        {target.enabled ? 'Disable' : 'Enable'}
+                        {target.enabled ? t('Disable') : t('Enable')}
                       </button>{' '}
                       <button
                         className="small danger"
@@ -235,11 +259,11 @@ function NotifierSection({
                         onClick={() =>
                           void run(async () => {
                             await api.deleteNotifier(target.id)
-                            return `Removed ${target.name}.`
+                            return t('Removed {name}.', { name: target.name })
                           }, reload)
                         }
                       >
-                        Remove
+                        {t('Remove')}
                       </button>
                     </td>
                   </tr>
@@ -248,7 +272,7 @@ function NotifierSection({
             </table>
           </div>
         ) : (
-          <Empty>No notification targets configured.</Empty>
+          <Empty>{t('No notification targets configured.')}</Empty>
         )}
       </div>
     </Card>
@@ -256,6 +280,7 @@ function NotifierSection({
 }
 
 function PasswordSection({ busy, run }: { busy: boolean; run: Runner }) {
+  const t = useT()
   const { state, logout } = useAuth()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
@@ -266,15 +291,15 @@ function PasswordSection({ busy, run }: { busy: boolean; run: Runner }) {
       await api.changePassword(current, next)
       setCurrent('')
       setNext('')
-      return 'Password changed.'
+      return t('Password changed.')
     })
   }
 
   return (
-    <Card title="Account" hint={`Signed in as ${state?.username ?? 'unknown'}.`}>
+    <Card title={t('Account')} hint={t('Signed in as {name}.', { name: state?.username ?? t('unknown') })}>
       <form onSubmit={submit} className="row">
         <div className="field">
-          <label htmlFor="cur">Current password</label>
+          <label htmlFor="cur">{t('Current password')}</label>
           <input
             id="cur"
             type="password"
@@ -285,7 +310,7 @@ function PasswordSection({ busy, run }: { busy: boolean; run: Runner }) {
           />
         </div>
         <div className="field">
-          <label htmlFor="new">New password</label>
+          <label htmlFor="new">{t('New password')}</label>
           <input
             id="new"
             type="password"
@@ -298,12 +323,12 @@ function PasswordSection({ busy, run }: { busy: boolean; run: Runner }) {
         </div>
         <div className="field fixed">
           <button className="primary" type="submit" disabled={busy}>
-            Change password
+            {t('Change password')}
           </button>
         </div>
         <div className="field fixed">
           <button type="button" onClick={() => void logout()}>
-            Sign out
+            {t('Sign out')}
           </button>
         </div>
       </form>

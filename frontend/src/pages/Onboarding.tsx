@@ -7,6 +7,7 @@ import { InstanceForm } from '../components/InstanceForm'
 import { BLANK_DRAFT, type InstanceDraft } from '../components/instanceDraft'
 import { Badge, Banner, Card, PageHeader } from '../components/ui'
 import { errorMessage, useResource } from '../hooks/useApi'
+import { useT } from '../i18n'
 
 type Step = 1 | 2 | 3
 
@@ -16,6 +17,7 @@ type Step = 1 | 2 | 3
  * rule set over every instance's existing configuration.
  */
 export default function Onboarding() {
+  const t = useT()
   const navigate = useNavigate()
   const { state, refresh } = useAuth()
   const instances = useResource<Instance[]>(() => api.instances())
@@ -45,17 +47,23 @@ export default function Onboarding() {
     run(async () => {
       const created = await api.createInstance(draft)
       setDraft({ ...BLANK_DRAFT })
-      return `Added ${created.name}. Add another, or continue to the import step.`
+      return t('Added {name}. Add another, or continue to the import step.', {
+        name: created.name,
+      })
     })
 
   const importFrom = (instance: Instance) => {
     if (
       !confirm(
-        `Use ${instance.name} as the master?\n\n` +
-          "Its rules, subscriptions and instance settings become AdGuardHub's state, and every " +
-          'other instance is overwritten with them on the next push.\n\n' +
-          'Encryption is adopted but left switched off: enabling it on a node without a valid ' +
-          'certificate would make that node unreachable.',
+        t('Use {name} as the master?', { name: instance.name }) +
+          '\n\n' +
+          t(
+            "Its rules, subscriptions and instance settings become AdGuardHub's state, and every other instance is overwritten with them on the next push.",
+          ) +
+          '\n\n' +
+          t(
+            'Encryption is adopted but left switched off: enabling it on a node without a valid certificate would make that node unreachable.',
+          ),
       )
     )
       return
@@ -63,9 +71,23 @@ export default function Onboarding() {
       const result = await api.importInstance(instance.id, { replace: true })
       setStep(3)
       const review = result.sections_needing_review.length
-        ? ` ${result.sections_needing_review.join(', ')} was adopted but left switched off — review it under Instance settings before enabling it.`
+        ? ' ' +
+          t(
+            '{names} was adopted but left switched off — review it under Instance settings before enabling it.',
+            { names: result.sections_needing_review.join(', ') },
+          )
         : ''
-      return `Imported ${result.rules_imported} rule(s), ${result.filter_lists_imported} subscription(s) and ${result.sections_imported.length} settings area(s) from ${result.instance}.${review}`
+      return (
+        t(
+          'Imported {rules} rule(s), {lists} subscription(s) and {sections} settings area(s) from {name}.',
+          {
+            rules: result.rules_imported,
+            lists: result.filter_lists_imported,
+            sections: result.sections_imported.length,
+            name: result.instance,
+          },
+        ) + review
+      )
     })
   }
 
@@ -86,18 +108,19 @@ export default function Onboarding() {
   return (
     <>
       <PageHeader
-        title="Welcome to AdGuardHub"
-        description="Three steps to a working hub. From then on every filtering change happens here, not in the native AdGuard UIs."
+        title={t('Welcome to AdGuardHub')}
+        description={t('Three steps to a working hub. From then on every filtering change happens here, not in the native AdGuard UIs.')}
         actions={
-          <button onClick={finish}>Skip setup</button>
+          <button onClick={finish}>{t('Skip setup')}</button>
         }
       />
 
       {state?.ephemeral_secret ? (
         <Banner kind="warn">
-          <strong>Set ADGUARDHUB_SECRET_KEY before you add instances.</strong> Without it a random
-          key is generated on every start, and the AdGuard passwords you are about to enter cannot
-          be decrypted after the next restart.
+          <strong>{t('Set ADGUARDHUB_SECRET_KEY before you add instances.')}</strong>{' '}
+          {t(
+            'Without it a random key is generated on every start, and the AdGuard passwords you are about to enter cannot be decrypted after the next restart.',
+          )}
         </Banner>
       ) : null}
 
@@ -105,16 +128,17 @@ export default function Onboarding() {
       {message ? <Banner kind="ok">{message}</Banner> : null}
 
       <ol className="steps">
-        <StepRow n={1} current={step} title="Add your AdGuard Home instances" onOpen={setStep}>
+        <StepRow n={1} current={step} title={t('Add your AdGuard Home instances')} onOpen={setStep}>
           <p className="hint">
-            Every instance you have in DHCP as a DNS server belongs here — that is the whole point:
-            a change made once reaches all of them, so a failover cannot undo it.
+            {t(
+              'Every instance you have in DHCP as a DNS server belongs here — that is the whole point: a change made once reaches all of them, so a failover cannot undo it.',
+            )}
           </p>
           <InstanceForm
             draft={draft}
             onChange={setDraft}
             onSubmit={addInstance}
-            submitLabel="Add instance"
+            submitLabel={t('Add instance')}
             busy={busy}
           />
           {list.length ? (
@@ -126,7 +150,7 @@ export default function Onboarding() {
                       <td>{instance.name}</td>
                       <td className="mono">{instance.base_url}</td>
                       <td>
-                        <Badge tone={instance.status}>{instance.status}</Badge>
+                        <Badge tone={instance.status}>{t(instance.status)}</Badge>
                       </td>
                     </tr>
                   ))}
@@ -138,17 +162,19 @@ export default function Onboarding() {
                 onClick={() => setStep(2)}
                 disabled={busy}
               >
-                Continue with {list.length} instance{list.length === 1 ? '' : 's'}
+                {list.length === 1
+                  ? t('Continue with 1 instance')
+                  : t('Continue with {count} instances', { count: list.length })}
               </button>
             </div>
           ) : null}
         </StepRow>
 
-        <StepRow n={2} current={step} title="Choose the master to import from" onOpen={setStep}>
+        <StepRow n={2} current={step} title={t('Choose the master to import from')} onOpen={setStep}>
           <p className="hint">
-            One instance's current configuration becomes the hub's starting state. The others are
-            overwritten with it — there is no merge between instances, by design. Pick the one whose
-            rules you actually want to keep.
+            {t(
+              "One instance's current configuration becomes the hub's starting state. The others are overwritten with it — there is no merge between instances, by design. Pick the one whose rules you actually want to keep.",
+            )}
           </p>
           {list.length ? (
             <table>
@@ -158,7 +184,7 @@ export default function Onboarding() {
                     <td>{instance.name}</td>
                     <td className="mono">{instance.base_url}</td>
                     <td>
-                      <Badge tone={instance.status}>{instance.status}</Badge>
+                      <Badge tone={instance.status}>{t(instance.status)}</Badge>
                     </td>
                     <td className="right">
                       <button
@@ -166,7 +192,7 @@ export default function Onboarding() {
                         onClick={() => importFrom(instance)}
                         disabled={busy || instance.status === 'unreachable'}
                       >
-                        Use as master
+                        {t('Use as master')}
                       </button>
                     </td>
                   </tr>
@@ -174,25 +200,26 @@ export default function Onboarding() {
               </tbody>
             </table>
           ) : (
-            <p className="hint">Add an instance in step 1 first.</p>
+            <p className="hint">{t('Add an instance in step 1 first.')}</p>
           )}
           <button style={{ marginTop: 12 }} onClick={() => setStep(3)} disabled={busy}>
-            Skip — I'll start from an empty rule set
+            {t('Skip — I\'ll start from an empty rule set')}
           </button>
         </StepRow>
 
-        <StepRow n={3} current={step} title="You're set up" onOpen={setStep}>
+        <StepRow n={3} current={step} title={t('You\'re set up')} onOpen={setStep}>
           <p className="hint">
-            AdGuardHub is now the single source of truth. Changes are pushed to every instance
-            immediately; a reconciliation run catches anything that drifts and logs the correction.
+            {t(
+              'AdGuardHub is now the single source of truth. Changes are pushed to every instance immediately; a reconciliation run catches anything that drifts and logs the correction.',
+            )}
           </p>
           <ul className="hint" style={{ paddingLeft: 18 }}>
-            <li>Use the query log to allow a blocked domain everywhere in one click.</li>
-            <li>Add notification targets under Settings to hear about failures.</li>
-            <li>Stop making filtering changes in the native AdGuard UIs.</li>
+            <li>{t('Use the query log to allow a blocked domain everywhere in one click.')}</li>
+            <li>{t('Add notification targets under Settings to hear about failures.')}</li>
+            <li>{t('Stop making filtering changes in the native AdGuard UIs.')}</li>
           </ul>
           <button className="primary" onClick={finish}>
-            Go to the dashboard
+            {t('Go to the dashboard')}
           </button>
         </StepRow>
       </ol>

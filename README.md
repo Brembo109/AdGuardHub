@@ -85,6 +85,11 @@ Light and dark both ship, following the operating system by default with a manua
 the top bar. There are no web fonts and no charting library: the hub runs on a local network
 that may have no internet at all, so everything it renders is in the image.
 
+English and German both ship as well. The language follows the browser on first load and is
+switched from the top bar (or from the login card, before there is a top bar); the choice is
+remembered per browser. Nothing about it is server-side, so two people can use the same hub in
+different languages.
+
 ## Architecture
 
 ```
@@ -158,8 +163,13 @@ builds from the working tree. Either way, the first log line tells you what you 
 
 ```bash
 docker logs adguardhub 2>&1 | head -5
-# INFO adguardhub: AdGuardHub 0.1.0 starting as uid=1000 gid=1000, data dir /data
+# INFO adguardhub: AdGuardHub 0.2.0 starting as uid=1000 gid=1000, data dir /data
 ```
+
+The same version is on `GET /api/health` and at the foot of the *Settings* page, which is
+usually the faster answer to "did the update land?". A published image reports the release
+tag it was built from; one you built yourself reports `dev`, because it was not cut from a
+tag and should not claim to have been.
 
 ### File permissions (PUID / PGID)
 
@@ -208,6 +218,9 @@ All settings are environment variables prefixed with `ADGUARDHUB_`.
 | `ADGUARDHUB_QUERYLOG_BUFFER_SIZE` | `2000` | Entries kept in the in-memory log buffer. |
 | `ADGUARDHUB_SESSION_MAX_AGE` | `1209600` | Session lifetime in seconds. |
 | `ADGUARDHUB_HTTP_TIMEOUT` | `10` | Per-request timeout when talking to instances. |
+
+`ADGUARDHUB_VERSION` is not in that list on purpose: it is build metadata, baked into the
+image from the release tag by the Release workflow, not something to set at runtime.
 
 The four interval/buffer timers only seed the initial values. Once the hub has started they are
 edited under *Settings → Sync & timers* and take effect on the next worker cycle — no restart.
@@ -328,11 +341,24 @@ Checks — the same ones CI runs:
 
 ```bash
 cd backend && ruff check . && pytest
-cd frontend && npm run lint && npm run build
+cd frontend && npm run lint && npm run i18n:check && npm run build
 ```
 
 In production the backend serves the built frontend from `ADGUARDHUB_STATIC_DIR`, so the whole
 thing is one container and one port.
+
+### Translations
+
+Translations are keyed on the English source text, so a call site reads as prose and a missing
+translation falls back to a correct English sentence rather than to a key name. The cost is that
+editing an English string silently unhooks its German, so `npm run i18n:check` walks every
+`t('…')` call site and fails on anything missing from `src/i18n/de.ts` — or still in it but no
+longer used. Strings that reach `t()` through a variable are listed in `src/i18n/dynamic-keys.json`;
+for the ones the backend serves (section titles, field labels and help text in
+`backend/app/adapters/sections.py`) a backend test keeps that list in sync.
+
+Adding a language means a dictionary next to `de.ts`, an entry in `DICTS` and `LANGUAGES`, and
+extending the check to cover it.
 
 ## Project layout
 

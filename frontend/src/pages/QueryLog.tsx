@@ -6,6 +6,7 @@ import { IconChevron, IconSearch } from '../components/icons'
 import { formatClock, formatTime } from '../format'
 import { errorMessage, useResource } from '../hooks/useApi'
 import { useEventStream } from '../hooks/useEventStream'
+import { useT } from '../i18n'
 
 const MAX_ROWS = 500
 
@@ -24,6 +25,7 @@ const rowKey = (entry: QueryLogEntry) =>
  * central rule model and push to all instances — no matter which instance logged the row.
  */
 export default function QueryLog() {
+  const t = useT()
   const instances = useResource<Instance[]>(() => api.instances())
   const [rows, setRows] = useState<QueryLogEntry[]>([])
   const [search, setSearch] = useState('')
@@ -73,7 +75,7 @@ export default function QueryLog() {
         mode === 'allow'
           ? await api.allowDomain(entry.question, 'querylog')
           : await api.blockDomain(entry.question, 'querylog')
-      setMessage(`${rule.text} added to the hub and pushed to every instance.`)
+      setMessage(t('{rule} added to the hub and pushed to every instance.', { rule: rule.text }))
     } catch (caught) {
       setError(errorMessage(caught))
     } finally {
@@ -96,17 +98,17 @@ export default function QueryLog() {
   return (
     <>
       <PageHeader
-        title="Query log"
-        description="Every instance's DNS queries in one stream. Allowing a domain here writes one rule that reaches all instances, so a failover cannot undo it."
+        title={t('Query log')}
+        description={t('Every instance\'s DNS queries in one stream. Allowing a domain here writes one rule that reaches all instances, so a failover cannot undo it.')}
         actions={
           <>
             <span style={{ alignSelf: 'center', color: 'var(--dim)', fontSize: 13 }}>
               <span className={`live-dot${connected && live ? ' on' : ''}`} />
               {connected ? (live ? 'live' : 'paused') : 'disconnected'}
             </span>
-            <button onClick={() => setLive(!live)}>{live ? 'Pause' : 'Resume'}</button>
+            <button onClick={() => setLive(!live)}>{live ? t('Pause') : t('Resume')}</button>
             <button onClick={refresh} disabled={busy}>
-              Poll now
+              {t('Poll now')}
             </button>
           </>
         }
@@ -121,18 +123,18 @@ export default function QueryLog() {
             <IconSearch />
             <input
               value={search}
-              aria-label="Search the query log"
-              placeholder="Search a domain, a client or a rule"
+              aria-label={t('Search the query log')}
+              placeholder={t('Search a domain, a client or a rule')}
               onChange={(event) => setSearch(event.target.value)}
             />
           </div>
           <select
-            aria-label="Filter by instance"
+            aria-label={t('Filter by instance')}
             style={{ flex: '0 0 190px' }}
             value={instance}
             onChange={(event) => setInstance(event.target.value)}
           >
-            <option value="">All nodes</option>
+            <option value="">{t('All nodes')}</option>
             {(instances.data ?? []).map((item) => (
               <option key={item.id} value={item.name}>
                 {item.name}
@@ -145,10 +147,10 @@ export default function QueryLog() {
               checked={blockedOnly}
               onChange={(event) => setBlockedOnly(event.target.checked)}
             />
-            Blocked only
+            {t('Blocked only')}
           </label>
           <span style={{ marginLeft: 'auto', color: 'var(--dim)', fontSize: 12.5 }}>
-            {rows.length} {rows.length === 1 ? 'entry' : 'entries'}
+            {rows.length === 1 ? t('1 entry') : t('{count} entries', { count: rows.length })}
           </span>
         </div>
 
@@ -157,11 +159,11 @@ export default function QueryLog() {
             <table className="stack-on-phone">
               <thead>
                 <tr>
-                  <th style={{ width: 112 }}>Time</th>
-                  <th>Domain</th>
-                  <th style={{ width: 110 }}>Response</th>
-                  <th style={{ width: 190 }}>Client</th>
-                  <th style={{ width: 150 }}>Node</th>
+                  <th style={{ width: 112 }}>{t('Time')}</th>
+                  <th>{t('Domain')}</th>
+                  <th style={{ width: 110 }}>{t('Response')}</th>
+                  <th style={{ width: 190 }}>{t('Client')}</th>
+                  <th style={{ width: 150 }}>{t('Node')}</th>
                   <th style={{ width: 180 }} />
                 </tr>
               </thead>
@@ -176,21 +178,21 @@ export default function QueryLog() {
                         onClick={() => setOpen(isOpen ? '' : key)}
                         style={{ cursor: 'pointer' }}
                       >
-                        <td data-label="Time" className="mono" title={formatTime(entry.time)}>
+                        <td data-label={t('Time')} className="mono" title={formatTime(entry.time)}>
                           {formatClock(entry.time)}
                         </td>
-                        <td data-label="Domain" className="mono">
+                        <td data-label={t('Domain')} className="mono">
                           {entry.question}
                         </td>
-                        <td data-label="Response">
+                        <td data-label={t('Response')}>
                           <Badge tone={entry.blocked ? 'blocked' : 'processed'}>
-                            {entry.blocked ? 'blocked' : 'processed'}
+                            {entry.blocked ? t('blocked') : t('processed')}
                           </Badge>
                         </td>
-                        <td data-label="Client" className="mono">
+                        <td data-label={t('Client')} className="mono">
                           {entry.client}
                         </td>
-                        <td data-label="Node" style={{ color: 'var(--dim)' }}>
+                        <td data-label={t('Node')} style={{ color: 'var(--dim)' }}>
                           {entry.instance}
                         </td>
                         <td className="right">
@@ -203,7 +205,7 @@ export default function QueryLog() {
                               fontSize: 12,
                             }}
                           >
-                            {isOpen ? 'collapse' : 'details'}
+                            {isOpen ? t('collapse') : t('details')}
                             <IconChevron up={isOpen} size={13} />
                           </span>
                         </td>
@@ -214,14 +216,14 @@ export default function QueryLog() {
                           <td colSpan={6} style={{ padding: '4px 12px 18px' }}>
                             <div className="detail">
                               <div className="detail-grid">
-                                <Fact label="Matched rule" value={entry.rule || '—'} mono />
-                                <Fact label="Question type" value={entry.question_type || '—'} />
-                                <Fact label="Filtering result" value={entry.answer_status || '—'} mono />
+                                <Fact label={t('Matched rule')} value={entry.rule || '—'} mono />
+                                <Fact label={t('Question type')} value={entry.question_type || '—'} />
+                                <Fact label={t('Filtering result')} value={entry.answer_status || '—'} mono />
                                 <Fact
-                                  label="Processed in"
+                                  label={t('Processed in')}
                                   value={entry.elapsed_ms ? `${entry.elapsed_ms.toFixed(2)} ms` : '—'}
                                 />
-                                <Fact label="Upstream" value={entry.upstream || '—'} mono />
+                                <Fact label={t('Upstream')} value={entry.upstream || '—'} mono />
                               </div>
                               <div
                                 style={{
@@ -238,13 +240,13 @@ export default function QueryLog() {
                                   onClick={() => act(entry, entry.blocked ? 'allow' : 'block')}
                                   disabled={busy || !entry.question}
                                 >
-                                  {entry.blocked ? 'Allow everywhere' : 'Block everywhere'}
+                                  {entry.blocked ? t('Allow everywhere') : t('Block everywhere')}
                                 </button>
                                 <button
                                   onClick={() => act(entry, entry.blocked ? 'block' : 'allow')}
                                   disabled={busy || !entry.question}
                                 >
-                                  {entry.blocked ? 'Block everywhere' : 'Allow everywhere'}
+                                  {entry.blocked ? t('Block everywhere') : t('Allow everywhere')}
                                 </button>
                                 <p
                                   style={{
@@ -254,9 +256,9 @@ export default function QueryLog() {
                                     maxWidth: '62ch',
                                   }}
                                 >
-                                  The rule is written to the hub and pushed to every instance at
-                                  once. It survives a failover, and reconciliation puts it back if a
-                                  node loses it.
+                                  {t(
+                                    'The rule is written to the hub and pushed to every instance at once. It survives a failover, and reconciliation puts it back if a node loses it.',
+                                  )}
                                 </p>
                               </div>
                             </div>
@@ -271,8 +273,9 @@ export default function QueryLog() {
           </div>
         ) : (
           <Empty>
-            Nothing buffered yet. The hub polls each instance every few seconds — add an instance
-            and give it a moment.
+            {t(
+              'Nothing buffered yet. The hub polls each instance every few seconds — add an instance and give it a moment.',
+            )}
           </Empty>
         )}
       </Card>
