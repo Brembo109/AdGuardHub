@@ -131,7 +131,7 @@ def _add_missing_columns(connection) -> None:
                     default = f" DEFAULT '{literal}'"
                 elif isinstance(literal, bool):
                     default = f" DEFAULT {int(literal)}"
-                elif isinstance(literal, (int, float)):
+                elif isinstance(literal, int | float):
                     default = f" DEFAULT {literal}"
             connection.execute(
                 text(f"ALTER TABLE {table.name} ADD COLUMN {column.name} {ddl}{default}")
