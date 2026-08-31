@@ -416,6 +416,9 @@ label {
 .main {
   padding: 24px 30px 48px;
   max-width: 1500px;
+  /* Without this the content clings to the left edge on a wide screen while the
+     band spans the full width — which reads as a broken layout, not a choice. */
+  margin: 0 auto;
 }
 
 .page-header {

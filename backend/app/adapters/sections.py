@@ -277,7 +277,9 @@ SPECS: tuple[SectionSpec, ...] = (
         description="Retention, client anonymisation and ignored domains.",
         strategy="document",
         get_path="/control/querylog/config",
-        set_path="/control/querylog/config",
+        # AdGuard reads and writes this area on different paths: PUT to the read
+        # path answers 405 "only method GET is allowed".
+        set_path="/control/querylog/config/update",
         set_method="PUT",
         keys=("enabled", "interval", "anonymize_client_ip", "ignored"),
         fields=(
@@ -294,7 +296,8 @@ SPECS: tuple[SectionSpec, ...] = (
         description="Statistics retention and ignored domains.",
         strategy="document",
         get_path="/control/stats/config",
-        set_path="/control/stats/config",
+        # As for the query log: the write lives on its own /update path.
+        set_path="/control/stats/config/update",
         set_method="PUT",
         keys=("enabled", "interval", "ignored"),
         fields=(
