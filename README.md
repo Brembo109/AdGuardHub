@@ -159,11 +159,11 @@ All settings are environment variables prefixed with `ADGUARDHUB_`.
 | `ADGUARDHUB_RETRY_INTERVAL` | `30` | Seconds between retry-queue passes. |
 | `ADGUARDHUB_QUERYLOG_POLL_INTERVAL` | `5` | Seconds between query log polls. |
 | `ADGUARDHUB_QUERYLOG_BUFFER_SIZE` | `2000` | Entries kept in the in-memory log buffer. |
-
-The four timers above only seed the initial values. Once the hub has started they are edited
-under *Settings → Sync & timers* and take effect on the next worker cycle — no restart.
 | `ADGUARDHUB_SESSION_MAX_AGE` | `1209600` | Session lifetime in seconds. |
 | `ADGUARDHUB_HTTP_TIMEOUT` | `10` | Per-request timeout when talking to instances. |
+
+The four interval/buffer timers only seed the initial values. Once the hub has started they are
+edited under *Settings → Sync & timers* and take effect on the next worker cycle — no restart.
 
 ## What gets replicated
 
