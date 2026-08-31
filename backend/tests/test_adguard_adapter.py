@@ -172,11 +172,14 @@ async def test_section_pull_is_limited_to_managed_keys() -> None:
 
 
 async def test_section_push_sends_only_managed_keys() -> None:
+    """A key the section does not declare is never forwarded to the node."""
     captured: dict[str, object] = {}
 
     async def handler(request: httpx.Request) -> httpx.Response:
         import json
 
+        if request.method == "GET":
+            return httpx.Response(200, json={})
         captured["path"] = request.url.path
         captured["body"] = json.loads(request.content)
         return httpx.Response(200, json={})
@@ -186,6 +189,39 @@ async def test_section_push_sends_only_managed_keys() -> None:
     )
     assert captured["path"] == "/control/dns_config"
     assert captured["body"] == {"upstream_dns": ["9.9.9.9"], "ratelimit": 20}
+
+
+async def test_a_partly_filled_section_leaves_the_rest_of_the_node_alone() -> None:
+    """A section configured by hand holds only the keys the operator filled in.
+
+    Sending those alone would be read by the node as "everything else is now
+    unset", so a hub built without importing a master would quietly flatten the
+    DNS config of every node it pushed to. The push overlays instead.
+    """
+    target = {
+        "upstream_dns": ["1.1.1.1"],
+        "bootstrap_dns": ["9.9.9.9"],
+        "cache_size": 4194304,
+        "dnssec_enabled": True,
+    }
+    captured: dict[str, object] = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return httpx.Response(200, json=target)
+        import json
+
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json={})
+
+    # Only one key has ever been set in the hub.
+    await make_adapter(login_ok(handler)).push_section("dns", {"upstream_dns": ["9.9.9.9"]})
+
+    body = captured["body"]
+    assert body["upstream_dns"] == ["9.9.9.9"], "the hub's own value must win"
+    assert body["bootstrap_dns"] == ["9.9.9.9"]
+    assert body["cache_size"] == 4194304
+    assert body["dnssec_enabled"] is True
 
 
 async def test_tls_push_keeps_the_targets_own_certificate() -> None:

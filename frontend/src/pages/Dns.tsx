@@ -111,13 +111,13 @@ export default function Dns() {
         description={t('How every instance resolves what it does not block. Saved here, these settings are pushed to all instances at once and put back by reconciliation if a node drifts.')}
         actions={
           <>
-            <button onClick={() => setShowRaw(!showRaw)} disabled={busy || !loaded.has_data}>
+            <button onClick={() => setShowRaw(!showRaw)} disabled={busy}>
               {showRaw ? t('Back to the form') : t('Edit raw document')}
             </button>
             <button
               className={loaded.managed ? '' : 'primary'}
               onClick={toggle}
-              disabled={busy || !loaded.has_data}
+              disabled={busy}
             >
               {loaded.managed ? t('Stop replicating') : t('Replicate')}
             </button>
@@ -129,7 +129,9 @@ export default function Dns() {
       {message ? <Banner kind="ok">{message}</Banner> : null}
       {sections.error ? <Banner kind="error">{sections.error}</Banner> : null}
       {loaded.skipped_reason ? (
-        <Banner kind="warn">Not pushed: {loaded.skipped_reason}</Banner>
+        <Banner kind="warn">
+          {t('Not pushed: {reason}', { reason: loaded.skipped_reason })}
+        </Banner>
       ) : null}
 
       <Card>
@@ -150,12 +152,12 @@ export default function Dns() {
                   count: loaded.keys.length,
                   when: formatTime(loaded.updated_at),
                 })
-              : t('Nothing imported yet — import an instance as the master on the Instances page.')}
+              : t('Empty — fill in only what the hub should own, or import a master.')}
           </span>
         </div>
       </Card>
 
-      {!loaded.has_data ? null : showRaw ? (
+      {showRaw ? (
         <Card
           title={t('Section document')}
           hint={t('Exactly what is pushed to each instance, including the keys without a form field above.')}
@@ -175,23 +177,21 @@ export default function Dns() {
         ))
       )}
 
-      {loaded.has_data ? (
-        <Card>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <button className="primary" onClick={save} disabled={busy}>
-              {loaded.managed ? t('Save and push') : t('Save')}
-            </button>
-            <button onClick={discard} disabled={busy}>
-              {t('Discard changes')}
-            </button>
-            <p style={{ margin: '0 0 0 6px', color: 'var(--dim)', fontSize: 12.5 }}>
-              {loaded.managed
-                ? t('Saving writes a new hub version and reaches every instance immediately.')
-                : t('This area is stored in the hub but not pushed. Switch on Replicate to send it.')}
-            </p>
-          </div>
-        </Card>
-      ) : null}
+      <Card>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <button className="primary" onClick={save} disabled={busy}>
+            {loaded.managed ? t('Save and push') : t('Save')}
+          </button>
+          <button onClick={discard} disabled={busy}>
+            {t('Discard changes')}
+          </button>
+          <p style={{ margin: '0 0 0 6px', color: 'var(--dim)', fontSize: 12.5 }}>
+            {loaded.managed
+              ? t('Saving writes a new hub version and reaches every instance immediately.')
+              : t('This area is stored in the hub but not pushed. Switch on Replicate to send it.')}
+          </p>
+        </div>
+      </Card>
     </>
   )
 }

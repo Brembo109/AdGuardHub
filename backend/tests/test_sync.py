@@ -224,3 +224,35 @@ async def test_manual_full_sync_reports_failures(auth_client: httpx.AsyncClient)
     result = (await auth_client.post("/api/sync")).json()
     assert result["instances"] == 2
     assert list(result["failed"]) == ["b"]
+
+
+async def test_a_section_can_be_built_without_importing_a_master(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """A hub with no master to copy from is still a usable hub.
+
+    Naming a master only saves you typing: it seeds the sections from a node that
+    already has the configuration. Someone starting from nothing — a fresh pair of
+    nodes, or an area they want to define rather than adopt — writes the section
+    here and switches it on, and it reaches every instance the same way.
+    """
+    await add_instance(auth_client, "a", A)
+
+    # Nothing has been imported: the section starts empty and unmanaged.
+    listing = (await auth_client.get("/api/config/sections")).json()
+    sections = {item["name"]: item for item in listing}
+    assert sections["access"]["has_data"] is False
+    assert sections["access"]["managed"] is False
+
+    response = await auth_client.patch(
+        "/api/config/sections/access",
+        json={"managed": True, "data": {"disallowed_clients": ["10.0.0.9"]}},
+    )
+    assert response.status_code == 200
+    await drain_background()
+
+    assert FakeAdapter.state_for(A).sections["access"] == {"disallowed_clients": ["10.0.0.9"]}
+
+    # And it is a normal hub version, so it can be diffed and rolled back.
+    versions = (await auth_client.get("/api/versions")).json()
+    assert any("access" in item["label"] for item in versions)

@@ -53,9 +53,12 @@ class SectionSpec:
     enable_path: str = ""
     disable_path: str = ""
     # Read the target's current document and overlay ``keys`` onto it instead of
-    # sending them alone. Required where the endpoint replaces the whole object,
-    # so the node's own settings survive a push.
-    merge_on_push: bool = False
+    # sending them alone, so the node keeps every setting the hub does not hold an
+    # opinion about. That matters twice over: some endpoints replace the whole
+    # object (TLS would lose the node's certificate), and a section configured by
+    # hand rather than imported holds only the keys the operator actually filled
+    # in — sending those alone would drop the rest of the node's document.
+    merge_on_push: bool = True
     # Shown on the section at all times, not only when something went wrong.
     notes: str = ""
     # This area is big enough to deserve its own page, so the combined settings
@@ -222,7 +225,6 @@ SPECS: tuple[SectionSpec, ...] = (
         keys=("enabled",),
         # /control/tls/configure replaces the whole object, unlike /control/dns_config
         # which merges. Sending "enabled" alone would wipe the target's certificate.
-        merge_on_push=True,
         notes=(
             "Install and verify a working certificate on every node before switching this "
             "on. AdGuard Home does not check that a node can actually serve HTTPS: if one "
