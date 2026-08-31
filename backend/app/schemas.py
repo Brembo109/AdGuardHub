@@ -221,11 +221,21 @@ class FilterListOut(ORMModel):
 # -- DNS settings ----------------------------------------------------------
 
 
+class ConfigFieldOut(BaseModel):
+    key: str
+    label: str
+    type: str
+    help: str
+    unit: str
+    options: list[list[str]]
+
+
 class ConfigSectionOut(BaseModel):
     name: str
     title: str
     description: str
     notes: str
+    fields: list[ConfigFieldOut]
     managed: bool
     has_data: bool
     keys: list[str]

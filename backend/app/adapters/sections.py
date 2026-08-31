@@ -18,6 +18,22 @@ from typing import Any, Literal
 
 Strategy = Literal["document", "toggle", "clients", "rewrites"]
 
+# How a value is presented in the UI. Anything without a field here stays editable
+# through the raw document view, so a setting is never unreachable just because it
+# has no curated form.
+FieldType = Literal["bool", "int", "text", "lines", "select", "pairs", "clients"]
+
+
+@dataclass(frozen=True)
+class FieldSpec:
+    key: str
+    label: str
+    type: FieldType
+    help: str = ""
+    unit: str = ""
+    # "select" only: (value, label) pairs.
+    options: tuple[tuple[str, str], ...] = ()
+
 
 @dataclass(frozen=True)
 class SectionSpec:
@@ -38,6 +54,7 @@ class SectionSpec:
     # so the node's own settings survive a push.
     merge_on_push: bool = False
     notes: str = ""
+    fields: tuple[FieldSpec, ...] = ()
 
 
 SPECS: tuple[SectionSpec, ...] = (
@@ -81,6 +98,47 @@ SPECS: tuple[SectionSpec, ...] = (
             "ratelimit_subnet_len_ipv6",
             "ratelimit_whitelist",
         ),
+        fields=(
+            FieldSpec("protection_enabled", "Filtering enabled", "bool",
+                      "Turning this off stops all filtering on the instance."),
+            FieldSpec("upstream_dns", "Upstream DNS servers", "lines",
+                      "One per line, in AdGuard syntax."),
+            FieldSpec("upstream_mode", "Upstream mode", "select", options=(
+                ("", "Load balance"),
+                ("parallel", "Parallel requests"),
+                ("fastest_addr", "Fastest IP address"),
+            )),
+            FieldSpec("bootstrap_dns", "Bootstrap DNS servers", "lines",
+                      "Used to resolve the hostnames of encrypted upstreams."),
+            FieldSpec("fallback_dns", "Fallback DNS servers", "lines",
+                      "Used when the upstreams fail."),
+            FieldSpec("dnssec_enabled", "Enable DNSSEC", "bool"),
+            FieldSpec("disable_ipv6", "Disable IPv6 answers", "bool"),
+            FieldSpec("blocking_mode", "Blocking mode", "select", options=(
+                ("default", "Default"),
+                ("refused", "REFUSED"),
+                ("nxdomain", "NXDOMAIN"),
+                ("null_ip", "Null IP"),
+                ("custom_ip", "Custom IP"),
+            )),
+            FieldSpec("blocking_ipv4", "Blocking IPv4", "text",
+                      "Only used with the custom IP blocking mode."),
+            FieldSpec("blocking_ipv6", "Blocking IPv6", "text",
+                      "Only used with the custom IP blocking mode."),
+            FieldSpec("blocked_response_ttl", "Blocked response TTL", "int", unit="seconds"),
+            FieldSpec("ratelimit", "Rate limit", "int",
+                      "Requests per second per client; 0 disables it.", unit="req/s"),
+            FieldSpec("cache_size", "Cache size", "int", unit="bytes"),
+            FieldSpec("cache_ttl_min", "Minimum cached TTL", "int", unit="seconds"),
+            FieldSpec("cache_ttl_max", "Maximum cached TTL", "int", unit="seconds"),
+            FieldSpec("cache_optimistic", "Optimistic caching", "bool",
+                      "Serve expired entries while refreshing them in the background."),
+            FieldSpec("resolve_clients", "Resolve client names via rDNS", "bool"),
+            FieldSpec("use_private_ptr_resolvers", "Use private reverse DNS resolvers", "bool"),
+            FieldSpec("local_ptr_upstreams", "Private reverse DNS servers", "lines"),
+            FieldSpec("private_upstream", "Private DNS upstreams", "lines"),
+            FieldSpec("edns_cs_enabled", "Enable EDNS client subnet", "bool"),
+        ),
     ),
     SectionSpec(
         name="clients",
@@ -88,6 +146,7 @@ SPECS: tuple[SectionSpec, ...] = (
         description="Persistent client definitions with their per-client filtering settings.",
         strategy="clients",
         get_path="/control/clients",
+        fields=(FieldSpec("clients", "Clients", "clients"),),
     ),
     SectionSpec(
         name="access",
@@ -97,6 +156,12 @@ SPECS: tuple[SectionSpec, ...] = (
         get_path="/control/access/list",
         set_path="/control/access/set",
         keys=("allowed_clients", "disallowed_clients", "blocked_hosts"),
+        fields=(
+            FieldSpec("allowed_clients", "Allowed clients", "lines",
+                      "When non-empty, only these clients may use the DNS server."),
+            FieldSpec("disallowed_clients", "Disallowed clients", "lines"),
+            FieldSpec("blocked_hosts", "Blocked hostnames", "lines"),
+        ),
     ),
     SectionSpec(
         name="tls",
@@ -115,6 +180,7 @@ SPECS: tuple[SectionSpec, ...] = (
             "A node with no certificate of its own will reject being switched on; that "
             "shows up as an error on this section."
         ),
+        fields=(FieldSpec("enabled", "Encryption enabled", "bool"),),
     ),
     SectionSpec(
         name="rewrites",
@@ -122,6 +188,7 @@ SPECS: tuple[SectionSpec, ...] = (
         description="Custom domain-to-answer rewrites.",
         strategy="rewrites",
         get_path="/control/rewrite/list",
+        fields=(FieldSpec("items", "Rewrites", "pairs", "Domain to answer with a fixed value."),),
     ),
     SectionSpec(
         name="blocked_services",
@@ -132,6 +199,10 @@ SPECS: tuple[SectionSpec, ...] = (
         set_path="/control/blocked_services/update",
         set_method="PUT",
         keys=("ids", "schedule"),
+        fields=(
+            FieldSpec("ids", "Blocked services", "lines",
+                      "AdGuard service identifiers, one per line (e.g. tiktok, facebook)."),
+        ),
     ),
     SectionSpec(
         name="filtering_config",
@@ -141,6 +212,16 @@ SPECS: tuple[SectionSpec, ...] = (
         get_path="/control/filtering/status",
         set_path="/control/filtering/config",
         keys=("enabled", "interval"),
+        fields=(
+            FieldSpec("enabled", "Use filtering lists", "bool"),
+            FieldSpec("interval", "Refresh subscriptions every", "select", options=(
+                ("1", "1 hour"),
+                ("12", "12 hours"),
+                ("24", "1 day"),
+                ("72", "3 days"),
+                ("168", "7 days"),
+            )),
+        ),
     ),
     SectionSpec(
         name="safebrowsing",
@@ -150,6 +231,7 @@ SPECS: tuple[SectionSpec, ...] = (
         get_path="/control/safebrowsing/status",
         enable_path="/control/safebrowsing/enable",
         disable_path="/control/safebrowsing/disable",
+        fields=(FieldSpec("enabled", "Safe browsing enabled", "bool"),),
     ),
     SectionSpec(
         name="parental",
@@ -159,6 +241,7 @@ SPECS: tuple[SectionSpec, ...] = (
         get_path="/control/parental/status",
         enable_path="/control/parental/enable",
         disable_path="/control/parental/disable",
+        fields=(FieldSpec("enabled", "Parental control enabled", "bool"),),
     ),
     SectionSpec(
         name="safesearch",
@@ -168,6 +251,15 @@ SPECS: tuple[SectionSpec, ...] = (
         get_path="/control/safesearch/status",
         set_path="/control/safesearch/settings",
         set_method="PUT",
+        fields=(
+            FieldSpec("enabled", "Enforce safe search", "bool"),
+            FieldSpec("bing", "Bing", "bool"),
+            FieldSpec("duckduckgo", "DuckDuckGo", "bool"),
+            FieldSpec("google", "Google", "bool"),
+            FieldSpec("pixabay", "Pixabay", "bool"),
+            FieldSpec("yandex", "Yandex", "bool"),
+            FieldSpec("youtube", "YouTube", "bool"),
+        ),
     ),
     SectionSpec(
         name="querylog_config",
@@ -178,6 +270,13 @@ SPECS: tuple[SectionSpec, ...] = (
         set_path="/control/querylog/config",
         set_method="PUT",
         keys=("enabled", "interval", "anonymize_client_ip", "ignored"),
+        fields=(
+            FieldSpec("enabled", "Log queries", "bool"),
+            FieldSpec("anonymize_client_ip", "Anonymise client IPs", "bool"),
+            FieldSpec("ignored", "Ignored domains", "lines"),
+            # `interval` is deliberately absent: its unit changed between AdGuard
+            # versions, so it stays in the raw view rather than being mislabelled.
+        ),
     ),
     SectionSpec(
         name="stats_config",
@@ -188,6 +287,10 @@ SPECS: tuple[SectionSpec, ...] = (
         set_path="/control/stats/config",
         set_method="PUT",
         keys=("enabled", "interval", "ignored"),
+        fields=(
+            FieldSpec("enabled", "Keep statistics", "bool"),
+            FieldSpec("ignored", "Ignored domains", "lines"),
+        ),
     ),
 )
 

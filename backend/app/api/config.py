@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from ..adapters.sections import SPECS
+from ..adapters.sections import SPECS, SectionSpec
 from ..deps import CurrentUser, SessionDep
 from ..models import PayloadKind
 from ..schemas import (
+    ConfigFieldOut,
     ConfigSectionOut,
     ConfigSectionUpdate,
     VersionDetail,
@@ -20,6 +21,20 @@ from ..services.config import get_section, loads, set_section, skipped_sections
 from ..services.sync import schedule_sync
 
 router = APIRouter(prefix="/api/config", tags=["config"])
+
+
+def _fields(spec: SectionSpec) -> list[ConfigFieldOut]:
+    return [
+        ConfigFieldOut(
+            key=field.key,
+            label=field.label,
+            type=field.type,
+            help=field.help,
+            unit=field.unit,
+            options=[list(option) for option in field.options],
+        )
+        for field in spec.fields
+    ]
 
 SETTING_KINDS = (PayloadKind.settings,)
 
@@ -37,6 +52,7 @@ async def list_sections(_: CurrentUser, session: SessionDep) -> list[ConfigSecti
                 title=spec.title,
                 description=spec.description,
                 notes=spec.notes,
+                fields=_fields(spec),
                 managed=row.managed,
                 has_data=bool(data),
                 keys=sorted(data),
@@ -71,6 +87,7 @@ async def update_section(
         title=spec.title,
         description=spec.description,
         notes=spec.notes,
+        fields=_fields(spec),
         managed=row.managed,
         has_data=bool(data),
         keys=sorted(data),

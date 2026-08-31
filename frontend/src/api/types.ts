@@ -143,11 +143,21 @@ export interface ConnectionResult {
   error: string
 }
 
+export interface ConfigField {
+  key: string
+  label: string
+  type: 'bool' | 'int' | 'text' | 'lines' | 'select' | 'pairs' | 'clients'
+  help: string
+  unit: string
+  options: [string, string][]
+}
+
 export interface ConfigSection {
   name: string
   title: string
   description: string
   notes: string
+  fields: ConfigField[]
   managed: boolean
   has_data: boolean
   keys: string[]
