@@ -44,6 +44,8 @@ class AuthState(BaseModel):
     username: str | None = None
     setup_required: bool = False
     ephemeral_secret: bool = False
+    # False until the first-run walkthrough is finished or skipped.
+    onboarding_done: bool = False
 
 
 # -- instances -------------------------------------------------------------
@@ -237,6 +239,8 @@ class ConfigFieldOut(BaseModel):
     help: str
     unit: str
     options: list[list[str]]
+    # Heading this field belongs under, from sections.py.
+    group: str
 
 
 class ConfigSectionOut(BaseModel):
@@ -245,6 +249,8 @@ class ConfigSectionOut(BaseModel):
     description: str
     notes: str
     risky: bool
+    # This area has a page of its own; the combined list links there instead.
+    own_page: bool
     fields: list[ConfigFieldOut]
     managed: bool
     has_data: bool

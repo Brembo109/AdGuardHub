@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import type { ConfigSection } from '../api/types'
 import { SectionFields } from '../components/SectionFields'
@@ -80,7 +81,11 @@ export default function Config() {
     })
   }
 
-  const list = sections.data ?? []
+  // Sections with a page of their own are edited there, not in this list. The
+  // convention is that such a section is routed at /<its name> — see App.tsx.
+  const all = sections.data ?? []
+  const list = all.filter((item) => !item.own_page)
+  const elsewhere = all.filter((item) => item.own_page)
   const managed = list.filter((item) => item.managed).length
   const current = list.find((item) => item.name === open) ?? list[0] ?? null
 
@@ -105,6 +110,20 @@ export default function Config() {
       {error ? <Banner kind="error">{error}</Banner> : null}
       {message ? <Banner kind="ok">{message}</Banner> : null}
       {sections.error ? <Banner kind="error">{sections.error}</Banner> : null}
+
+      {elsewhere.length ? (
+        <p style={{ margin: '0 0 16px', color: 'var(--dim)', fontSize: 13 }}>
+          {elsewhere.map((item) => item.title).join(', ')} {elsewhere.length > 1 ? 'have' : 'has'}{' '}
+          a page of {elsewhere.length > 1 ? 'their' : 'its' } own:{' '}
+          {elsewhere.map((item, index) => (
+            <span key={item.name}>
+              {index ? ', ' : ''}
+              <Link to={`/${item.name}`}>{item.title}</Link>
+            </span>
+          ))}
+          .
+        </p>
+      ) : null}
 
       {list.length && managed === 0 ? (
         <Banner kind="warn">

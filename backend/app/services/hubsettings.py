@@ -83,6 +83,22 @@ async def load(session: AsyncSession) -> RuntimeSettings:
     return _cache
 
 
+async def onboarding_done(session: AsyncSession) -> bool:
+    row = await session.get(HubSettings, 1)
+    return bool(row.onboarding_done) if row is not None else False
+
+
+async def finish_onboarding(session: AsyncSession) -> None:
+    """Mark the first-run walkthrough as finished (or deliberately skipped)."""
+    row = await session.get(HubSettings, 1)
+    if row is None:
+        await load(session)
+        row = await session.get(HubSettings, 1)
+    if row is not None and not row.onboarding_done:
+        row.onboarding_done = True
+        await session.commit()
+
+
 async def update(session: AsyncSession, changes: dict[str, object]) -> RuntimeSettings:
     global _cache
     row = await session.get(HubSettings, 1)

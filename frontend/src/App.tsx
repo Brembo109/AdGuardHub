@@ -1,17 +1,15 @@
 import { useState } from 'react'
-import { api } from './api/client'
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from './auth'
 import { SyncStatus } from './components/SyncStatus'
 import { IconMenu, IconMonitor, IconMoon, IconSun } from './components/icons'
 import { Banner } from './components/ui'
-import { useResource } from './hooks/useApi'
 import { useEventStream } from './hooks/useEventStream'
 import { useTheme } from './hooks/useTheme'
-import { isOnboardingDone } from './onboarding'
 import Blocklists from './pages/Blocklists'
 import Config from './pages/Config'
 import Dashboard from './pages/Dashboard'
+import Dns from './pages/Dns'
 import Instances from './pages/Instances'
 import Login from './pages/Login'
 import Onboarding from './pages/Onboarding'
@@ -25,6 +23,7 @@ const NAV = [
   { to: '/querylog', label: 'Query log' },
   { to: '/rules', label: 'Rules' },
   { to: '/subscriptions', label: 'Subscriptions' },
+  { to: '/dns', label: 'DNS & upstreams' },
   { to: '/instances', label: 'Instances' },
   { to: '/config', label: 'Instance settings' },
   { to: '/history', label: 'History' },
@@ -130,10 +129,16 @@ export default function App() {
 
         <Routes>
           <Route path="/onboarding" element={<Onboarding />} />
-          <Route path="/" element={<Home />} />
+          {/* Until the walkthrough is finished or skipped, the hub opens on it
+              rather than on a dashboard with nothing to show. */}
+          <Route
+            path="/"
+            element={state.onboarding_done ? <Dashboard /> : <Navigate to="/onboarding" replace />}
+          />
           <Route path="/querylog" element={<QueryLog />} />
           <Route path="/rules" element={<Rules />} />
           <Route path="/subscriptions" element={<Blocklists />} />
+          <Route path="/dns" element={<Dns />} />
           <Route path="/instances" element={<Instances />} />
           <Route path="/config" element={<Config />} />
           <Route path="/history" element={<Versions />} />
@@ -145,15 +150,3 @@ export default function App() {
   )
 }
 
-/**
- * A fresh install lands on the walkthrough instead of an empty dashboard; once the
- * hub has instances (or the operator skipped), the dashboard takes over.
- */
-function Home() {
-  const stats = useResource(() => api.dashboard())
-  if (stats.loading && !stats.data) return null
-  if (stats.data && stats.data.instances_total === 0 && !isOnboardingDone()) {
-    return <Navigate to="/onboarding" replace />
-  }
-  return <Dashboard />
-}

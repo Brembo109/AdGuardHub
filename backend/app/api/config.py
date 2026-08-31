@@ -32,6 +32,7 @@ def _fields(spec: SectionSpec) -> list[ConfigFieldOut]:
             help=field.help,
             unit=field.unit,
             options=[list(option) for option in field.options],
+            group=field.group,
         )
         for field in spec.fields
     ]
@@ -53,6 +54,7 @@ async def list_sections(_: CurrentUser, session: SessionDep) -> list[ConfigSecti
                 description=spec.description,
                 notes=spec.notes,
                 risky=spec.risky,
+                own_page=spec.own_page,
                 fields=_fields(spec),
                 managed=row.managed,
                 has_data=bool(data),
@@ -89,6 +91,7 @@ async def update_section(
         description=spec.description,
         notes=spec.notes,
         risky=spec.risky,
+        own_page=spec.own_page,
         fields=_fields(spec),
         managed=row.managed,
         has_data=bool(data),
