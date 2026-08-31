@@ -34,7 +34,7 @@ const NAV = [
 // The names the backend actually publishes (services/sync.py, reconcile.py) that
 // change what the status pill should say. Query log traffic is deliberately not
 // among them — it fires constantly and says nothing about whether nodes agree.
-const SYNC_EVENTS = new Set(['instance.status', 'sync', 'retry', 'drift'])
+const SYNC_EVENTS = new Set(['instance.status', 'instances', 'sync', 'retry', 'drift'])
 
 export default function App() {
   const { state, loading, logout } = useAuth()

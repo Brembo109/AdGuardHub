@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -15,6 +17,8 @@ from sqlalchemy.ext.asyncio import (
 
 from .config import get_settings
 from .models import Base
+
+logger = logging.getLogger("adguardhub")
 
 _engine: AsyncEngine | None = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None
@@ -90,11 +94,57 @@ def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
     return _sessionmaker
 
 
+def _add_missing_columns(connection) -> None:
+    """Bring an existing database up to the current model, additively.
+
+    ``create_all`` creates missing tables but never touches an existing one, so a
+    new column would leave every running installation querying a column its
+    database does not have. This adds them.
+
+    Deliberately limited to additive changes with a default or NULL — the ones
+    that make up almost every schema change here. A rename, a type change or a
+    new constraint still needs a real migration, and would have to be written by
+    hand; this is not a substitute for that.
+    """
+    inspector = inspect(connection)
+    existing_tables = set(inspector.get_table_names())
+
+    for table in Base.metadata.sorted_tables:
+        if table.name not in existing_tables:
+            continue
+        present = {column["name"] for column in inspector.get_columns(table.name)}
+        for column in table.columns:
+            if column.name in present:
+                continue
+            if not column.nullable and column.default is None and column.server_default is None:
+                logger.warning(
+                    "Cannot add column %s.%s automatically: it is NOT NULL with no default",
+                    table.name,
+                    column.name,
+                )
+                continue
+            ddl = column.type.compile(connection.dialect)
+            default = ""
+            if column.default is not None and not callable(column.default.arg):
+                literal = column.default.arg
+                if isinstance(literal, str):
+                    default = f" DEFAULT '{literal}'"
+                elif isinstance(literal, bool):
+                    default = f" DEFAULT {int(literal)}"
+                elif isinstance(literal, (int, float)):
+                    default = f" DEFAULT {literal}"
+            connection.execute(
+                text(f"ALTER TABLE {table.name} ADD COLUMN {column.name} {ddl}{default}")
+            )
+            logger.info("Added missing column %s.%s", table.name, column.name)
+
+
 async def init_db() -> None:
     check_data_dir()
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(_add_missing_columns)
 
 
 async def dispose_db() -> None:
