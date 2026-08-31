@@ -21,6 +21,7 @@ from app.adapters import session as adapter_session  # noqa: E402
 from app.config import get_settings  # noqa: E402
 from app.main import app  # noqa: E402
 from app.services import hubsettings  # noqa: E402
+from app.services.aggregate import invalidate_stats_cache  # noqa: E402
 from app.services.querylog import buffer  # noqa: E402
 from app.services.sync import drain_background  # noqa: E402
 
@@ -44,6 +45,9 @@ async def fresh_db(tmp_path, monkeypatch) -> AsyncIterator[None]:
     adapter_session.store.reset()
     # Runtime settings are cached process-wide; reload them per test.
     hubsettings._cache = None
+    # So is the aggregated-statistics cache — one test's numbers must not be
+    # served to the next.
+    invalidate_stats_cache()
     yield
     await drain_background()
     await db.dispose_db()

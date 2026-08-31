@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import type { Instance } from '../api/types'
 import { InstanceForm } from '../components/InstanceForm'
 import { BLANK_DRAFT, type InstanceDraft, draftFrom } from '../components/instanceDraft'
 import { Badge, Banner, Card, Empty, PageHeader } from '../components/ui'
+import { IconDots } from '../components/icons'
 import { formatTime } from '../format'
 import { errorMessage, useResource } from '../hooks/useApi'
 
@@ -114,7 +115,7 @@ export default function Instances() {
     <>
       <PageHeader
         title="Instances"
-        description="Add each AdGuard Home instance once. Credentials are encrypted at rest and never sent back to the browser."
+        description="Add each AdGuard Home instance once. Credentials are encrypted at rest with the key from ADGUARDHUB_SECRET_KEY and are never sent back to the browser."
       />
 
       {error ? <Banner kind="error">{error}</Banner> : null}
@@ -134,7 +135,10 @@ export default function Instances() {
           />
         </Card>
       ) : (
-        <Card title="Add an instance" hint="Test the connection first — it verifies the URL and credentials without saving.">
+        <Card
+          title="Add an instance"
+          hint="Test the connection first — it verifies the URL and credentials without saving anything."
+        >
           <InstanceForm
             draft={draft}
             onChange={setDraft}
@@ -145,69 +149,173 @@ export default function Instances() {
         </Card>
       )}
 
-      <Card
-        title="Connected instances"
-        hint="Import one instance as the master to seed the hub; the others are overwritten on the next push."
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          gap: 16,
+          margin: '22px 0 12px',
+          flexWrap: 'wrap',
+        }}
       >
-        {instances.data && instances.data.length ? (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>URL</th>
-                  <th>Status</th>
-                  <th>Last synced</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {instances.data.map((instance) => (
-                  <tr key={instance.id}>
-                    <td>{instance.name}</td>
-                    <td className="mono">{instance.base_url}</td>
-                    <td>
-                      <Badge tone={instance.status}>{instance.status}</Badge>
-                      {instance.last_error ? (
-                        <div className="mono" style={{ color: 'var(--danger)', marginTop: 4 }}>
-                          {instance.last_error}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td>{formatTime(instance.last_synced_at)}</td>
-                    <td className="right">
-                      <button className="small" onClick={() => startEdit(instance)} disabled={busy}>
-                        Edit
-                      </button>{' '}
-                      <button className="small" onClick={() => test(instance)} disabled={busy}>
-                        Test
-                      </button>{' '}
-                      <button className="small" onClick={() => push(instance)} disabled={busy}>
-                        Push
-                      </button>{' '}
-                      <button className="small" onClick={() => importFrom(instance)} disabled={busy}>
-                        Import as master
-                      </button>{' '}
-                      <button className="small" onClick={() => toggle(instance)} disabled={busy}>
-                        {instance.enabled ? 'Disable' : 'Enable'}
-                      </button>{' '}
-                      <button
-                        className="small danger"
-                        onClick={() => remove(instance)}
-                        disabled={busy}
-                      >
-                        Remove
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
+        <h2 style={{ margin: 0, fontSize: 16, fontWeight: 620 }}>Connected instances</h2>
+        <p style={{ margin: 0, color: 'var(--dim)', fontSize: 13 }}>
+          Importing one instance as the master replaces the hub state and overwrites every other
+          node on the next push.
+        </p>
+      </div>
+
+      {instances.data && instances.data.length ? (
+        <div className="cards-3">
+          {instances.data.map((instance) => (
+            <NodeCard
+              key={instance.id}
+              instance={instance}
+              busy={busy}
+              onEdit={() => startEdit(instance)}
+              onTest={() => test(instance)}
+              onPush={() => push(instance)}
+              onImport={() => importFrom(instance)}
+              onToggle={() => toggle(instance)}
+              onRemove={() => remove(instance)}
+            />
+          ))}
+        </div>
+      ) : (
+        <Card>
           <Empty>No instances configured yet.</Empty>
-        )}
-      </Card>
+        </Card>
+      )}
     </>
+  )
+}
+
+interface NodeCardProps {
+  instance: Instance
+  busy: boolean
+  onEdit: () => void
+  onTest: () => void
+  onPush: () => void
+  onImport: () => void
+  onToggle: () => void
+  onRemove: () => void
+}
+
+/**
+ * One node per card. Only the everyday actions get a button; importing as master,
+ * disabling and removing sit in the overflow — putting "Remove" next to "Push now"
+ * at the same weight is how the wrong one gets clicked.
+ */
+function NodeCard({
+  instance,
+  busy,
+  onEdit,
+  onTest,
+  onPush,
+  onImport,
+  onToggle,
+  onRemove,
+}: NodeCardProps) {
+  const [menu, setMenu] = useState(false)
+  const wrap = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!menu) return
+    const close = (event: MouseEvent) => {
+      if (!wrap.current?.contains(event.target as Node)) setMenu(false)
+    }
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenu(false)
+    }
+    document.addEventListener('mousedown', close)
+    document.addEventListener('keydown', escape)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      document.removeEventListener('keydown', escape)
+    }
+  }, [menu])
+
+  const down = instance.status === 'unreachable'
+  const run = (action: () => void) => () => {
+    setMenu(false)
+    action()
+  }
+
+  return (
+    <div className={`node-card${down ? ' down' : ''}`}>
+      <div className="node-head">
+        <span
+          className={`node-dot${down ? ' down' : instance.enabled ? '' : ' off'}`}
+        />
+        <span className="name">{instance.name}</span>
+        <Badge tone={instance.status}>{instance.status}</Badge>
+      </div>
+      <div className="mono" style={{ color: 'var(--dim)', marginBottom: 16 }}>
+        {instance.base_url}
+      </div>
+
+      <div className="node-facts">
+        <div>
+          <div className="dl">Adapter</div>
+          <div style={{ fontSize: 13 }}>{instance.adapter}</div>
+        </div>
+        <div>
+          <div className="dl">Last synced</div>
+          <div style={{ fontSize: 13 }}>{formatTime(instance.last_synced_at)}</div>
+        </div>
+        <div>
+          <div className="dl">Last seen</div>
+          <div style={{ fontSize: 13 }}>{formatTime(instance.last_seen_at)}</div>
+        </div>
+      </div>
+
+      {instance.last_error ? (
+        <div
+          className="mono"
+          style={{
+            color: 'var(--danger-ink)',
+            background: 'var(--danger-soft)',
+            borderRadius: 6,
+            padding: '7px 10px',
+            marginBottom: 14,
+          }}
+        >
+          {instance.last_error}
+        </div>
+      ) : null}
+
+      <div className="node-actions">
+        <button className="small" onClick={onEdit} disabled={busy}>
+          Edit
+        </button>
+        <button className="small" onClick={onTest} disabled={busy}>
+          Test
+        </button>
+        <button className="small" onClick={onPush} disabled={busy}>
+          Push now
+        </button>
+        <div className="menu" ref={wrap}>
+          <button
+            className="small"
+            onClick={() => setMenu(!menu)}
+            disabled={busy}
+            aria-label={`More actions for ${instance.name}`}
+            aria-expanded={menu}
+          >
+            <IconDots />
+          </button>
+          {menu ? (
+            <div className="menu-list">
+              <button onClick={run(onImport)}>Import as master</button>
+              <button onClick={run(onToggle)}>{instance.enabled ? 'Disable' : 'Enable'}</button>
+              <button className="danger" onClick={run(onRemove)}>
+                Remove
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
   )
 }

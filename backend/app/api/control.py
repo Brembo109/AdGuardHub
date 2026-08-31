@@ -32,7 +32,7 @@ from ..models import FilterList, Instance, ListKind, PayloadKind, Rule
 from ..schemas import ControlLogin
 from ..security import verify_password
 from ..services import versions as version_service
-from ..services.aggregate import aggregate_stats
+from ..services.aggregate import cached_stats
 from ..services.config import get_section, loads, set_section
 from ..services.hubsettings import current as current_settings
 from ..services.querylog import buffer
@@ -137,7 +137,9 @@ async def profile(user: CurrentUser) -> dict[str, Any]:
 @router.get("/stats")
 async def stats(_: CurrentUser) -> dict[str, Any]:
     _guard()
-    return await aggregate_stats()
+    # Same held result the hub's own dashboard reads, so a phone app polling
+    # this endpoint does not fan out to every resolver on each request.
+    return await cached_stats()
 
 
 @router.get("/querylog")

@@ -46,6 +46,30 @@ export function Badge({ tone, children }: { tone: string; children: ReactNode })
   return <span className={`badge ${tone}`}>{children}</span>
 }
 
+/**
+ * For settings the hub turns on or off for every node, where a state reads better
+ * than a form field. Plain checkboxes stay for filters and one-off form options.
+ */
+export function Switch({
+  checked,
+  onChange,
+  label,
+  title,
+}: {
+  checked: boolean
+  onChange: (value: boolean) => void
+  label: string
+  title?: string
+}) {
+  return (
+    <label className="switch" title={title}>
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span className="track" />
+      {label}
+    </label>
+  )
+}
+
 export function Empty({ children }: { children: ReactNode }) {
   return <div className="empty">{children}</div>
 }

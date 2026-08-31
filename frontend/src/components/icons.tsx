@@ -1,0 +1,102 @@
+/**
+ * One stroke-based icon set, drawn inline.
+ *
+ * Kept in the repo rather than pulled from an icon package: the hub ships as a
+ * single image for a local network, and eight glyphs are not worth a dependency.
+ */
+
+interface IconProps {
+  size?: number
+  className?: string
+}
+
+const base = (size: number) => ({
+  width: size,
+  height: size,
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 1.8,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+  'aria-hidden': true,
+})
+
+export function IconSun({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <circle cx="12" cy="12" r="3.6" />
+      <path d="M12 3v2M12 19v2M5 12H3M21 12h-2M6.3 6.3 4.9 4.9M19.1 19.1l-1.4-1.4M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4" />
+    </svg>
+  )
+}
+
+export function IconMoon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M20.5 14.4A8.5 8.5 0 0 1 9.6 3.5a8.5 8.5 0 1 0 10.9 10.9" />
+    </svg>
+  )
+}
+
+export function IconMonitor({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <rect x="3" y="4" width="18" height="12.5" rx="1.6" />
+      <path d="M9 20.5h6M12 16.5v4" />
+    </svg>
+  )
+}
+
+export function IconChevron({ size = 12, up = false }: IconProps & { up?: boolean }) {
+  return (
+    <svg {...base(size)} strokeWidth={2.2}>
+      <path d={up ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} />
+    </svg>
+  )
+}
+
+export function IconSearch({ size = 15 }: IconProps) {
+  return (
+    <svg {...base(size)} strokeWidth={1.9}>
+      <circle cx="11" cy="11" r="6.6" />
+      <path d="m16.2 16.2 4 4" />
+    </svg>
+  )
+}
+
+export function IconDots({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height="4" viewBox="0 0 16 4" fill="currentColor" aria-hidden="true">
+      <circle cx="2" cy="2" r="1.6" />
+      <circle cx="8" cy="2" r="1.6" />
+      <circle cx="14" cy="2" r="1.6" />
+    </svg>
+  )
+}
+
+export function IconWarning({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)} strokeWidth={1.9}>
+      <path d="M12 4.5 21 20H3z" />
+      <path d="M12 10v4.2M12 17.2v.1" strokeWidth={2.1} />
+    </svg>
+  )
+}
+
+export function IconCheck({ size = 15 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m8 12.3 2.7 2.7L16 9.7" strokeWidth={2} />
+    </svg>
+  )
+}
+
+export function IconMenu({ size = 20 }: IconProps) {
+  return (
+    <svg {...base(size)} strokeWidth={2}>
+      <path d="M4 7h16M4 12h16M4 17h16" />
+    </svg>
+  )
+}

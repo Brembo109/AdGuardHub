@@ -26,8 +26,10 @@ from ..schemas import (
     PushJobOut,
     ReconcileReportOut,
     SyncResult,
+    TrafficOut,
 )
 from ..services import querylog
+from ..services.aggregate import traffic_summary
 from ..services.reconcile import reconcile_all
 from ..services.sync import ALL_KINDS, process_retry_queue, sync_all
 
@@ -36,6 +38,16 @@ router = APIRouter(prefix="/api", tags=["ops"])
 
 async def _count(session: SessionDep, statement) -> int:
     return int((await session.execute(statement)).scalar_one() or 0)
+
+
+@router.get("/traffic", response_model=TrafficOut)
+async def traffic(_: CurrentUser) -> TrafficOut:
+    """DNS statistics across the fleet, for the hub's own dashboard.
+
+    Behind the session cookie like every other hub route — the ``/control`` façade's
+    switch governs that façade, not what the hub shows its own operator.
+    """
+    return TrafficOut.model_validate(await traffic_summary())
 
 
 @router.get("/dashboard", response_model=DashboardStats)

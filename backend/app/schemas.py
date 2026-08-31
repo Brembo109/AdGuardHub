@@ -402,6 +402,31 @@ class DashboardStats(BaseModel):
     querylog_buffered: int
 
 
+class TopEntryOut(BaseModel):
+    name: str
+    count: int
+
+
+class TrafficOut(BaseModel):
+    """Live DNS statistics summed across every instance that answered."""
+
+    queries: int
+    blocked: int
+    block_rate: float
+    replaced_safebrowsing: int
+    # In whatever unit the instances report; see services/aggregate.py.
+    avg_processing_time: float
+    series_queries: list[int]
+    series_blocked: list[int]
+    time_units: str
+    top_queried: list[TopEntryOut]
+    top_blocked: list[TopEntryOut]
+    top_clients: list[TopEntryOut]
+    # A total that is short by one node reads as a quiet day, so say who answered.
+    instances_reporting: int
+    instances_total: int
+
+
 class QueryLogEntryOut(BaseModel):
     instance: str
     time: str

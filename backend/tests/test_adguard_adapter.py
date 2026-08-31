@@ -119,7 +119,8 @@ async def test_query_log_parsing_marks_blocked_entries() -> None:
                         "question": {"name": "ads.example.com", "type": "A"},
                         "client": "192.168.1.10",
                         "reason": "FilteredBlackList",
-                        "elapsed_ms": "1.5",
+                        # The name AdGuard Home actually uses, and it sends a string.
+                        "elapsedMs": "1.5",
                         "rules": [{"text": "||ads.example.com^"}],
                     },
                     {
@@ -127,7 +128,14 @@ async def test_query_log_parsing_marks_blocked_entries() -> None:
                         "question": {"name": "shop.example.com", "type": "A"},
                         "client": "192.168.1.11",
                         "reason": "NotFilteredWhiteList",
-                        "elapsed_ms": "bogus",
+                        "elapsedMs": "bogus",
+                    },
+                    {
+                        "time": "2026-01-01T10:00:02Z",
+                        "question": {"name": "old.example.com", "type": "A"},
+                        "client": "192.168.1.12",
+                        "reason": "NotFilteredNotFound",
+                        "elapsed_ms": "2.5",
                     },
                 ]
             },
@@ -139,6 +147,8 @@ async def test_query_log_parsing_marks_blocked_entries() -> None:
     assert entries[0].elapsed_ms == 1.5
     assert entries[1].blocked is False
     assert entries[1].elapsed_ms == 0.0
+    # The snake_case spelling is still accepted, for anything that sends it.
+    assert entries[2].elapsed_ms == 2.5
 
 
 async def test_section_pull_is_limited_to_managed_keys() -> None:
