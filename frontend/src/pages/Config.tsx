@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import type { ConfigSection } from '../api/types'
 import { SectionFields } from '../components/SectionFields'
 import { Badge, Banner, Card, Empty, PageHeader } from '../components/ui'
+import { IconWarning } from '../components/icons'
 import { formatTime } from '../format'
 import { errorMessage, useResource } from '../hooks/useApi'
 
@@ -48,12 +49,13 @@ export default function Config() {
     })
   }
 
-  const startEdit = (section: ConfigSection) => {
-    setOpen(open === section.name ? null : section.name)
+  const select = (section: ConfigSection) => {
+    setOpen(section.name)
     setDraft(section.data)
     setRaw(JSON.stringify(section.data, null, 2))
     setShowRaw(false)
     setError('')
+    setMessage('')
   }
 
   const save = (section: ConfigSection) => {
@@ -74,19 +76,30 @@ export default function Config() {
     }
     return run(async () => {
       await api.updateSection(section.name, { data: payload })
-      setOpen(null)
       return `${section.title} saved${section.managed ? ' and pushed to every instance' : ''}.`
     })
   }
 
   const list = sections.data ?? []
   const managed = list.filter((item) => item.managed).length
+  const current = list.find((item) => item.name === open) ?? list[0] ?? null
+
+  // The right pane always shows something, so the first section loaded seeds the
+  // form. Done in an effect, not during render — setting state while rendering is
+  // how you get an update loop.
+  const first = list[0]
+  useEffect(() => {
+    if (!first || open !== null) return
+    setOpen(first.name)
+    setDraft(first.data)
+    setRaw(JSON.stringify(first.data, null, 2))
+  }, [first, open])
 
   return (
     <>
       <PageHeader
         title="Instance settings"
-        description="Configuration areas replicated from the hub to every instance. DHCP is deliberately excluded — leases and interface bindings are per-host state."
+        description="What the hub replicates to every node. A replicated area is owned by the hub — change it here, and reconciliation puts it back if a node drifts. DHCP is never touched: leases and interface bindings belong to the individual host."
       />
 
       {error ? <Banner kind="error">{error}</Banner> : null}
@@ -101,89 +114,114 @@ export default function Config() {
       ) : null}
 
       {list.length ? (
-        list.map((section) => (
-          <Card key={section.name}>
+        <div className="split-wide">
+          <Card>
             <div
               style={{
                 display: 'flex',
+                alignItems: 'baseline',
                 justifyContent: 'space-between',
-                gap: 14,
-                alignItems: 'flex-start',
+                padding: '0 4px 12px',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 650,
+                  letterSpacing: '0.05em',
+                  textTransform: 'uppercase',
+                  color: 'var(--dim)',
+                }}
+              >
+                Areas
+              </span>
+              <span style={{ fontSize: 12, color: 'var(--dim)' }}>
+                {managed} of {list.length} replicated
+              </span>
+            </div>
+
+            <div className="sections">
+              {list.map((section) => (
+                <button
+                  key={section.name}
+                  className={`section-item${section.name === current?.name ? ' active' : ''}${
+                    section.risky && !section.managed ? ' risky' : ''
+                  }`}
+                  onClick={() => select(section)}
+                >
+                  <span className={`dot${section.managed ? '' : ' off'}`} />
+                  {section.title}
+                  {section.risky && !section.managed ? (
+                    <span style={{ color: 'var(--danger-ink)', display: 'inline-flex' }}>
+                      <IconWarning size={14} />
+                    </span>
+                  ) : null}
+                  <span className="count">
+                    {section.has_data ? section.keys.length : '—'}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div
+              style={{
+                borderTop: '1px solid var(--line)',
+                marginTop: 12,
+                padding: '12px 4px 2px',
+                color: 'var(--dim)',
+                fontSize: 12,
+                display: 'flex',
+                gap: 16,
                 flexWrap: 'wrap',
               }}
             >
-              <div style={{ flex: '1 1 320px' }}>
-                <h2 style={{ marginBottom: 4 }}>
-                  {section.title}{' '}
-                  <Badge tone={section.managed ? 'applied' : 'pending'}>
-                    {section.managed ? 'replicated' : 'not replicated'}
-                  </Badge>
-                </h2>
-                <p className="hint" style={{ marginBottom: 6 }}>
-                  {section.description}
-                </p>
-                <p className="hint" style={{ marginBottom: 0 }}>
-                  {section.has_data
-                    ? `${section.keys.length} setting(s) · updated ${formatTime(section.updated_at)}`
-                    : 'Nothing imported yet — import an instance as the master first.'}
-                </p>
-                {section.skipped_reason ? (
-                  <Banner kind="warn">Not pushed: {section.skipped_reason}</Banner>
-                ) : null}
-                {section.notes ? (
-                  <Banner kind={section.risky ? 'error' : 'warn'}>
-                    {section.risky ? <strong>Before you enable this: </strong> : null}
-                    {section.notes}
-                  </Banner>
-                ) : null}
-              </div>
-              <div className="actions">
-                <button
-                  className="small"
-                  onClick={() => startEdit(section)}
-                  disabled={busy || !section.has_data}
-                >
-                  {open === section.name ? 'Close' : 'View / edit'}
-                </button>
-                <button
-                  className={`small${section.managed ? '' : ' primary'}`}
-                  onClick={() => toggle(section)}
-                  disabled={busy || !section.has_data}
-                >
-                  {section.managed ? 'Stop replicating' : 'Replicate'}
-                </button>
-              </div>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span className="dot" style={dotStyle('var(--accent)')} />
+                replicated
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span className="dot" style={dotStyle('var(--danger)')} />
+                left to each node
+              </span>
             </div>
+          </Card>
 
-            {open === section.name ? (
-              <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
-                {showRaw ? (
-                  <>
-                    <label htmlFor={`data-${section.name}`}>
-                      Section document — exactly what is pushed to each instance
-                    </label>
-                    <textarea
-                      id={`data-${section.name}`}
-                      value={raw}
-                      spellCheck={false}
-                      style={{ minHeight: 260 }}
-                      onChange={(event) => setRaw(event.target.value)}
-                    />
-                  </>
-                ) : section.fields.length ? (
-                  <SectionFields fields={section.fields} data={draft} onChange={setDraft} />
-                ) : (
-                  <p className="hint">This section has no editable fields of its own.</p>
-                )}
-
-                <div className="actions" style={{ marginTop: 12 }}>
-                  <button className="primary" onClick={() => save(section)} disabled={busy}>
-                    Save
-                  </button>
+          {current ? (
+            <Card>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  justifyContent: 'space-between',
+                  gap: 16,
+                  borderBottom: '1px solid var(--line)',
+                  paddingBottom: 16,
+                  marginBottom: 18,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
+                    <h2 style={{ fontSize: 16 }}>{current.title}</h2>
+                    <Badge tone={current.managed ? 'replicated' : 'pending'}>
+                      {current.managed ? 'replicated' : 'not replicated'}
+                    </Badge>
+                  </div>
+                  <p className="hint" style={{ margin: '4px 0 0' }}>
+                    {current.description}
+                  </p>
+                  <p className="hint" style={{ margin: '3px 0 0' }}>
+                    {current.has_data
+                      ? `${current.keys.length} setting(s) · updated ${formatTime(current.updated_at)}`
+                      : 'Nothing imported yet — import an instance as the master first.'}
+                  </p>
+                </div>
+                <div className="actions">
                   <button
+                    className="small"
                     onClick={() => {
-                      // Switching views carries the edits across, so neither is a dead end.
                       if (showRaw) {
+                        // Switching views carries the edits across, so neither is a dead end.
                         try {
                           setDraft(JSON.parse(raw))
                         } catch {
@@ -195,21 +233,90 @@ export default function Config() {
                       }
                       setShowRaw(!showRaw)
                     }}
-                    disabled={busy}
+                    disabled={busy || !current.has_data}
                   >
                     {showRaw ? 'Back to the form' : 'Edit raw document'}
                   </button>
-                  <button onClick={() => setOpen(null)} disabled={busy}>
-                    Cancel
+                  <button
+                    className={`small${current.managed ? '' : ' primary'}`}
+                    onClick={() => toggle(current)}
+                    disabled={busy || !current.has_data}
+                  >
+                    {current.managed ? 'Stop replicating' : 'Replicate'}
                   </button>
                 </div>
               </div>
-            ) : null}
-          </Card>
-        ))
+
+              {current.skipped_reason ? (
+                <Banner kind="warn">Not pushed: {current.skipped_reason}</Banner>
+              ) : null}
+              {current.notes ? (
+                <Banner kind={current.risky ? 'error' : 'warn'}>
+                  {current.risky ? <strong>Before you enable this: </strong> : null}
+                  {current.notes}
+                </Banner>
+              ) : null}
+
+              {!current.has_data ? (
+                <Empty>Nothing imported yet — import an instance as the master first.</Empty>
+              ) : showRaw ? (
+                <>
+                  <label htmlFor={`data-${current.name}`}>
+                    Section document — exactly what is pushed to each instance
+                  </label>
+                  <textarea
+                    id={`data-${current.name}`}
+                    value={raw}
+                    spellCheck={false}
+                    style={{ minHeight: 300 }}
+                    onChange={(event) => setRaw(event.target.value)}
+                  />
+                </>
+              ) : current.fields.length ? (
+                <SectionFields fields={current.fields} data={draft} onChange={setDraft} />
+              ) : (
+                <p className="hint">This section has no editable fields of its own.</p>
+              )}
+
+              {current.has_data ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    borderTop: '1px solid var(--line)',
+                    marginTop: 20,
+                    paddingTop: 16,
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <button className="primary" onClick={() => save(current)} disabled={busy}>
+                    {current.managed ? 'Save and push' : 'Save'}
+                  </button>
+                  <button onClick={() => select(current)} disabled={busy}>
+                    Discard changes
+                  </button>
+                  <p style={{ margin: '0 0 0 6px', color: 'var(--dim)', fontSize: 12.5 }}>
+                    {current.managed
+                      ? 'Saving writes a new hub version and pushes this area to every instance immediately.'
+                      : 'This area is stored in the hub but not pushed. Switch on Replicate to send it.'}
+                  </p>
+                </div>
+              ) : null}
+            </Card>
+          ) : null}
+        </div>
       ) : (
         <Empty>{sections.loading ? 'Loading…' : 'No configuration sections.'}</Empty>
       )}
     </>
   )
 }
+
+const dotStyle = (background: string) => ({
+  width: 7,
+  height: 7,
+  borderRadius: '50%',
+  display: 'inline-block',
+  background,
+})

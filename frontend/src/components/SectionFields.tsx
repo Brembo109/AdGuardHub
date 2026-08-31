@@ -1,4 +1,5 @@
 import type { ConfigField } from '../api/types'
+import { Switch } from './ui'
 
 type Doc = Record<string, unknown>
 
@@ -25,16 +26,25 @@ export function SectionFields({
 
   return (
     <>
-      {booleans.map((field) => (
-        <label className="checkbox" key={field.key} title={field.help}>
-          <input
-            type="checkbox"
-            checked={Boolean(data[field.key])}
-            onChange={(event) => set(field.key, event.target.checked)}
-          />
-          {field.label}
-        </label>
-      ))}
+      {booleans.length ? (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+            gap: '12px 26px',
+          }}
+        >
+          {booleans.map((field) => (
+            <Switch
+              key={field.key}
+              checked={Boolean(data[field.key])}
+              onChange={(value) => set(field.key, value)}
+              label={field.label}
+              title={field.help}
+            />
+          ))}
+        </div>
+      ) : null}
 
       <div className="row" style={{ marginTop: booleans.length ? 12 : 0 }}>
         {others.map((field) => (

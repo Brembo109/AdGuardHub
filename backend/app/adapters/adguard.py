@@ -344,8 +344,13 @@ class AdGuardAdapter(DnsAdapter):
             rule_text = str(rules[0].get("text") or "")
         elif row.get("rule"):
             rule_text = str(row["rule"])
+        # AdGuard Home names this field elapsedMs, and sends it as a string. Reading
+        # only elapsed_ms meant every entry reported a response time of zero.
+        raw_elapsed = row.get("elapsedMs")
+        if raw_elapsed is None:
+            raw_elapsed = row.get("elapsed_ms")
         try:
-            elapsed = float(row.get("elapsed_ms") or 0)
+            elapsed = float(raw_elapsed or 0)
         except (TypeError, ValueError):
             elapsed = 0.0
         return QueryLogEntry(

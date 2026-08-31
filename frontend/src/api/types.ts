@@ -113,6 +113,29 @@ export interface DashboardStats {
   querylog_buffered: number
 }
 
+export interface TopEntry {
+  name: string
+  count: number
+}
+
+export interface Traffic {
+  queries: number
+  blocked: number
+  block_rate: number
+  replaced_safebrowsing: number
+  /** In whatever unit the instances report it; rendered as AdGuard labels it. */
+  avg_processing_time: number
+  series_queries: number[]
+  series_blocked: number[]
+  time_units: string
+  top_queried: TopEntry[]
+  top_blocked: TopEntry[]
+  top_clients: TopEntry[]
+  /** A total short by one node reads as a quiet day, so the page says who answered. */
+  instances_reporting: number
+  instances_total: number
+}
+
 export interface ReconcileReport {
   instance_id: number
   instance_name: string

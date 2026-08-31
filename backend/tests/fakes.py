@@ -19,6 +19,9 @@ class FakeInstanceState:
         self.push_calls = 0
         self.unsupported_sections: set[str] = set()
         self.stats: dict[str, Any] = {}
+        # How often the node was actually asked — the cache in front of the
+        # aggregation is only worth having if this stops climbing.
+        self.stats_calls = 0
 
 
 class FakeAdapter(DnsAdapter):
@@ -93,6 +96,7 @@ class FakeAdapter(DnsAdapter):
 
     async def stats(self) -> dict[str, Any]:
         self._guard()
+        self.state.stats_calls += 1
         return dict(self.state.stats)
 
     async def query_log(self, limit: int) -> list[QueryLogEntry]:

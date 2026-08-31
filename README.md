@@ -38,6 +38,23 @@ AdGuardHub becomes the **single source of truth** for filtering rules, blocklist
   diff any two points, and roll back (the rollback is recorded too, so it can be undone)
 - **Notifications** via configurable webhooks to Home Assistant, Discord, or Gotify
 
+## The interface
+
+A flat top bar carries all eight areas, the way AdGuard Home's own UI does, and a status
+element that is never off screen: green while every node carries the current configuration,
+amber while a push waits in the retry queue, red when a node is unreachable or reconciliation
+found drift. The whole point of the hub is that the nodes agree; when they stop agreeing, that
+has to find you rather than wait to be looked up.
+
+The dashboard leads with what the network actually did — queries over time, block rate, top
+domains and clients, summed across every node — and says plainly how many nodes answered. A
+total that is short by one node otherwise reads as a quiet day. Below that sits the hub's own
+state: nodes, last push, queued pushes, drift.
+
+Light and dark both ship, following the operating system by default with a manual override in
+the top bar. There are no web fonts and no charting library: the hub runs on a local network
+that may have no internet at all, so everything it renders is in the image.
+
 ## Architecture
 
 ```

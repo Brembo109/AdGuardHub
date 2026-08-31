@@ -23,6 +23,7 @@ from ..schemas import (
     InstanceOut,
     InstanceUpdate,
 )
+from ..services.aggregate import invalidate_stats_cache
 from ..services.importer import import_from_instance
 from ..services.sync import ALL_KINDS, check_instance, push_to_instance, schedule_sync
 from ..services.versions import record as _record
@@ -126,6 +127,8 @@ async def create_instance(
     except IntegrityError as exc:
         await session.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, "An instance with that name exists") from exc
+    # The dashboard's "n of m nodes reporting" is now stale by one node.
+    invalidate_stats_cache()
     await check_instance(session, instance)
     return to_out(instance)
 
@@ -155,6 +158,7 @@ async def update_instance(
     except IntegrityError as exc:
         await session.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, "An instance with that name exists") from exc
+    invalidate_stats_cache()
     if instance.enabled:
         await check_instance(session, instance)
     return to_out(instance)
@@ -169,6 +173,7 @@ async def delete_instance(instance_id: int, _: CurrentUser, session: SessionDep)
     adapter_session.store.forget((instance.base_url, instance.username))
     await session.delete(instance)
     await session.commit()
+    invalidate_stats_cache()
 
 
 @router.post("/{instance_id}/test")

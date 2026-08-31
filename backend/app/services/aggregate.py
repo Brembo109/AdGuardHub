@@ -7,8 +7,10 @@ the instances and folded together.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import logging
+import time
 from typing import Any
 
 from sqlalchemy import select
@@ -19,6 +21,15 @@ from ..models import Instance
 from ..runtime import get_crypto
 
 logger = logging.getLogger(__name__)
+
+# Collecting statistics fans out to every node on every call. The dashboard polls,
+# and a second browser tab doubles that, so the result is held briefly and shared.
+# Short enough that the numbers still look live, long enough that leaving the page
+# open does not become a load generator on the resolvers.
+STATS_CACHE_TTL = 10.0
+
+_cache: tuple[float, dict[str, Any]] | None = None
+_cache_lock = asyncio.Lock()
 
 # Plain sums.
 COUNTERS = (
@@ -127,4 +138,73 @@ async def aggregate_stats() -> dict[str, Any]:
         # the numbers look lower than expected because a node was down.
         "adguardhub_instances_reporting": contributing,
         "adguardhub_instances_total": len(instances),
+    }
+
+
+async def cached_stats() -> dict[str, Any]:
+    """``aggregate_stats()`` behind a short TTL, with concurrent callers collapsed.
+
+    The lock matters as much as the TTL: without it, three tabs opening at once
+    would each start their own fan-out before any of them stored a result.
+    """
+    global _cache
+    now = time.monotonic()
+    cached = _cache
+    if cached is not None and now - cached[0] < STATS_CACHE_TTL:
+        return cached[1]
+
+    async with _cache_lock:
+        # Another caller may have refreshed it while this one waited for the lock.
+        cached = _cache
+        now = time.monotonic()
+        if cached is not None and now - cached[0] < STATS_CACHE_TTL:
+            return cached[1]
+        data = await aggregate_stats()
+        _cache = (time.monotonic(), data)
+        return data
+
+
+def invalidate_stats_cache() -> None:
+    """Drop the held result, so the next read reflects a changed instance list."""
+    global _cache
+    _cache = None
+
+
+def _top(entries: Any, limit: int = 5) -> list[dict[str, Any]]:
+    """AdGuard's ``[{name: count}, …]`` shape flattened for the UI."""
+    out: list[dict[str, Any]] = []
+    for entry in entries or []:
+        if not isinstance(entry, dict):
+            continue
+        for name, count in entry.items():
+            out.append({"name": name, "count": int(count)})
+        if len(out) >= limit:
+            break
+    return out[:limit]
+
+
+async def traffic_summary() -> dict[str, Any]:
+    """What the hub's own dashboard shows: totals, the two series, and top lists."""
+    data = await cached_stats()
+    queries = int(data.get("num_dns_queries") or 0)
+    blocked = int(data.get("num_blocked_filtering") or 0)
+    return {
+        "queries": queries,
+        "blocked": blocked,
+        # Reported rather than recomputed in the browser, so every surface that
+        # shows a block rate shows the same number.
+        "block_rate": (blocked / queries * 100) if queries else 0.0,
+        "replaced_safebrowsing": int(data.get("num_replaced_safebrowsing") or 0),
+        # Passed through in whatever unit the instances report it in, and rendered
+        # the way AdGuard's own dashboard labels it. Scaling it here would mean
+        # guessing at a factor of 1000 that no reachable source confirms.
+        "avg_processing_time": float(data.get("avg_processing_time") or 0),
+        "series_queries": [int(v) for v in data.get("dns_queries") or []],
+        "series_blocked": [int(v) for v in data.get("blocked_filtering") or []],
+        "time_units": str(data.get("time_units") or "hours"),
+        "top_queried": _top(data.get("top_queried_domains")),
+        "top_blocked": _top(data.get("top_blocked_domains")),
+        "top_clients": _top(data.get("top_clients")),
+        "instances_reporting": int(data.get("adguardhub_instances_reporting") or 0),
+        "instances_total": int(data.get("adguardhub_instances_total") or 0),
     }

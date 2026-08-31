@@ -17,6 +17,7 @@ import type {
   RuleKind,
   RuleOrigin,
   SyncResult,
+  Traffic,
   Version,
   VersionDiff,
   VersionRestoreResult,
@@ -92,6 +93,7 @@ export const api = {
     }),
 
   dashboard: () => get<DashboardStats>('/api/dashboard'),
+  traffic: () => get<Traffic>('/api/traffic'),
   sync: () => post<SyncResult>('/api/sync'),
   reconcile: (applyFixes = true) =>
     post<ReconcileReport[]>(`/api/reconcile${query({ apply_fixes: applyFixes })}`),
