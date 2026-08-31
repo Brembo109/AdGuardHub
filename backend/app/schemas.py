@@ -126,7 +126,8 @@ class InstanceOut(ORMModel):
 
 class ImportRequest(BaseModel):
     replace: bool = True
-    include_dns: bool = False
+    # Empty means every section the master exposes.
+    sections: list[str] = Field(default_factory=list)
     push_after_import: bool = True
 
 
@@ -220,25 +221,58 @@ class FilterListOut(ORMModel):
 # -- DNS settings ----------------------------------------------------------
 
 
-class DnsSettingsIn(BaseModel):
-    managed: bool = False
-    upstream_dns: str = ""
-    bootstrap_dns: str = ""
-    fallback_dns: str = ""
-    upstream_mode: str = ""
-    dnssec_enabled: bool = False
-    protection_enabled: bool = True
-
-
-class DnsSettingsOut(ORMModel):
+class ConfigSectionOut(BaseModel):
+    name: str
+    title: str
+    description: str
+    notes: str
+    sensitive: bool
     managed: bool
-    upstream_dns: str
-    bootstrap_dns: str
-    fallback_dns: str
-    upstream_mode: str
-    dnssec_enabled: bool
-    protection_enabled: bool
+    has_data: bool
+    keys: list[str]
+    data: dict[str, Any]
+    # Non-empty when the section is managed but cannot safely be pushed.
+    skipped_reason: str
     updated_at: datetime
+
+
+class ConfigSectionUpdate(BaseModel):
+    managed: bool | None = None
+    data: dict[str, Any] | None = None
+
+
+class VersionOut(BaseModel):
+    id: int
+    label: str
+    author: str
+    kind: str
+    summary: str
+    created_at: datetime
+
+
+class VersionDetail(BaseModel):
+    id: int
+    label: str
+    author: str
+    kind: str
+    created_at: datetime
+    snapshot: dict[str, Any]
+
+
+class VersionDiff(BaseModel):
+    from_id: int
+    to_id: int | None
+    to_label: str
+    summary: str
+    changes: dict[str, Any]
+
+
+class VersionRestoreResult(BaseModel):
+    version_id: int
+    rules: int
+    filter_lists: int
+    sections: int
+    pushed: bool
 
 
 # -- notifiers -------------------------------------------------------------
@@ -308,6 +342,11 @@ class SyncResult(BaseModel):
 
 class DashboardStats(BaseModel):
     instances_total: int
+    # Most recent successful push across all instances, and how many are current.
+    last_sync_at: datetime | None = None
+    instances_synced: int = 0
+    managed_sections: int = 0
+    versions_total: int = 0
     instances_online: int
     instances_unreachable: int
     instances_disabled: int

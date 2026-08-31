@@ -100,7 +100,7 @@ export default function Instances() {
     )
       return
     void run(async () => {
-      const result = await api.importInstance(instance.id, { replace: true, include_dns: false })
+      const result = await api.importInstance(instance.id, { replace: true })
       return `Imported ${result.rules_imported} rule(s) and ${result.filter_lists_imported} subscription(s) from ${result.instance}; pushing to the other instances now.`
     })
   }

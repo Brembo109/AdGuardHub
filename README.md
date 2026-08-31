@@ -31,6 +31,11 @@ AdGuardHub becomes the **single source of truth** for filtering rules, blocklist
 - **Reconciliation job** as a safety net — detects and auto-corrects drift (e.g. after downtime, or a change made in the native UI anyway), and logs every correction so nothing happens silently
 - **Aggregated query log** across all instances, so you can whitelist a blocked domain no matter which instance saw it
 - **Dynamic instance management** — add, remove, or disable AdGuard instances from the UI, no config file edits
+- **Full configuration replication** — not just filtering rules: DNS and upstreams, clients,
+  encryption, access control, rewrites, blocked services, protection toggles and logging.
+  DHCP is deliberately excluded, since leases and interface bindings are per-host state
+- **Version history** — every change is snapshotted, so you can see what a sync carried,
+  diff any two points, and roll back (the rollback is recorded too, so it can be undone)
 - **Notifications** via configurable webhooks to Home Assistant, Discord, or Gotify
 
 ## Architecture
@@ -156,6 +161,46 @@ All settings are environment variables prefixed with `ADGUARDHUB_`.
 | `ADGUARDHUB_QUERYLOG_BUFFER_SIZE` | `2000` | Entries kept in the in-memory log buffer. |
 | `ADGUARDHUB_SESSION_MAX_AGE` | `1209600` | Session lifetime in seconds. |
 | `ADGUARDHUB_HTTP_TIMEOUT` | `10` | Per-request timeout when talking to instances. |
+
+## What gets replicated
+
+Under *Instance settings*, each area can be replicated or left to the instance:
+
+| Section | Covers |
+| --- | --- |
+| DNS & upstreams | Upstream/bootstrap/fallback resolvers, upstream mode, DNSSEC, cache, rate limits, blocking mode |
+| Clients | Persistent clients and their per-client filtering settings |
+| Access control | Allowed/disallowed clients, blocked hostnames |
+| Encryption (TLS) | HTTPS/DoT/DoQ settings, certificate and key |
+| DNS rewrites | Custom domain-to-answer rewrites |
+| Blocked services | Globally blocked services and their schedule |
+| Filtering | Filtering on/off and the list refresh interval |
+| Safe browsing / Parental / Safe search | The protection modules |
+| Query log & Statistics | Retention, anonymisation, ignored domains |
+
+**DHCP is never touched.** Leases and interface bindings belong to the individual host;
+copying them between nodes would be actively wrong.
+
+Importing an instance as the master adopts every area it exposes and switches replication on.
+An area a given AdGuard version does not implement is skipped rather than failing the sync.
+
+> **One caveat on TLS.** AdGuard Home never returns a stored private key over its API. If the
+> master only reports `private_key_saved`, AdGuardHub will *not* push the TLS section — doing so
+> would turn encryption off on the target rather than replicate it. The section shows why it was
+> skipped; paste the certificate and key into it to replicate them, or manage TLS per node.
+
+## Version history
+
+Every change to the hub — a rule, a subscription, a settings section, an import — records a
+snapshot. Under *History* you can:
+
+- see what each change actually carried, summarised per entry
+- compare any version against the current state or against another version, down to the
+  individual settings key
+- roll back to any version: the central state is replaced and pushed to every instance, and the
+  rollback itself is recorded so it can be undone in turn
+
+History is capped at the most recent 200 versions to keep the database small.
 
 ## Notifications
 

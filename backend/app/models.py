@@ -61,7 +61,7 @@ class PayloadKind(StrEnum):
 
     rules = "rules"
     filters = "filters"
-    dns = "dns"
+    settings = "settings"
 
 
 class User(Base):
@@ -124,22 +124,38 @@ class FilterList(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class DnsSettings(Base):
-    """Singleton row (id=1) holding the instance-level DNS config pushed to every instance."""
+class ConfigSection(Base):
+    """One managed AdGuard configuration area (adapters/sections.py).
 
-    __tablename__ = "dns_settings"
+    ``data`` is the section's document as JSON — deliberately opaque, so a new
+    AdGuard setting needs no schema change here.
+    """
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    __tablename__ = "config_sections"
+
+    name: Mapped[str] = mapped_column(String(60), primary_key=True)
     managed: Mapped[bool] = mapped_column(Boolean, default=False)
-    upstream_dns: Mapped[str] = mapped_column(Text, default="")
-    bootstrap_dns: Mapped[str] = mapped_column(Text, default="")
-    fallback_dns: Mapped[str] = mapped_column(Text, default="")
-    upstream_mode: Mapped[str] = mapped_column(String(40), default="")
-    dnssec_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
-    protection_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    data: Mapped[str] = mapped_column(Text, default="{}")
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
+
+
+class ConfigVersion(Base):
+    """A point-in-time snapshot of everything AdGuardHub manages.
+
+    One row per change, so the operator can see what a sync actually carried,
+    compare two points, and roll back to either.
+    """
+
+    __tablename__ = "config_versions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    label: Mapped[str] = mapped_column(String(255), default="")
+    author: Mapped[str] = mapped_column(String(120), default="")
+    kind: Mapped[str] = mapped_column(String(20), default="change")
+    snapshot: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class PushJob(Base):

@@ -59,7 +59,7 @@ export default function Onboarding() {
     )
       return
     void run(async () => {
-      const result = await api.importInstance(instance.id, { replace: true, include_dns: false })
+      const result = await api.importInstance(instance.id, { replace: true })
       setStep(3)
       return `Imported ${result.rules_imported} rule(s) and ${result.filter_lists_imported} subscription(s) from ${result.instance}.`
     })

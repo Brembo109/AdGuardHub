@@ -9,6 +9,8 @@ from sqlalchemy import func, select
 
 from ..deps import CurrentUser, SessionDep
 from ..models import (
+    ConfigSection,
+    ConfigVersion,
     DriftEvent,
     FilterList,
     Instance,
@@ -41,8 +43,21 @@ async def dashboard(_: CurrentUser, session: SessionDep) -> DashboardStats:
     def instances_where(*conditions):
         return select(func.count()).select_from(Instance).where(*conditions)
 
+    last_sync = (
+        await session.execute(select(func.max(Instance.last_synced_at)))
+    ).scalar_one_or_none()
+
     return DashboardStats(
         instances_total=await _count(session, select(func.count()).select_from(Instance)),
+        last_sync_at=last_sync,
+        instances_synced=await _count(
+            session, instances_where(Instance.last_synced_at.is_not(None))
+        ),
+        managed_sections=await _count(
+            session,
+            select(func.count()).select_from(ConfigSection).where(ConfigSection.managed.is_(True)),
+        ),
+        versions_total=await _count(session, select(func.count()).select_from(ConfigVersion)),
         instances_online=await _count(
             session, instances_where(Instance.status == InstanceStatus.online.value)
         ),

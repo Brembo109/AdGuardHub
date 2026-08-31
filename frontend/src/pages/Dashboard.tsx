@@ -77,6 +77,37 @@ export default function Dashboard() {
         }
       />
 
+      {value ? (
+        <Card>
+          <div className="sync-line">
+            <div>
+              <div className="hint" style={{ margin: 0 }}>
+                Last successful push
+              </div>
+              <div style={{ fontSize: 17, fontWeight: 600 }}>
+                {value.last_sync_at ? formatTime(value.last_sync_at) : 'never'}
+              </div>
+            </div>
+            <div>
+              <div className="hint" style={{ margin: 0 }}>
+                Instances carrying it
+              </div>
+              <div style={{ fontSize: 17, fontWeight: 600 }}>
+                {value.instances_synced}/{value.instances_total}
+              </div>
+            </div>
+            <div>
+              <div className="hint" style={{ margin: 0 }}>
+                Config versions
+              </div>
+              <div style={{ fontSize: 17, fontWeight: 600 }}>
+                <Link to="/history">{value.versions_total}</Link>
+              </div>
+            </div>
+          </div>
+        </Card>
+      ) : null}
+
       {error ? <Banner kind="error">{error}</Banner> : null}
       {message ? <Banner kind="ok">{message}</Banner> : null}
       {stats.error ? <Banner kind="error">{stats.error}</Banner> : null}
@@ -90,6 +121,7 @@ export default function Dashboard() {
             alert={value.instances_unreachable > 0}
           />
           <Stat value={value.rules_total} label="Rules" />
+          <Stat value={value.managed_sections} label="Replicated settings" />
           <Stat value={value.rules_allow} label="Allow rules" />
           <Stat value={value.filter_lists_enabled} label="Active subscriptions" />
           <Stat

@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
-from .api import auth, blocklists, instances, ops, querylog, rules
+from .api import auth, blocklists, config, instances, ops, querylog, rules
 from .api import settings as settings_api
 from .config import get_settings
 from .db import DataDirError, dispose_db, init_db, session_scope
@@ -106,6 +106,8 @@ app.include_router(blocklists.router)
 app.include_router(querylog.router)
 app.include_router(settings_api.router)
 app.include_router(ops.router)
+app.include_router(config.router)
+app.include_router(config.versions_router)
 
 
 @app.get("/api/health")

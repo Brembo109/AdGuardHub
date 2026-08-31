@@ -23,7 +23,7 @@ from ..models import DriftEvent, Instance, InstanceStatus, PayloadKind, utcnow
 from ..runtime import get_crypto
 from .events import bus
 from .notify import EVENT_INSTANCE_UNREACHABLE, EVENT_RECONCILE_FIX, notify
-from .sync import desired_dns, desired_filter_lists, desired_rules, push_kind
+from .sync import desired_filter_lists, desired_rules, desired_sections, push_kind
 
 logger = logging.getLogger(__name__)
 
@@ -96,25 +96,57 @@ def diff_filter_lists(
 
 def _normalise(value: Any) -> Any:
     if isinstance(value, list):
-        return [str(item) for item in value]
+        return [_normalise(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _normalise(item) for key, item in sorted(value.items())}
     return value
 
 
-def diff_dns(expected: dict[str, Any] | None, actual: dict[str, Any]) -> Difference | None:
-    if expected is None:
-        return None
+def diff_section(
+    name: str, expected: dict[str, Any], actual: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    """Per-key differences for one section, or ``None`` when it matches.
+
+    ``actual`` is ``None`` when the instance does not implement the section; that is
+    not drift, just a capability difference, so it is reported without a correction.
+    """
+    if actual is None:
+        return {"unsupported": True}
     changed = {
         key: {"expected": _normalise(value), "actual": _normalise(actual.get(key))}
         for key, value in expected.items()
         if _normalise(actual.get(key)) != _normalise(value)
     }
-    if not changed:
+    return changed or None
+
+
+def diff_settings(
+    expected: dict[str, dict[str, Any]], actual: dict[str, dict[str, Any] | None]
+) -> Difference | None:
+    """Fold every managed section into one difference for the settings payload."""
+    details: dict[str, Any] = {}
+    unsupported: list[str] = []
+    for name, wanted in expected.items():
+        found = diff_section(name, wanted, actual.get(name))
+        if found is None:
+            continue
+        if found.get("unsupported"):
+            unsupported.append(name)
+            continue
+        details[name] = found
+
+    if not details and not unsupported:
         return None
-    return Difference(
-        PayloadKind.dns.value,
-        f"{len(changed)} DNS setting(s) differ: {', '.join(sorted(changed))}",
-        changed,
-    )
+
+    parts = []
+    if details:
+        parts.append(f"{len(details)} section(s) differ: {', '.join(sorted(details))}")
+    if unsupported:
+        parts.append(f"not supported by this instance: {', '.join(sorted(unsupported))}")
+    payload: dict[str, Any] = dict(details)
+    if unsupported:
+        payload["_unsupported"] = unsupported
+    return Difference(PayloadKind.settings.value, "; ".join(parts), payload)
 
 
 async def reconcile_instance(
@@ -124,9 +156,10 @@ async def reconcile_instance(
     if not instance.enabled:
         return report
 
+    expected_sections = await desired_sections(session)
     adapter = build_adapter(instance, get_crypto())
     try:
-        state = await adapter.pull_state()
+        state = await adapter.pull_state(tuple(expected_sections))
     except (AdapterError, ValueError) as exc:
         await adapter.aclose()
         report.error = str(exc)
@@ -147,17 +180,21 @@ async def reconcile_instance(
     instance.last_error = ""
     instance.last_seen_at = utcnow()
 
-    expected_dns = await desired_dns(session)
     candidates = [
         diff_rules(await desired_rules(session), state.rules),
         diff_filter_lists(await desired_filter_lists(session), state.filter_lists),
-        diff_dns(expected_dns, state.dns),
+        diff_settings(expected_sections, state.sections),
     ]
     report.differences = [item for item in candidates if item is not None]
 
-    if report.differences and apply_fixes:
+    correctable = [
+        difference
+        for difference in report.differences
+        if set(difference.details) - {"_unsupported"} or difference.payload_kind != "settings"
+    ]
+    if correctable and apply_fixes:
         try:
-            for difference in report.differences:
+            for difference in correctable:
                 await push_kind(session, adapter, PayloadKind(difference.payload_kind))
             report.corrected = True
             instance.last_synced_at = utcnow()

@@ -1,0 +1,163 @@
+import { useState } from 'react'
+import { api } from '../api/client'
+import type { ConfigSection } from '../api/types'
+import { Badge, Banner, Card, Empty, PageHeader } from '../components/ui'
+import { formatTime } from '../format'
+import { errorMessage, useResource } from '../hooks/useApi'
+
+/**
+ * The instance-level settings AdGuardHub replicates. Everything the master exposes
+ * is here except DHCP, which is per-host state and would be wrong to copy.
+ */
+export default function Config() {
+  const sections = useResource<ConfigSection[]>(() => api.configSections())
+  const [open, setOpen] = useState<string | null>(null)
+  const [draft, setDraft] = useState('')
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function run(action: () => Promise<string>) {
+    setBusy(true)
+    setError('')
+    setMessage('')
+    try {
+      setMessage(await action())
+    } catch (caught) {
+      setError(errorMessage(caught))
+    } finally {
+      setBusy(false)
+      await sections.reload()
+    }
+  }
+
+  const toggle = (section: ConfigSection) =>
+    run(async () => {
+      await api.updateSection(section.name, { managed: !section.managed })
+      return section.managed
+        ? `${section.title} is no longer pushed; instances keep their own.`
+        : `${section.title} is now pushed to every instance.`
+    })
+
+  const startEdit = (section: ConfigSection) => {
+    setOpen(open === section.name ? null : section.name)
+    setDraft(JSON.stringify(section.data, null, 2))
+    setError('')
+  }
+
+  const save = (section: ConfigSection) =>
+    run(async () => {
+      let parsed: Record<string, unknown>
+      try {
+        parsed = JSON.parse(draft)
+      } catch {
+        throw new Error('That is not valid JSON.')
+      }
+      await api.updateSection(section.name, { data: parsed })
+      setOpen(null)
+      return `${section.title} saved${section.managed ? ' and pushed' : ''}.`
+    })
+
+  const list = sections.data ?? []
+  const managed = list.filter((item) => item.managed).length
+
+  return (
+    <>
+      <PageHeader
+        title="Instance settings"
+        description="Configuration areas replicated from the hub to every instance. DHCP is deliberately excluded — leases and interface bindings are per-host state."
+      />
+
+      {error ? <Banner kind="error">{error}</Banner> : null}
+      {message ? <Banner kind="ok">{message}</Banner> : null}
+      {sections.error ? <Banner kind="error">{sections.error}</Banner> : null}
+
+      {list.length && managed === 0 ? (
+        <Banner kind="warn">
+          No settings are being replicated yet. Import an instance as the master on the Instances
+          page — that adopts every area it exposes and switches them on.
+        </Banner>
+      ) : null}
+
+      {list.length ? (
+        list.map((section) => (
+          <Card key={section.name}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: 14,
+                alignItems: 'flex-start',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div style={{ flex: '1 1 320px' }}>
+                <h2 style={{ marginBottom: 4 }}>
+                  {section.title}{' '}
+                  <Badge tone={section.managed ? 'applied' : 'pending'}>
+                    {section.managed ? 'replicated' : 'not replicated'}
+                  </Badge>
+                </h2>
+                <p className="hint" style={{ marginBottom: 6 }}>
+                  {section.description}
+                </p>
+                <p className="hint" style={{ marginBottom: 0 }}>
+                  {section.has_data
+                    ? `${section.keys.length} setting(s) · updated ${formatTime(section.updated_at)}`
+                    : 'Nothing imported yet.'}
+                </p>
+                {section.skipped_reason ? (
+                  <Banner kind="warn">
+                    Not pushed: {section.skipped_reason}
+                    {section.notes ? <div style={{ marginTop: 6 }}>{section.notes}</div> : null}
+                  </Banner>
+                ) : null}
+              </div>
+              <div className="actions">
+                <button
+                  className="small"
+                  onClick={() => startEdit(section)}
+                  disabled={busy || !section.has_data}
+                >
+                  {open === section.name ? 'Close' : 'View / edit'}
+                </button>
+                <button
+                  className={`small${section.managed ? '' : ' primary'}`}
+                  onClick={() => toggle(section)}
+                  disabled={busy || !section.has_data}
+                >
+                  {section.managed ? 'Stop replicating' : 'Replicate'}
+                </button>
+              </div>
+            </div>
+
+            {open === section.name ? (
+              <div style={{ marginTop: 14 }}>
+                <label htmlFor={`data-${section.name}`}>
+                  Section document — this is exactly what is pushed to each instance
+                </label>
+                <textarea
+                  id={`data-${section.name}`}
+                  value={draft}
+                  spellCheck={false}
+                  style={{ minHeight: 260 }}
+                  onChange={(event) => setDraft(event.target.value)}
+                />
+                <div className="actions" style={{ marginTop: 10 }}>
+                  <button className="primary" onClick={() => save(section)} disabled={busy}>
+                    Save
+                  </button>
+                  <button onClick={() => setOpen(null)} disabled={busy}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </Card>
+        ))
+      ) : (
+        <Empty>{sections.loading ? 'Loading…' : 'No configuration sections.'}</Empty>
+      )}
+    </>
+  )
+}

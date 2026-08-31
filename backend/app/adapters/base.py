@@ -12,7 +12,15 @@ from typing import Any
 
 
 class AdapterError(RuntimeError):
-    """Raised when a backend is unreachable or rejects a request."""
+    """Raised when a backend is unreachable or rejects a request.
+
+    ``status`` carries the HTTP status when there was one, so callers can tell an
+    unsupported endpoint (404/405) from a real failure.
+    """
+
+    def __init__(self, message: str, status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status
 
 
 @dataclass(slots=True)
@@ -25,11 +33,15 @@ class RemoteFilterList:
 
 @dataclass(slots=True)
 class RemoteState:
-    """The subset of a backend's configuration that AdGuardHub manages."""
+    """The subset of a backend's configuration that AdGuardHub manages.
+
+    ``sections`` maps a section name to its document, or to ``None`` when this
+    backend does not implement that area at all.
+    """
 
     rules: list[str] = field(default_factory=list)
     filter_lists: list[RemoteFilterList] = field(default_factory=list)
-    dns: dict[str, Any] = field(default_factory=dict)
+    sections: dict[str, dict[str, Any] | None] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -71,22 +83,25 @@ class DnsAdapter(ABC):
         """Make the backend's subscriptions match ``lists`` exactly."""
 
     @abstractmethod
-    async def pull_dns_settings(self) -> dict[str, Any]:
-        """Return the managed instance-level DNS settings."""
-
-    @abstractmethod
-    async def push_dns_settings(self, settings: dict[str, Any]) -> None:
-        """Apply the managed instance-level DNS settings."""
-
-    @abstractmethod
     async def query_log(self, limit: int) -> list[QueryLogEntry]:
         """Return the most recent query log entries, newest first."""
 
-    async def pull_state(self) -> RemoteState:
+    @abstractmethod
+    async def pull_section(self, name: str) -> dict[str, Any] | None:
+        """Read one configuration section, or ``None`` if the backend lacks it."""
+
+    @abstractmethod
+    async def push_section(self, name: str, data: dict[str, Any]) -> None:
+        """Apply one configuration section."""
+
+    def supported_sections(self) -> tuple[str, ...]:
+        return ()
+
+    async def pull_state(self, sections: tuple[str, ...] = ()) -> RemoteState:
         return RemoteState(
             rules=await self.pull_rules(),
             filter_lists=await self.pull_filter_lists(),
-            dns=await self.pull_dns_settings(),
+            sections={name: await self.pull_section(name) for name in sections},
         )
 
     async def aclose(self) -> None:  # pragma: no cover - default no-op

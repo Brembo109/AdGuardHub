@@ -12,8 +12,10 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..adapters import build_adapter
-from ..models import DnsSettings, FilterList, Instance, Rule, RuleOrigin
+from ..adapters.sections import SECTION_NAMES
+from ..models import FilterList, Instance, Rule, RuleOrigin
 from ..runtime import get_crypto
+from .config import set_section
 from .rules import classify, is_comment, normalise
 
 
@@ -23,7 +25,8 @@ class ImportResult:
     rules_imported: int
     rules_skipped: int
     filter_lists_imported: int
-    dns_imported: bool
+    sections_imported: list[str]
+    sections_unsupported: list[str]
     replaced: bool
 
 
@@ -32,11 +35,16 @@ async def import_from_instance(
     instance: Instance,
     *,
     replace: bool = True,
-    include_dns: bool = False,
+    sections: tuple[str, ...] = SECTION_NAMES,
 ) -> ImportResult:
+    """Adopt the master's configuration, including every settings section it exposes.
+
+    Imported sections are switched on, so the second node receives them on the next
+    push — that is the point of naming a master.
+    """
     adapter = build_adapter(instance, get_crypto())
     try:
-        state = await adapter.pull_state()
+        state = await adapter.pull_state(tuple(sections))
     finally:
         await adapter.aclose()
 
@@ -88,20 +96,16 @@ async def import_from_instance(
         )
         lists_imported += 1
 
-    dns_imported = False
-    if include_dns and state.dns:
-        settings = await session.get(DnsSettings, 1)
-        if settings is None:
-            settings = DnsSettings(id=1)
-            session.add(settings)
-        settings.managed = True
-        settings.upstream_dns = "\n".join(state.dns.get("upstream_dns") or [])
-        settings.bootstrap_dns = "\n".join(state.dns.get("bootstrap_dns") or [])
-        settings.fallback_dns = "\n".join(state.dns.get("fallback_dns") or [])
-        settings.upstream_mode = str(state.dns.get("upstream_mode") or "")
-        settings.dnssec_enabled = bool(state.dns.get("dnssec_enabled"))
-        settings.protection_enabled = bool(state.dns.get("protection_enabled", True))
-        dns_imported = True
+    imported_sections: list[str] = []
+    unsupported: list[str] = []
+    for name in sections:
+        data = state.sections.get(name)
+        if data is None:
+            # The instance does not implement this area; nothing to adopt.
+            unsupported.append(name)
+            continue
+        await set_section(session, name, data=data, managed=True)
+        imported_sections.append(name)
 
     await session.commit()
     return ImportResult(
@@ -109,6 +113,7 @@ async def import_from_instance(
         rules_imported=imported,
         rules_skipped=skipped,
         filter_lists_imported=lists_imported,
-        dns_imported=dns_imported,
+        sections_imported=imported_sections,
+        sections_unsupported=unsupported,
         replaced=replace,
     )

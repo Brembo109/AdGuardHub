@@ -5,7 +5,7 @@ from __future__ import annotations
 import httpx
 
 from app.adapters.base import RemoteFilterList
-from app.services.reconcile import diff_dns, diff_filter_lists, diff_rules
+from app.services.reconcile import diff_filter_lists, diff_rules, diff_settings
 from app.services.sync import drain_background
 
 from .fakes import FakeAdapter
@@ -31,11 +31,27 @@ def test_diff_filter_lists_notices_a_disabled_subscription() -> None:
     assert difference.details["changed"] == ["blocklist:https://e.com/l.txt"]
 
 
-def test_diff_dns_ignores_unmanaged_settings() -> None:
-    assert diff_dns(None, {"upstream_dns": ["8.8.8.8"]}) is None
-    difference = diff_dns({"upstream_dns": ["1.1.1.1"]}, {"upstream_dns": ["8.8.8.8"]})
+def test_diff_settings_is_quiet_when_nothing_is_managed() -> None:
+    assert diff_settings({}, {}) is None
+
+
+def test_diff_settings_reports_the_changed_keys_per_section() -> None:
+    difference = diff_settings(
+        {"dns": {"upstream_dns": ["1.1.1.1"], "dnssec_enabled": True}},
+        {"dns": {"upstream_dns": ["8.8.8.8"], "dnssec_enabled": True}},
+    )
     assert difference is not None
-    assert difference.details["upstream_dns"]["actual"] == ["8.8.8.8"]
+    assert difference.details["dns"]["upstream_dns"]["actual"] == ["8.8.8.8"]
+    # An unchanged key must not be reported as drift.
+    assert "dnssec_enabled" not in difference.details["dns"]
+
+
+def test_diff_settings_flags_an_unsupported_section_without_calling_it_drift() -> None:
+    """An instance that lacks an area is a capability gap, not a config difference."""
+    difference = diff_settings({"tls": {"enabled": True}}, {"tls": None})
+    assert difference is not None
+    assert difference.details["_unsupported"] == ["tls"]
+    assert "not supported" in difference.summary
 
 
 async def test_out_of_band_change_is_corrected_and_logged(auth_client: httpx.AsyncClient) -> None:

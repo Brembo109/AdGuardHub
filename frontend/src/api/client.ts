@@ -1,8 +1,8 @@
 import type {
   AuthState,
+  ConfigSection,
   ConnectionResult,
   DashboardStats,
-  DnsSettings,
   DriftEvent,
   FilterList,
   ImportResult,
@@ -16,6 +16,9 @@ import type {
   RuleKind,
   RuleOrigin,
   SyncResult,
+  Version,
+  VersionDiff,
+  VersionRestoreResult,
 } from './types'
 
 export class ApiError extends Error {
@@ -60,8 +63,6 @@ const post = <T,>(path: string, body?: unknown) =>
   request<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) })
 const patch = <T,>(path: string, body: unknown) =>
   request<T>(path, { method: 'PATCH', body: JSON.stringify(body) })
-const put = <T,>(path: string, body: unknown) =>
-  request<T>(path, { method: 'PUT', body: JSON.stringify(body) })
 const del = (path: string) => request<void>(path, { method: 'DELETE' })
 
 function query(params: Record<string, string | boolean | number | undefined>): string {
@@ -116,7 +117,7 @@ export const api = {
   deleteInstance: (id: number) => del(`/api/instances/${id}`),
   testInstance: (id: number) => post<{ ok: string; version: string }>(`/api/instances/${id}/test`),
   pushInstance: (id: number) => post<{ ok: string; error: string }>(`/api/instances/${id}/push`),
-  importInstance: (id: number, payload: { replace: boolean; include_dns: boolean }) =>
+  importInstance: (id: number, payload: { replace: boolean; sections?: string[] }) =>
     post<ImportResult>(`/api/instances/${id}/import`, { ...payload, push_after_import: true }),
 
   rules: (params: { kind?: RuleKind; origin?: RuleOrigin; search?: string } = {}) =>
@@ -166,7 +167,13 @@ export const api = {
   testNotifier: (id: number) =>
     post<{ ok: string; error: string }>(`/api/settings/notifiers/${id}/test`),
 
-  dnsSettings: () => get<DnsSettings>('/api/settings/dns'),
-  saveDnsSettings: (payload: Omit<DnsSettings, 'updated_at'>) =>
-    put<DnsSettings>('/api/settings/dns', payload),
+  configSections: () => get<ConfigSection[]>('/api/config/sections'),
+  updateSection: (name: string, payload: { managed?: boolean; data?: Record<string, unknown> }) =>
+    patch<ConfigSection>(`/api/config/sections/${name}`, payload),
+
+  versions: (limit = 50) => get<Version[]>(`/api/versions${query({ limit })}`),
+  versionDiff: (id: number, against?: number) =>
+    get<VersionDiff>(`/api/versions/${id}/diff${query({ against })}`),
+  restoreVersion: (id: number) =>
+    post<VersionRestoreResult>(`/api/versions/${id}/restore`),
 }

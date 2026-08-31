@@ -5,16 +5,19 @@ from __future__ import annotations
 from typing import Any, ClassVar
 
 from app.adapters.base import AdapterError, DnsAdapter, QueryLogEntry, RemoteFilterList
+from app.adapters.sections import SECTION_NAMES
 
 
 class FakeInstanceState:
     def __init__(self) -> None:
         self.rules: list[str] = []
         self.filter_lists: list[RemoteFilterList] = []
-        self.dns: dict[str, Any] = {}
+        # Section name -> document, or absent when this fake does not implement it.
+        self.sections: dict[str, dict[str, Any]] = {}
         self.query_log: list[QueryLogEntry] = []
         self.offline = False
         self.push_calls = 0
+        self.unsupported_sections: set[str] = set()
 
 
 class FakeAdapter(DnsAdapter):
@@ -71,13 +74,20 @@ class FakeAdapter(DnsAdapter):
         self.state.filter_lists = list(lists)
         self.state.push_calls += 1
 
-    async def pull_dns_settings(self) -> dict[str, Any]:
-        self._guard()
-        return dict(self.state.dns)
+    def supported_sections(self) -> tuple[str, ...]:
+        return SECTION_NAMES
 
-    async def push_dns_settings(self, settings: dict[str, Any]) -> None:
+    async def pull_section(self, name: str) -> dict[str, Any] | None:
         self._guard()
-        self.state.dns = dict(settings)
+        if name in self.state.unsupported_sections:
+            return None
+        return dict(self.state.sections.get(name, {})) or None
+
+    async def push_section(self, name: str, data: dict[str, Any]) -> None:
+        self._guard()
+        if name in self.state.unsupported_sections:
+            raise AdapterError(f"{name} is not supported by {self.base_url}", status=404)
+        self.state.sections[name] = dict(data)
         self.state.push_calls += 1
 
     async def query_log(self, limit: int) -> list[QueryLogEntry]:

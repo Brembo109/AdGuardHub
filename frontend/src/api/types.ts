@@ -93,19 +93,12 @@ export interface Notifier {
   last_error: string
 }
 
-export interface DnsSettings {
-  managed: boolean
-  upstream_dns: string
-  bootstrap_dns: string
-  fallback_dns: string
-  upstream_mode: string
-  dnssec_enabled: boolean
-  protection_enabled: boolean
-  updated_at: string
-}
-
 export interface DashboardStats {
   instances_total: number
+  last_sync_at: string | null
+  instances_synced: number
+  managed_sections: number
+  versions_total: number
   instances_online: number
   instances_unreachable: number
   instances_disabled: number
@@ -134,7 +127,8 @@ export interface ImportResult {
   rules_imported: number
   rules_skipped: number
   filter_lists_imported: number
-  dns_imported: boolean
+  sections_imported: string[]
+  sections_unsupported: string[]
   replaced: boolean
 }
 
@@ -147,4 +141,55 @@ export interface ConnectionResult {
   ok: boolean
   version: string
   error: string
+}
+
+export interface ConfigSection {
+  name: string
+  title: string
+  description: string
+  notes: string
+  sensitive: boolean
+  managed: boolean
+  has_data: boolean
+  keys: string[]
+  data: Record<string, unknown>
+  /** Non-empty when the section is managed but cannot safely be pushed. */
+  skipped_reason: string
+  updated_at: string
+}
+
+export interface Version {
+  id: number
+  label: string
+  author: string
+  kind: string
+  summary: string
+  created_at: string
+}
+
+export interface VersionDiff {
+  from_id: number
+  to_id: number | null
+  to_label: string
+  summary: string
+  changes: {
+    rules: { added: string[]; removed: string[]; changed: { key: string }[] }
+    filter_lists: { added: string[]; removed: string[]; changed: { key: string }[] }
+    sections: Record<
+      string,
+      {
+        keys: Record<string, { before: unknown; after: unknown }>
+        managed?: { before: boolean; after: boolean }
+      }
+    >
+    empty: boolean
+  }
+}
+
+export interface VersionRestoreResult {
+  version_id: number
+  rules: number
+  filter_lists: number
+  sections: number
+  pushed: boolean
 }

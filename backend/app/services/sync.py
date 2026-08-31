@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import UTC, datetime
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +18,6 @@ from ..adapters import AdapterError, DnsAdapter, RemoteFilterList, build_adapter
 from ..config import get_settings
 from ..db import session_scope
 from ..models import (
-    DnsSettings,
     FilterList,
     Instance,
     InstanceStatus,
@@ -30,12 +28,17 @@ from ..models import (
     utcnow,
 )
 from ..runtime import get_crypto
+from .config import managed_sections
 from .events import bus
 from .notify import EVENT_INSTANCE_UNREACHABLE, EVENT_PUSH_FAILED, notify
 
 logger = logging.getLogger(__name__)
 
-ALL_KINDS: tuple[PayloadKind, ...] = (PayloadKind.rules, PayloadKind.filters, PayloadKind.dns)
+ALL_KINDS: tuple[PayloadKind, ...] = (
+    PayloadKind.rules,
+    PayloadKind.filters,
+    PayloadKind.settings,
+)
 
 
 # --------------------------------------------------------------------------
@@ -59,34 +62,9 @@ async def desired_filter_lists(session: AsyncSession) -> list[RemoteFilterList]:
     ]
 
 
-def _split(value: str) -> list[str]:
-    return [line.strip() for line in (value or "").splitlines() if line.strip()]
-
-
-async def get_dns_settings(session: AsyncSession) -> DnsSettings:
-    settings = await session.get(DnsSettings, 1)
-    if settings is None:
-        settings = DnsSettings(id=1)
-        session.add(settings)
-        await session.commit()
-    return settings
-
-
-async def desired_dns(session: AsyncSession) -> dict[str, Any] | None:
-    """``None`` when DNS settings are unmanaged — then instances keep their own."""
-    settings = await get_dns_settings(session)
-    if not settings.managed:
-        return None
-    payload: dict[str, Any] = {
-        "upstream_dns": _split(settings.upstream_dns),
-        "bootstrap_dns": _split(settings.bootstrap_dns),
-        "fallback_dns": _split(settings.fallback_dns),
-        "dnssec_enabled": settings.dnssec_enabled,
-        "protection_enabled": settings.protection_enabled,
-    }
-    if settings.upstream_mode:
-        payload["upstream_mode"] = settings.upstream_mode
-    return payload
+async def desired_sections(session: AsyncSession) -> dict[str, dict]:
+    """The configuration documents every instance should carry."""
+    return await managed_sections(session)
 
 
 # --------------------------------------------------------------------------
@@ -99,10 +77,13 @@ async def push_kind(session: AsyncSession, adapter: DnsAdapter, kind: PayloadKin
         await adapter.push_rules(await desired_rules(session))
     elif kind is PayloadKind.filters:
         await adapter.push_filter_lists(await desired_filter_lists(session))
-    elif kind is PayloadKind.dns:
-        payload = await desired_dns(session)
-        if payload is not None:
-            await adapter.push_dns_settings(payload)
+    elif kind is PayloadKind.settings:
+        for name, data in (await desired_sections(session)).items():
+            try:
+                await adapter.push_section(name, data)
+            except AdapterError as exc:
+                # Name the section: "settings failed" alone is not actionable.
+                raise AdapterError(f"section {name!r}: {exc}", status=exc.status) from exc
 
 
 async def push_to_instance(

@@ -141,32 +141,102 @@ async def test_query_log_parsing_marks_blocked_entries() -> None:
     assert entries[1].elapsed_ms == 0.0
 
 
-async def test_dns_settings_are_limited_to_managed_keys() -> None:
+async def test_section_pull_is_limited_to_managed_keys() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "upstream_dns": ["1.1.1.1"],
+                "dnssec_enabled": True,
+                "ratelimit_whitelist": [],
+                "something_adguard_added_later": 1,  # not in the managed key set
+            },
+        )
+
+    data = await make_adapter(login_ok(handler)).pull_section("dns")
+    assert data == {
+        "upstream_dns": ["1.1.1.1"],
+        "dnssec_enabled": True,
+        "ratelimit_whitelist": [],
+    }
+
+
+async def test_section_push_sends_only_managed_keys() -> None:
     captured: dict[str, object] = {}
 
     async def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.path == "/control/dns_info":
+        import json
+
+        captured["path"] = request.url.path
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json={})
+
+    await make_adapter(login_ok(handler)).push_section(
+        "dns", {"upstream_dns": ["9.9.9.9"], "ratelimit": 20, "not_a_dns_key": True}
+    )
+    assert captured["path"] == "/control/dns_config"
+    assert captured["body"] == {"upstream_dns": ["9.9.9.9"], "ratelimit": 20}
+
+
+async def test_a_section_the_instance_lacks_reads_as_none() -> None:
+    """AdGuard versions differ; a missing endpoint must not fail the whole sync."""
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, text="not found")
+
+    assert await make_adapter(login_ok(handler)).pull_section("blocked_services") is None
+
+
+async def test_toggle_sections_use_the_enable_and_disable_endpoints() -> None:
+    seen: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.path)
+        return httpx.Response(200, json={})
+
+    adapter = make_adapter(login_ok(handler))
+    await adapter.push_section("safebrowsing", {"enabled": True})
+    await adapter.push_section("parental", {"enabled": False})
+    assert seen == ["/control/safebrowsing/enable", "/control/parental/disable"]
+
+
+async def test_clients_are_added_updated_and_removed() -> None:
+    calls: list[tuple[str, dict]] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/control/clients":
             return httpx.Response(
                 200,
                 json={
-                    "upstream_dns": ["1.1.1.1"],
-                    "dnssec_enabled": True,
-                    "ratelimit": 20,  # not managed by AdGuardHub
+                    "clients": [
+                        {"name": "keep", "ids": ["10.0.0.1"]},
+                        {"name": "change", "ids": ["10.0.0.2"]},
+                        {"name": "drop", "ids": ["10.0.0.3"]},
+                    ]
                 },
             )
         import json
 
-        captured["body"] = json.loads(request.content)
+        calls.append((request.url.path, json.loads(request.content)))
         return httpx.Response(200, json={})
 
-    adapter = make_adapter(login_ok(handler))
-    assert await adapter.pull_dns_settings() == {
-        "upstream_dns": ["1.1.1.1"],
-        "dnssec_enabled": True,
-    }
+    await make_adapter(login_ok(handler)).push_section(
+        "clients",
+        {
+            "clients": [
+                {"name": "keep", "ids": ["10.0.0.1"]},
+                {"name": "change", "ids": ["10.0.0.9"]},
+                {"name": "new", "ids": ["10.0.0.4"]},
+            ]
+        },
+    )
 
-    await adapter.push_dns_settings({"upstream_dns": ["9.9.9.9"], "ratelimit": 99})
-    assert captured["body"] == {"upstream_dns": ["9.9.9.9"]}
+    paths = [path for path, _ in calls]
+    assert paths.count("/control/clients/add") == 1
+    assert paths.count("/control/clients/update") == 1
+    assert paths.count("/control/clients/delete") == 1
+    deleted = next(body for path, body in calls if path.endswith("delete"))
+    assert deleted == {"name": "drop"}
 
 
 async def test_the_session_is_established_once_not_per_request() -> None:
