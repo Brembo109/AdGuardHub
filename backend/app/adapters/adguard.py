@@ -14,6 +14,38 @@ from .session import SessionKey, SessionStore
 # AdGuard's query log "reason" values that mean the answer was actually filtered.
 _ALLOWED_REASONS = {"NotFilteredWhiteList", "NotFilteredNotFound", "NotFilteredError", ""}
 
+# httpx raises its timeout and transport errors with no message at all, so
+# f"…failed: {exc}" renders as "…failed:" and tells the operator nothing. These
+# say what actually happened instead.
+_SILENT_ERRORS = {
+    "ConnectTimeout": "no answer while opening the connection (connect timeout)",
+    "ReadTimeout": "the connection was accepted but no response arrived (read timeout)",
+    "WriteTimeout": "the request could not be sent in time (write timeout)",
+    "PoolTimeout": "no connection slot became free in time (pool timeout)",
+    "ConnectError": "the connection could not be established",
+    "ReadError": "the connection dropped while reading the response",
+    "WriteError": "the connection dropped while sending the request",
+    "RemoteProtocolError": "the instance sent a malformed HTTP response",
+}
+
+
+def describe_transport_error(exc: Exception, timeout: float | None = None) -> str:
+    """A sentence an operator can act on, even when httpx supplies nothing.
+
+    A timeout and a refused connection mean very different things — one host is
+    silent, the other is answering — and an empty message hides which it was.
+    """
+    message = str(exc).strip()
+    if message:
+        return message
+    name = type(exc).__name__
+    described = _SILENT_ERRORS.get(name)
+    if described is None:
+        return name
+    if timeout and name.endswith("Timeout"):
+        return f"{described} after {timeout:g}s"
+    return described
+
 
 
 class AdGuardAdapter(DnsAdapter):
@@ -43,6 +75,8 @@ class AdGuardAdapter(DnsAdapter):
         # Sessions outlive the adapter, which is rebuilt for every operation.
         self._sessions = sessions if sessions is not None else session.store
         self._key: SessionKey = (self.base_url, self._username)
+        # Kept for error messages: "no answer after 10s" beats "no answer".
+        self._timeout = timeout
 
     async def aclose(self) -> None:
         if self._owns_client:
@@ -71,7 +105,9 @@ class AdGuardAdapter(DnsAdapter):
                 json={"name": self._username, "password": self._password},
             )
         except httpx.HTTPError as exc:
-            raise AdapterError(f"Login failed: {exc}") from exc
+            raise AdapterError(
+                f"Login failed: {describe_transport_error(exc, self._timeout)}"
+            ) from exc
 
         if response.status_code == 429:
             self._sessions.note_rate_limited(self._key)
@@ -110,7 +146,9 @@ class AdGuardAdapter(DnsAdapter):
         try:
             return await self._client.request(method, path, **kwargs)
         except httpx.HTTPError as exc:
-            raise AdapterError(f"{method} {path} failed: {exc}") from exc
+            raise AdapterError(
+                f"{method} {path} failed: {describe_transport_error(exc, self._timeout)}"
+            ) from exc
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         await self._ensure_session()

@@ -390,3 +390,52 @@ async def test_transport_errors_surface_as_adapter_errors() -> None:
 
     with pytest.raises(AdapterError, match="connection refused"):
         await make_adapter(login_ok(handler)).check()
+
+
+async def test_a_timeout_says_what_happened() -> None:
+    """httpx raises timeouts with no message, which rendered as "failed:" and nothing.
+
+    A silent host and a refusing host need different fixes, so the message has to
+    say which one it was.
+    """
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectTimeout("")
+
+    adapter = make_adapter(handler)
+    with pytest.raises(AdapterError) as caught:
+        await adapter.check()
+
+    # Before the fix this read "Login failed: " and stopped there.
+    assert str(caught.value) == (
+        "Login failed: no answer while opening the connection (connect timeout) after 10s"
+    )
+
+
+async def test_an_error_with_its_own_message_keeps_it() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("All connection attempts failed")
+
+    with pytest.raises(AdapterError, match="All connection attempts failed"):
+        await make_adapter(handler).check()
+
+
+async def test_query_log_and_stats_config_write_to_the_update_path() -> None:
+    """AdGuard answers 405 on the read path; the write lives under /update."""
+    seen: list[tuple[str, str]] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.method, request.url.path))
+        if request.method == "GET":
+            return httpx.Response(200, json={"enabled": True, "ignored": []})
+        return httpx.Response(200, json={})
+
+    adapter = make_adapter(login_ok(handler))
+    await adapter.push_section("querylog_config", {"enabled": True})
+    await adapter.push_section("stats_config", {"enabled": True})
+
+    writes = [entry for entry in seen if entry[0] == "PUT"]
+    assert writes == [
+        ("PUT", "/control/querylog/config/update"),
+        ("PUT", "/control/stats/config/update"),
+    ]
