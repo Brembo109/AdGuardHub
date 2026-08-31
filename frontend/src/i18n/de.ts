@@ -488,4 +488,5 @@ export const de: Record<string, string> = {
   "change": "Änderung",
   "import": "Import",
   "restore": "Wiederherstellung",
+  "AdGuardHub {version}": "AdGuardHub {version}",
 }

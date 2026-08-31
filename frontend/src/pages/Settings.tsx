@@ -61,7 +61,26 @@ export default function Settings() {
         reload={notifiers.reload}
       />
       <PasswordSection busy={busy} run={run} />
+      <BuildLine />
     </>
+  )
+}
+
+/**
+ * Which build is actually running.
+ *
+ * Released images carry the tag they were cut from; anything else says "dev".
+ * Without this the only way to answer "did my update land?" is the container's
+ * startup log, which is exactly what you do not have when you are asking.
+ */
+function BuildLine() {
+  const t = useT()
+  const health = useResource(() => api.health())
+  if (!health.data) return null
+  return (
+    <p style={{ textAlign: 'center', color: 'var(--faint)', fontSize: 12.5, margin: '18px 0 0' }}>
+      {t('AdGuardHub {version}', { version: health.data.version })}
+    </p>
   )
 }
 

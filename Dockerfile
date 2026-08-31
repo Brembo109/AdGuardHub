@@ -13,10 +13,16 @@ RUN npm run build
 # --- Stage 2: runtime ------------------------------------------------------
 FROM python:3.12-slim
 
+# The release tag, passed by the Release workflow (--build-arg ADGUARDHUB_VERSION=0.2.0).
+# Left empty for a local build, which then reports itself as "dev" rather than
+# borrowing a release number it was not cut from.
+ARG ADGUARDHUB_VERSION=""
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     ADGUARDHUB_DATA_DIR=/data \
-    ADGUARDHUB_STATIC_DIR=/app/static
+    ADGUARDHUB_STATIC_DIR=/app/static \
+    ADGUARDHUB_VERSION=${ADGUARDHUB_VERSION}
 
 WORKDIR /app
 

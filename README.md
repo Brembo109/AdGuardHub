@@ -163,8 +163,13 @@ builds from the working tree. Either way, the first log line tells you what you 
 
 ```bash
 docker logs adguardhub 2>&1 | head -5
-# INFO adguardhub: AdGuardHub 0.1.0 starting as uid=1000 gid=1000, data dir /data
+# INFO adguardhub: AdGuardHub 0.2.0 starting as uid=1000 gid=1000, data dir /data
 ```
+
+The same version is on `GET /api/health` and at the foot of the *Settings* page, which is
+usually the faster answer to "did the update land?". A published image reports the release
+tag it was built from; one you built yourself reports `dev`, because it was not cut from a
+tag and should not claim to have been.
 
 ### File permissions (PUID / PGID)
 
@@ -213,6 +218,9 @@ All settings are environment variables prefixed with `ADGUARDHUB_`.
 | `ADGUARDHUB_QUERYLOG_BUFFER_SIZE` | `2000` | Entries kept in the in-memory log buffer. |
 | `ADGUARDHUB_SESSION_MAX_AGE` | `1209600` | Session lifetime in seconds. |
 | `ADGUARDHUB_HTTP_TIMEOUT` | `10` | Per-request timeout when talking to instances. |
+
+`ADGUARDHUB_VERSION` is not in that list on purpose: it is build metadata, baked into the
+image from the release tag by the Release workflow, not something to set at runtime.
 
 The four interval/buffer timers only seed the initial values. Once the hub has started they are
 edited under *Settings → Sync & timers* and take effect on the next worker cycle — no restart.
