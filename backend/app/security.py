@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import logging
+import os
 import secrets
 import time
 
@@ -13,19 +15,120 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from .config import get_settings
 
+logger = logging.getLogger(__name__)
+
 _DEV_KEY_MARKER = "insecure-dev-key"
+
+KEY_FILENAME = "secret.key"
+
+# Keys that have appeared in this project's own documentation. Anyone running
+# with one of these has an encryption key that can be read off GitHub, and —
+# unlike a missing key — nothing about it looks wrong: the hub starts, works,
+# and warns about nothing. That is the more dangerous failure of the two, since
+# a missing key loses the stored credentials while a published one exposes them.
+PLACEHOLDER_KEYS = frozenset(
+    {
+        "change-me-to-a-long-random-string",
+        "<a long random string>",
+        "change-me",
+        "changeme",
+        "your-secret-key",
+        "secret",
+    }
+)
+
+# Long enough that a key is not being typed by hand. Short keys are only warned
+# about, never refused: they are weak but private, which is a different problem
+# from one that is published.
+ADVISED_KEY_LENGTH = 24
+
+
+class SecretKeyError(RuntimeError):
+    """The configured key must not be used, and using it anyway would be worse."""
 
 
 def resolve_secret_key() -> str:
-    """Return the configured master secret, falling back to an ephemeral dev key.
+    """Return the master secret, generating and persisting one if none is set.
 
-    A generated key means sessions and stored credentials do not survive a restart,
-    so ``main`` warns loudly when this path is taken.
+    Three cases, in the order they are checked:
+
+    * **Configured** — used as given. This stays the recommended setup, because
+      it is the only one where the key does not live beside the data it protects.
+    * **A documented placeholder** — refused. See ``PLACEHOLDER_KEYS``.
+    * **Unset** — a strong key is generated once and kept in the data directory.
+      Instance credentials then survive a restart without anyone having to set
+      anything, which is what makes the encryption worth having at all: without
+      persistence the realistic default was a hub that lost its credentials on
+      every update, and the realistic workaround was pasting the placeholder.
+
+    That last case is a deliberate reading of spec §8 rather than a literal one.
+    The key sits next to the database instead of outside it, so it no longer
+    defends against someone holding the whole data directory — but it still does
+    the one thing the encryption is for: the database file alone is not enough.
     """
     settings = get_settings()
-    if settings.secret_key:
-        return settings.secret_key
-    return f"{_DEV_KEY_MARKER}:{secrets.token_urlsafe(32)}"
+    configured = settings.secret_key.strip()
+    if configured:
+        if configured in PLACEHOLDER_KEYS:
+            raise SecretKeyError(
+                f"ADGUARDHUB_SECRET_KEY is set to {configured!r}, which is a placeholder from "
+                "AdGuardHub's own documentation — anyone can read it, so the stored AdGuard "
+                "credentials would not be protected. Generate one with "
+                "`openssl rand -base64 48`, or remove the variable entirely and the hub will "
+                "create and keep its own. Either way the instance passwords have to be entered "
+                "again, because changing the key makes the stored ones unreadable."
+            )
+        if len(configured) < ADVISED_KEY_LENGTH:
+            logger.warning(
+                "ADGUARDHUB_SECRET_KEY is only %d characters. Generate a longer one with "
+                "`openssl rand -base64 48`.",
+                len(configured),
+            )
+        return configured
+    return _stored_key(settings.data_dir)
+
+
+def _stored_key(data_dir: str) -> str:
+    """Read the generated key from the data directory, creating it once.
+
+    Falls back to the old ephemeral key when the directory cannot be written, so
+    an unwritable volume still starts the hub with the warning it always had,
+    rather than turning a warning into an outage.
+    """
+    path = os.path.join(data_dir.rstrip("/") or ".", KEY_FILENAME)
+    try:
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        # O_EXCL rather than "check then write": two workers starting together
+        # would otherwise generate different keys and the loser's would silently
+        # replace the winner's, leaving half the credentials undecryptable.
+        try:
+            handle = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except FileExistsError:
+            with open(path, encoding="utf-8") as existing:
+                stored = existing.read().strip()
+            if stored:
+                return stored
+            # An empty file is a half-finished write from a previous start.
+            os.unlink(path)
+            return _stored_key(data_dir)
+        with os.fdopen(handle, "w", encoding="utf-8") as created:
+            key = secrets.token_urlsafe(48)
+            created.write(key + "\n")
+        logger.info(
+            "ADGUARDHUB_SECRET_KEY is not set, so a key was generated and stored at %s. "
+            "Back that file up with the database — without it the stored instance "
+            "credentials cannot be read.",
+            path,
+        )
+        return key
+    except OSError as exc:
+        logger.warning(
+            "Could not read or write %s (%s), so a temporary key is in use. Sessions and "
+            "stored instance credentials will NOT survive a restart.",
+            path,
+            exc,
+        )
+        return f"{_DEV_KEY_MARKER}:{secrets.token_urlsafe(32)}"
 
 
 def is_ephemeral_key(key: str) -> bool:

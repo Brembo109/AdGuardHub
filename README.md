@@ -150,7 +150,6 @@ services:
     volumes:
       - ./data:/data
     environment:
-      ADGUARDHUB_SECRET_KEY: "<a long random string>"
       PUID: "1000"   # Unraid: 99
       PGID: "1000"   # Unraid: 100
 ```
@@ -165,7 +164,6 @@ docker compose up -d
 docker run -d --name adguardhub \
   -p 80:80 \
   -v "$PWD/data:/data" \
-  -e ADGUARDHUB_SECRET_KEY="$(openssl rand -base64 48)" \
   -e PUID=1000 -e PGID=1000 \
   --log-opt max-size=10m --log-opt max-file=3 \
   --restart unless-stopped \
@@ -217,10 +215,26 @@ drops to `PUID:PGID` for the application itself. If the directory still isn't wr
 startup aborts with a single line naming the directory, the uid it tried, and the fix —
 rather than a SQLAlchemy traceback.
 
-> **Keep `ADGUARDHUB_SECRET_KEY` safe and stable.** It signs your session cookie *and* derives the
-> key that encrypts your AdGuard admin passwords at rest — the key itself is never written to the
-> database. If it changes, you'll have to re-enter the instance credentials. If it isn't set at
-> all, AdGuardHub generates a random one per start and warns you in the UI.
+### The encryption key
+
+AdGuardHub encrypts the AdGuard admin passwords it stores, and signs your session cookie, with
+one master key. **You do not have to set it.** On first start, with no `ADGUARDHUB_SECRET_KEY`
+in the environment, the hub generates a strong one and keeps it at `/data/secret.key` (mode
+`0600`). Updates, restarts and container rebuilds then leave your instance credentials intact.
+
+Setting the variable yourself is still the better option, and it is what the examples above
+leave room for: a key you supply lives *outside* the directory it protects, so a copy of `/data`
+alone is not enough to read the passwords. Generate one with `openssl rand -base64 48`.
+
+> **Whichever you choose, the key and the database belong together.** Back up `secret.key`
+> alongside `adguardhub.db`, or set the variable and remember it. A key that is lost or changed
+> makes the stored instance passwords unreadable — the hub keeps working and asks you to type
+> them in again.
+
+**Never paste an example key.** A key published in a README or a compose file is worse than no
+key at all: the hub starts, looks healthy, warns about nothing, and protects nothing, because
+anyone can read the key and decrypt the database. AdGuardHub therefore refuses to start when it
+finds one of its own documented placeholders, and says what to do instead.
 
 ### First run
 
@@ -245,7 +259,7 @@ All settings are environment variables prefixed with `ADGUARDHUB_`.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `ADGUARDHUB_SECRET_KEY` | *(random per start)* | Signs sessions and derives the credential encryption key. **Set this.** |
+| `ADGUARDHUB_SECRET_KEY` | *(generated into `/data/secret.key`)* | Signs sessions and derives the credential encryption key. Optional — see [The encryption key](#the-encryption-key). |
 | `ADGUARDHUB_DATA_DIR` | `/data` | Where `adguardhub.db` lives. |
 | `ADGUARDHUB_ADMIN_USERNAME` | — | Creates/updates the admin account on start. |
 | `ADGUARDHUB_ADMIN_PASSWORD` | — | Password for the above. |
@@ -422,10 +436,14 @@ curl -u admin:yourpassword http://adguardhub.lan/api/backup -o adguardhub-backup
 ```
 
 **Instance passwords are never in it.** A backup is downloaded through a browser and then
-lives wherever you put it; ciphertext would be no better, since it is one leaked
-`ADGUARDHUB_SECRET_KEY` away from the plaintext and the key tends to end up in the same
-folder. Restored instances therefore come back needing their password typed in again, and
+lives wherever you put it; ciphertext would be no better, since it is one leaked key away
+from the plaintext — and by default that key sits in the same directory as the database it
+protects. Restored instances therefore come back needing their password typed in again, and
 the restore says how many.
+
+That is also why this JSON file is *not* a substitute for backing up `/data`: it deliberately
+leaves out the credentials, so restoring from it always costs you a round of retyping. A copy
+of the data directory — database and `secret.key` together — restores everything.
 
 Restoring replaces the hub's rules, subscriptions and instance settings and pushes the
 result to every node. Two things make that safe to try: the file is validated in full
@@ -484,7 +502,7 @@ Backend:
 cd backend
 python -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
-ADGUARDHUB_SECRET_KEY=dev ADGUARDHUB_DATA_DIR=./data uvicorn app.main:app --reload
+ADGUARDHUB_DATA_DIR=./data uvicorn app.main:app --reload
 ```
 
 Frontend (proxies `/api` to `127.0.0.1:8000`):

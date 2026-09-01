@@ -21,7 +21,7 @@ from .deps import admin_exists
 from .logging_setup import configure as configure_logging
 from .models import User
 from .runtime import using_ephemeral_secret
-from .security import hash_password
+from .security import SecretKeyError, hash_password
 from .services import hubsettings
 from .services.querylog import querylog_worker
 from .services.reconcile import reconcile_worker
@@ -78,10 +78,18 @@ async def bootstrap_admin() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    if using_ephemeral_secret():
+    # Resolved first, and deliberately not lazily: a refused key has to stop the
+    # start here, with one readable line, rather than surfacing later as a 500 on
+    # whichever request happened to need the crypto first.
+    try:
+        ephemeral = using_ephemeral_secret()
+    except SecretKeyError as exc:
+        logger.error("Startup aborted: %s", exc)
+        raise
+    if ephemeral:
         logger.warning(
-            "ADGUARDHUB_SECRET_KEY is not set. A random key is being used, so sessions and "
-            "stored instance credentials will NOT survive a restart. Set it before real use."
+            "No usable key store, so a random key is in use. Sessions and stored instance "
+            "credentials will NOT survive a restart — see the warning above for why."
         )
     # Printed before anything can fail, so a pasted log always identifies the build
     # and the user it runs as — the two things a startup problem turns on.
