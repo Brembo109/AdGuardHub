@@ -28,6 +28,10 @@ class Base(DeclarativeBase):
 class RuleKind(StrEnum):
     allow = "allow"
     block = "block"
+    # A `!` or `#` line. Stored rather than dropped: it is usually the note
+    # saying *why* the rule under it exists, and the hub is the source of truth
+    # for the whole rule set, not for the parts of it it happens to understand.
+    comment = "comment"
 
 
 class RuleOrigin(StrEnum):

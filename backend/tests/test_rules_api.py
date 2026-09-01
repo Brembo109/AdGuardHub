@@ -52,9 +52,19 @@ async def test_duplicate_rules_are_rejected(auth_client: httpx.AsyncClient) -> N
     assert (await auth_client.post("/api/rules", json={"text": "||a.com^"})).status_code == 409
 
 
-async def test_comments_are_not_stored_as_rules(auth_client: httpx.AsyncClient) -> None:
+async def test_comments_are_stored_as_rules(auth_client: httpx.AsyncClient) -> None:
+    """They used to be refused, which quietly deleted the note explaining a rule."""
     response = await auth_client.post("/api/rules", json={"text": "! just a note"})
-    assert response.status_code == 422
+    assert response.status_code == 201
+    assert response.json()["kind"] == "comment"
+
+
+async def test_a_commented_out_allow_rule_is_a_comment(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """Reading the `@@` first would file a disabled line under the rules it is not."""
+    response = await auth_client.post("/api/rules", json={"text": "! @@||example.com^"})
+    assert response.json()["kind"] == "comment"
 
 
 async def test_allow_is_idempotent_across_entry_points(auth_client: httpx.AsyncClient) -> None:
@@ -69,12 +79,20 @@ async def test_allow_is_idempotent_across_entry_points(auth_client: httpx.AsyncC
     assert len((await auth_client.get("/api/rules")).json()) == 1
 
 
-async def test_bulk_import_skips_comments_and_blanks(auth_client: httpx.AsyncClient) -> None:
+async def test_bulk_import_keeps_comments_and_skips_blanks(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """Order is the point: a comment is the line above the rule it explains."""
     response = await auth_client.post(
         "/api/rules/bulk",
-        json={"text": "||a.com^\n\n! note\n# note\n@@||b.com^\n||a.com^"},
+        json={"text": "! ads\n||a.com^\n\n# shop\n@@||b.com^\n||a.com^"},
     )
-    assert [rule["text"] for rule in response.json()] == ["||a.com^", "@@||b.com^"]
+    assert [rule["text"] for rule in response.json()] == [
+        "! ads",
+        "||a.com^",
+        "# shop",
+        "@@||b.com^",
+    ]
 
 
 async def test_rule_filters(auth_client: httpx.AsyncClient) -> None:

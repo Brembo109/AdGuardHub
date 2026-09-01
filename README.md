@@ -336,6 +336,22 @@ An area a given AdGuard version does not implement is skipped rather than failin
 > settings and overlays just `enabled` — `/control/tls/configure` replaces the whole object, so a
 > partial write would erase the node's certificate.
 
+## Comments in the rule set
+
+`!` and `#` lines are stored and replicated like any other line, in place. That matters more
+than it sounds: a comment is usually the note saying *why* a rule exists — "allowed after the
+doorbell app broke" — and since the hub owns the whole rule set, anything it does not store is
+something reconciliation later removes from your nodes.
+
+They appear under *Rules → Notes*, carry a neutral badge because they filter nothing, and are
+edited and deleted like any other entry. Two limits worth knowing:
+
+- **Identical comment lines collapse.** Rule text is unique in the hub, so using `!` twice as a
+  bare separator keeps one of them. Notes with different wording are all kept.
+- **Already-lost comments do not come back.** If an earlier version imported your rules and
+  reconciliation stripped the comments from your nodes, that text is gone; re-import from a node
+  that still has them, or add them again.
+
 ## Version history
 
 Every change to the hub — a rule, a subscription, a settings section, an import — records a
@@ -532,9 +548,8 @@ German alongside English, backup and restore, rate-limited sign-ins, and caps on
 that used to grow without end.
 
 Next, in no fixed order: a maintenance mode for pausing reconciliation on one instance while
-you work on it, translating the drift log's summaries (they are generated in the backend and
-stored as English text), and preserving `!` comment lines in the rule set — the hub currently
-drops them on import, and reconciliation then removes them from the node.
+you work on it, and translating the drift log's summaries (they are generated in the backend
+and stored as English text, so they stay English in the German interface).
 
 Deliberately **not** planned before v1.0: per-client rule scoping and multi-user accounts.
 v1.0 is when Pi-hole support lands and the feature set has settled. The adapter interface it

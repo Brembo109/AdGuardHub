@@ -16,7 +16,7 @@ from ..adapters.sections import SECTION_NAMES, SPEC_BY_NAME
 from ..models import FilterList, Instance, Rule, RuleOrigin
 from ..runtime import get_crypto
 from .config import set_section
-from .rules import classify, is_comment, normalise
+from .rules import classify, normalise
 
 
 @dataclass(slots=True)
@@ -62,7 +62,7 @@ async def import_from_instance(
     imported = skipped = 0
     for raw in state.rules:
         text = normalise(raw)
-        if not text or is_comment(text):
+        if not text:
             skipped += 1
             continue
         if text in existing_rules:

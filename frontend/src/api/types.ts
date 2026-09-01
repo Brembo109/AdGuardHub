@@ -1,4 +1,4 @@
-export type RuleKind = 'allow' | 'block'
+export type RuleKind = 'allow' | 'block' | 'comment'
 export type RuleOrigin = 'custom' | 'allowlist' | 'querylog'
 export type ListKind = 'blocklist' | 'allowlist'
 export type NotifierType = 'homeassistant' | 'discord' | 'gotify'

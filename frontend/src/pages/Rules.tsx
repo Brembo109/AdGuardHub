@@ -6,7 +6,7 @@ import { formatTime } from '../format'
 import { errorMessage, useResource } from '../hooks/useApi'
 import { useT } from '../i18n'
 
-type Tab = 'all' | 'block' | 'allow'
+type Tab = 'all' | 'block' | 'allow' | 'comment'
 
 /**
  * Two of the three AdGuard entry points live here: free-form custom rules and the
@@ -135,7 +135,7 @@ export default function Rules() {
 
       <Card
         title={t('Bulk import')}
-        hint={t('Paste AdGuard syntax, one rule per line. Blank lines and ! / # comments are skipped.')}
+        hint={t('Paste AdGuard syntax, one rule per line. Blank lines are skipped; ! and # comments are kept, so a note stays with the rule it explains.')}
       >
         <form onSubmit={addBulk}>
           <textarea
@@ -151,13 +151,19 @@ export default function Rules() {
 
       <Card>
         <div className="tabs">
-          {(['all', 'block', 'allow'] as Tab[]).map((item) => (
+          {(['all', 'block', 'allow', 'comment'] as Tab[]).map((item) => (
             <button
               key={item}
               className={`tab${tab === item ? ' active' : ''}`}
               onClick={() => setTab(item)}
             >
-              {item === 'all' ? t('All') : item === 'block' ? t('Block') : t('Allow')}
+              {item === 'all'
+                ? t('All')
+                : item === 'block'
+                  ? t('Block')
+                  : item === 'allow'
+                    ? t('Allow')
+                    : t('Notes')}
             </button>
           ))}
           <div style={{ marginLeft: 'auto', paddingBottom: 6, width: 220 }}>

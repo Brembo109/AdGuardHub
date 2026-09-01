@@ -42,7 +42,7 @@ from ..services.aggregate import cached_stats
 from ..services.config import get_section, loads, set_section
 from ..services.hubsettings import current as current_settings
 from ..services.querylog import buffer
-from ..services.rules import classify, is_comment
+from ..services.rules import classify
 from ..services.sync import schedule_sync
 
 logger = logging.getLogger(__name__)
@@ -246,7 +246,7 @@ async def set_rules(
     await session.flush()
     seen: set[str] = set()
     for text in incoming:
-        if not text or is_comment(text) or text in seen:
+        if not text or text in seen:
             continue
         seen.add(text)
         session.add(
