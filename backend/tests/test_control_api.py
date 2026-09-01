@@ -224,3 +224,90 @@ async def test_the_surface_can_be_switched_off(app_client: httpx.AsyncClient) ->
     response = await app_client.get("/control/status")
     assert response.status_code == 404
     assert "switched off" in response.json()["detail"]
+
+
+# --------------------------------------------------------------------------
+# HTTP Basic Auth
+#
+# AdGuard Home accepts Basic on its whole /control surface, and that is what the
+# phone remotes and the Home Assistant integration send. The hub understood only
+# its own session cookie, so those clients got a bare 401 and could only report
+# it as bad credentials — the web UI password was correct all along.
+# --------------------------------------------------------------------------
+
+
+async def test_basic_auth_is_accepted_on_the_control_surface(
+    client: httpx.AsyncClient,
+) -> None:
+    await client.post("/api/auth/setup", json={"username": "admin", "password": "supersecret"})
+    await client.post("/api/auth/logout")
+
+    response = await client.get("/control/status", auth=("admin", "supersecret"))
+    assert response.status_code == 200, response.text
+    assert response.json()["version"].startswith("AdGuardHub")
+
+
+async def test_basic_auth_rejects_a_wrong_password_and_asks_again(
+    client: httpx.AsyncClient,
+) -> None:
+    await client.post("/api/auth/setup", json={"username": "admin", "password": "supersecret"})
+    await client.post("/api/auth/logout")
+
+    response = await client.get("/control/status", auth=("admin", "nope"))
+    assert response.status_code == 401
+    # Without the challenge a client has nothing telling it credentials are wanted.
+    assert response.headers["WWW-Authenticate"] == 'Basic realm="AdGuardHub"'
+
+
+@pytest.mark.parametrize(
+    "header",
+    ["Basic", "Basic !!!not-base64!!!", "Basic " + "YWRtaW4=", "Bearer sometoken", "nonsense"],
+)
+async def test_a_malformed_authorization_header_is_a_401_not_a_crash(
+    client: httpx.AsyncClient, header: str
+) -> None:
+    """'YWRtaW4=' decodes to "admin" with no colon, so there is no password to check."""
+    await client.post("/api/auth/setup", json={"username": "admin", "password": "supersecret"})
+    await client.post("/api/auth/logout")
+
+    response = await client.get("/control/status", headers={"Authorization": header})
+    assert response.status_code == 401
+
+
+async def test_the_hubs_own_api_stays_cookie_only(client: httpx.AsyncClient) -> None:
+    """Basic is for other people's clients; it does not widen the hub's own API."""
+    await client.post("/api/auth/setup", json={"username": "admin", "password": "supersecret"})
+    await client.post("/api/auth/logout")
+
+    response = await client.get("/api/instances", auth=("admin", "supersecret"))
+    assert response.status_code == 401
+
+
+async def test_a_changed_password_stops_working_at_once(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """The credential cache must not keep the old password alive for its TTL.
+
+    The cookie is dropped first, or it would answer these requests by itself: a
+    session stays valid across a password change on purpose, so that changing it
+    does not log you out of the tab you changed it in.
+    """
+    response = await auth_client.post(
+        "/api/auth/password",
+        json={"current_password": "supersecret", "new_password": "a-longer-secret"},
+    )
+    assert response.status_code == 200, response.text
+    auth_client.cookies.clear()
+
+    stale = await auth_client.get("/control/status", auth=("admin", "supersecret"))
+    assert stale.status_code == 401
+    fresh = await auth_client.get("/control/status", auth=("admin", "a-longer-secret"))
+    assert fresh.status_code == 200
+
+
+async def test_a_cookie_and_a_basic_header_together_prefer_the_cookie(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """A live session is not overruled by whatever a client also puts in a header."""
+    response = await auth_client.get("/control/status", auth=("admin", "quite-wrong"))
+    assert response.status_code == 200

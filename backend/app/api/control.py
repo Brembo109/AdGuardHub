@@ -27,7 +27,7 @@ from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy import select
 
 from ..adapters.sections import SECTION_NAMES
-from ..deps import CurrentUser, SessionDep
+from ..deps import ControlUser, SessionDep
 from ..models import FilterList, Instance, ListKind, PayloadKind, Rule
 from ..schemas import ControlLogin
 from ..security import verify_password
@@ -61,7 +61,7 @@ async def _section(session: SessionDep, name: str) -> dict[str, Any]:
 
 
 async def _write_section(
-    session: SessionDep, name: str, changes: dict[str, Any], user: CurrentUser, label: str
+    session: SessionDep, name: str, changes: dict[str, Any], user: ControlUser, label: str
 ) -> None:
     """Merge a partial change into a section and push it, as a UI edit would."""
     data = {**(await _section(session, name)), **changes}
@@ -105,7 +105,7 @@ async def logout(response: Response) -> dict[str, str]:
 
 
 @router.get("/status")
-async def status_endpoint(user: CurrentUser, session: SessionDep) -> dict[str, Any]:
+async def status_endpoint(user: ControlUser, session: SessionDep) -> dict[str, Any]:
     _guard()
     from ..main import VERSION
 
@@ -129,13 +129,13 @@ async def status_endpoint(user: CurrentUser, session: SessionDep) -> dict[str, A
 
 
 @router.get("/profile")
-async def profile(user: CurrentUser) -> dict[str, Any]:
+async def profile(user: ControlUser) -> dict[str, Any]:
     _guard()
     return {"name": user.username, "language": "en", "theme": "auto"}
 
 
 @router.get("/stats")
-async def stats(_: CurrentUser) -> dict[str, Any]:
+async def stats(_: ControlUser) -> dict[str, Any]:
     _guard()
     # Same held result the hub's own dashboard reads, so a phone app polling
     # this endpoint does not fan out to every resolver on each request.
@@ -144,7 +144,7 @@ async def stats(_: CurrentUser) -> dict[str, Any]:
 
 @router.get("/querylog")
 async def querylog(
-    _: CurrentUser,
+    _: ControlUser,
     limit: int = Query(100, ge=1, le=2000),
     search: str = "",
     response_status: str = Query("", alias="response_status"),
@@ -187,7 +187,7 @@ async def querylog(
 
 
 @router.get("/filtering/status")
-async def filtering_status(_: CurrentUser, session: SessionDep) -> dict[str, Any]:
+async def filtering_status(_: ControlUser, session: SessionDep) -> dict[str, Any]:
     _guard()
     config = await _section(session, "filtering_config")
     rules = (
@@ -222,7 +222,7 @@ async def filtering_status(_: CurrentUser, session: SessionDep) -> dict[str, Any
 
 @router.post("/filtering/set_rules")
 async def set_rules(
-    payload: dict[str, Any], user: CurrentUser, session: SessionDep
+    payload: dict[str, Any], user: ControlUser, session: SessionDep
 ) -> dict[str, str]:
     """Replace the hub's rule set, exactly as the native UI's editor would."""
     _guard()
@@ -251,7 +251,7 @@ async def set_rules(
 
 @router.post("/filtering/config")
 async def filtering_config(
-    payload: dict[str, Any], user: CurrentUser, session: SessionDep
+    payload: dict[str, Any], user: ControlUser, session: SessionDep
 ) -> dict[str, str]:
     _guard()
     changes = {key: payload[key] for key in ("enabled", "interval") if key in payload}
@@ -263,7 +263,7 @@ async def filtering_config(
 
 @router.post("/filtering/add_url")
 async def add_url(
-    payload: dict[str, Any], user: CurrentUser, session: SessionDep
+    payload: dict[str, Any], user: ControlUser, session: SessionDep
 ) -> dict[str, str]:
     _guard()
     url = str(payload.get("url") or "").strip()
@@ -290,7 +290,7 @@ async def add_url(
 
 @router.post("/filtering/remove_url")
 async def remove_url(
-    payload: dict[str, Any], user: CurrentUser, session: SessionDep
+    payload: dict[str, Any], user: ControlUser, session: SessionDep
 ) -> dict[str, str]:
     _guard()
     url = str(payload.get("url") or "")
@@ -311,7 +311,7 @@ async def remove_url(
 
 @router.post("/filtering/set_url")
 async def set_url(
-    payload: dict[str, Any], user: CurrentUser, session: SessionDep
+    payload: dict[str, Any], user: ControlUser, session: SessionDep
 ) -> dict[str, str]:
     _guard()
     url = str(payload.get("url") or "")
@@ -337,7 +337,7 @@ async def set_url(
 
 
 @router.post("/filtering/refresh")
-async def refresh_filters(_: CurrentUser) -> dict[str, int]:
+async def refresh_filters(_: ControlUser) -> dict[str, int]:
     """The hub tracks subscription URLs, not their contents — nothing to refresh here."""
     _guard()
     return {"updated": 0}
@@ -350,7 +350,7 @@ async def refresh_filters(_: CurrentUser) -> dict[str, int]:
 
 @router.post("/protection")
 async def protection(
-    payload: dict[str, Any], user: CurrentUser, session: SessionDep
+    payload: dict[str, Any], user: ControlUser, session: SessionDep
 ) -> dict[str, str]:
     """Pause or resume filtering everywhere at once."""
     _guard()
@@ -368,12 +368,12 @@ async def protection(
 
 def _toggle_routes(name: str, path: str) -> None:
     @router.get(f"/{path}/status", name=f"{name}_status")
-    async def read(_: CurrentUser, session: SessionDep) -> dict[str, Any]:
+    async def read(_: ControlUser, session: SessionDep) -> dict[str, Any]:
         _guard()
         return {"enabled": bool((await _section(session, name)).get("enabled"))}
 
     @router.post(f"/{path}/enable", name=f"{name}_enable")
-    async def enable(user: CurrentUser, session: SessionDep) -> dict[str, str]:
+    async def enable(user: ControlUser, session: SessionDep) -> dict[str, str]:
         _guard()
         await _write_section(
             session, name, {"enabled": True}, user, f"{path} enabled via the AdGuard API"
@@ -381,7 +381,7 @@ def _toggle_routes(name: str, path: str) -> None:
         return {}
 
     @router.post(f"/{path}/disable", name=f"{name}_disable")
-    async def disable(user: CurrentUser, session: SessionDep) -> dict[str, str]:
+    async def disable(user: ControlUser, session: SessionDep) -> dict[str, str]:
         _guard()
         await _write_section(
             session, name, {"enabled": False}, user, f"{path} disabled via the AdGuard API"
@@ -394,14 +394,14 @@ _toggle_routes("parental", "parental")
 
 
 @router.get("/safesearch/status")
-async def safesearch_status(_: CurrentUser, session: SessionDep) -> dict[str, Any]:
+async def safesearch_status(_: ControlUser, session: SessionDep) -> dict[str, Any]:
     _guard()
     return await _section(session, "safesearch")
 
 
 @router.put("/safesearch/settings")
 async def safesearch_settings(
-    payload: dict[str, Any], user: CurrentUser, session: SessionDep
+    payload: dict[str, Any], user: ControlUser, session: SessionDep
 ) -> dict[str, str]:
     _guard()
     await _write_section(
@@ -416,14 +416,14 @@ async def safesearch_settings(
 
 
 @router.get("/dns_info")
-async def dns_info(_: CurrentUser, session: SessionDep) -> dict[str, Any]:
+async def dns_info(_: ControlUser, session: SessionDep) -> dict[str, Any]:
     _guard()
     return await _section(session, "dns")
 
 
 @router.post("/dns_config")
 async def dns_config(
-    payload: dict[str, Any], user: CurrentUser, session: SessionDep
+    payload: dict[str, Any], user: ControlUser, session: SessionDep
 ) -> dict[str, str]:
     _guard()
     await _write_section(
@@ -433,21 +433,21 @@ async def dns_config(
 
 
 @router.get("/clients")
-async def clients(_: CurrentUser, session: SessionDep) -> dict[str, Any]:
+async def clients(_: ControlUser, session: SessionDep) -> dict[str, Any]:
     _guard()
     data = await _section(session, "clients")
     return {"clients": data.get("clients") or [], "auto_clients": [], "supported_tags": []}
 
 
 @router.get("/access/list")
-async def access_list(_: CurrentUser, session: SessionDep) -> dict[str, Any]:
+async def access_list(_: ControlUser, session: SessionDep) -> dict[str, Any]:
     _guard()
     return await _section(session, "access")
 
 
 @router.post("/access/set")
 async def access_set(
-    payload: dict[str, Any], user: CurrentUser, session: SessionDep
+    payload: dict[str, Any], user: ControlUser, session: SessionDep
 ) -> dict[str, str]:
     _guard()
     await _write_section(
@@ -457,14 +457,14 @@ async def access_set(
 
 
 @router.get("/rewrite/list")
-async def rewrite_list(_: CurrentUser, session: SessionDep) -> list[dict[str, Any]]:
+async def rewrite_list(_: ControlUser, session: SessionDep) -> list[dict[str, Any]]:
     _guard()
     return list((await _section(session, "rewrites")).get("items") or [])
 
 
 @router.post("/rewrite/add")
 async def rewrite_add(
-    payload: dict[str, Any], user: CurrentUser, session: SessionDep
+    payload: dict[str, Any], user: ControlUser, session: SessionDep
 ) -> dict[str, str]:
     _guard()
     items = list((await _section(session, "rewrites")).get("items") or [])
@@ -479,7 +479,7 @@ async def rewrite_add(
 
 @router.post("/rewrite/delete")
 async def rewrite_delete(
-    payload: dict[str, Any], user: CurrentUser, session: SessionDep
+    payload: dict[str, Any], user: ControlUser, session: SessionDep
 ) -> dict[str, str]:
     _guard()
     entry = {"domain": payload.get("domain"), "answer": payload.get("answer")}
@@ -493,19 +493,19 @@ async def rewrite_delete(
 
 
 @router.get("/querylog/config")
-async def querylog_config(_: CurrentUser, session: SessionDep) -> dict[str, Any]:
+async def querylog_config(_: ControlUser, session: SessionDep) -> dict[str, Any]:
     _guard()
     return await _section(session, "querylog_config")
 
 
 @router.get("/stats/config")
-async def stats_config(_: CurrentUser, session: SessionDep) -> dict[str, Any]:
+async def stats_config(_: ControlUser, session: SessionDep) -> dict[str, Any]:
     _guard()
     return await _section(session, "stats_config")
 
 
 @router.get("/blocked_services/get")
-async def blocked_services(_: CurrentUser, session: SessionDep) -> dict[str, Any]:
+async def blocked_services(_: ControlUser, session: SessionDep) -> dict[str, Any]:
     _guard()
     data = await _section(session, "blocked_services")
     return {"ids": data.get("ids") or [], "schedule": data.get("schedule") or {}}
@@ -513,7 +513,7 @@ async def blocked_services(_: CurrentUser, session: SessionDep) -> dict[str, Any
 
 @router.put("/blocked_services/update")
 async def blocked_services_update(
-    payload: dict[str, Any], user: CurrentUser, session: SessionDep
+    payload: dict[str, Any], user: ControlUser, session: SessionDep
 ) -> dict[str, str]:
     _guard()
     await _write_section(
@@ -523,7 +523,7 @@ async def blocked_services_update(
 
 
 @router.get("/adguardhub/sections")
-async def sections_index(_: CurrentUser) -> dict[str, Any]:
+async def sections_index(_: ControlUser) -> dict[str, Any]:
     """Not part of AdGuard's API: says which areas this compatibility layer serves."""
     _guard()
     return {"sections": list(SECTION_NAMES)}

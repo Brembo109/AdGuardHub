@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import secrets
+import time
 
 import bcrypt
 from cryptography.fernet import Fernet, InvalidToken
@@ -81,3 +82,45 @@ def verify_password(password: str, password_hash: str) -> bool:
         return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("ascii"))
     except ValueError:
         return False
+
+
+class VerifiedCredentials:
+    """Remembers that a username and password checked out, so bcrypt runs once.
+
+    bcrypt is deliberately slow — around 300 ms on this hardware — which is right
+    for a login form and wrong for an API that a phone polls every few seconds.
+    HTTP Basic Auth presents the password on every single request, so without this
+    the AdGuard-compatible surface would spend a third of a second of CPU per call.
+
+    Only successes are remembered. A wrong password therefore always costs the
+    full check and cannot be used to fill this from outside, which keeps the
+    dictionary bounded by the number of credentials that actually work.
+    """
+
+    def __init__(self, ttl: float = 300.0) -> None:
+        self._ttl = ttl
+        self._seen: dict[str, float] = {}
+
+    @staticmethod
+    def _key(username: str, password: str) -> str:
+        # A digest, so the plaintext password is never held in the dictionary.
+        return hashlib.sha256(f"{username}\0{password}".encode()).hexdigest()
+
+    def check(self, username: str, password: str, *, now: float | None = None) -> bool:
+        moment = time.monotonic() if now is None else now
+        key = self._key(username, password)
+        expires = self._seen.get(key)
+        if expires is None:
+            return False
+        if expires <= moment:
+            del self._seen[key]
+            return False
+        return True
+
+    def remember(self, username: str, password: str, *, now: float | None = None) -> None:
+        moment = time.monotonic() if now is None else now
+        self._seen[self._key(username, password)] = moment + self._ttl
+
+    def forget_all(self) -> None:
+        """Drop everything — the password changed, so nothing accepted before may pass."""
+        self._seen.clear()

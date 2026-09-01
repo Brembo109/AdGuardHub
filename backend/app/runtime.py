@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from .security import Crypto, Sessions, is_ephemeral_key, resolve_secret_key
+from .security import Crypto, Sessions, VerifiedCredentials, is_ephemeral_key, resolve_secret_key
 
 
 @lru_cache
@@ -20,6 +20,11 @@ def get_crypto() -> Crypto:
 @lru_cache
 def get_sessions() -> Sessions:
     return Sessions(_secret())
+
+
+@lru_cache
+def get_credentials() -> VerifiedCredentials:
+    return VerifiedCredentials()
 
 
 def using_ephemeral_secret() -> bool:
