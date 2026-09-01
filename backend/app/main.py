@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
-from .api import auth, blocklists, config, control, instances, ops, querylog, rules
+from .api import auth, backup, blocklists, config, control, instances, ops, querylog, rules
 from .api import settings as settings_api
 from .config import get_settings
 from .db import DataDirError, dispose_db, init_db, session_scope
@@ -124,6 +124,7 @@ app.include_router(settings_api.router)
 app.include_router(ops.router)
 app.include_router(config.router)
 app.include_router(config.versions_router)
+app.include_router(backup.router)
 # Registered before the SPA fallback so /control/* is not swallowed by it.
 app.include_router(control.router)
 

@@ -488,4 +488,16 @@ export const de: Record<string, string> = {
   "AdGuardHub {version}": "AdGuardHub {version}",
   "Empty — fill in only what the hub should own, or import a master.": "Leer — tragen Sie nur ein, was der Hub besitzen soll, oder importieren Sie einen Master.",
   "No settings are being replicated yet. Either import an instance as the master on the Instances page, or fill in an area below and switch on Replicate.": "Es werden noch keine Einstellungen repliziert. Importieren Sie entweder auf der Seite Instanzen eine Instanz als Master, oder füllen Sie unten einen Bereich aus und schalten Sie Replizieren ein.",
+
+  // Backup and restore
+  "Backup": "Sicherung",
+  "Download backup": "Sicherung herunterladen",
+  "Everything the hub owns — rules, subscriptions and instance settings — as one file. Instance passwords are never included.": "Alles, was der Hub besitzt — Regeln, Abonnements und Instanz-Einstellungen — als eine Datei. Instanz-Passwörter sind nie enthalten.",
+  "Replace every rule, subscription and instance setting in this hub with the contents of {name}?": "Jede Regel, jedes Abonnement und jede Instanz-Einstellung dieses Hubs durch den Inhalt von {name} ersetzen?",
+  "Restore": "Wiederherstellen",
+  "Restore from a backup file": "Aus einer Sicherungsdatei wiederherstellen",
+  "Restored {rules} rule(s), {lists} subscription(s) and {sections} settings area(s).": "{rules} Regel(n), {lists} Abonnement(s) und {sections} Einstellungsbereich(e) wiederhergestellt.",
+  "Restoring replaces the hub's rules, subscriptions and instance settings, then pushes the result to every node. Nodes already connected keep their credentials; any the backup adds need their password entered again.": "Beim Wiederherstellen werden Regeln, Abonnements und Instanz-Einstellungen des Hubs ersetzt und das Ergebnis an jeden Node übertragen. Bereits verbundene Nodes behalten ihre Zugangsdaten; alle, die die Sicherung hinzufügt, brauchen ihr Passwort erneut.",
+  "The current state stays in the history, so this can be rolled back.": "Der aktuelle Stand bleibt im Verlauf erhalten, das lässt sich also zurücknehmen.",
+  "{count} instance(s) came back without a password — re-enter it under Instances.": "{count} Instanz(en) kamen ohne Passwort zurück — tragen Sie es unter Instanzen erneut ein.",
 }

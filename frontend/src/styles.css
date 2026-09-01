@@ -152,7 +152,10 @@ a:hover {
 
 /* -- controls ----------------------------------------------------------- */
 
-button {
+/* `a.button` is for the one action that has to stay a real link: a download the
+   browser follows, so it keeps the filename the server sends. */
+button,
+a.button {
   font: inherit;
   font-size: 13px;
   cursor: pointer;
@@ -164,7 +167,13 @@ button {
   transition: border-color 0.12s, background 0.12s;
 }
 
-button:hover:not(:disabled) {
+a.button {
+  display: inline-block;
+  text-decoration: none;
+}
+
+button:hover:not(:disabled),
+a.button:hover {
   border-color: var(--accent);
 }
 

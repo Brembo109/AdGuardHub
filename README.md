@@ -303,6 +303,29 @@ open internet.
 Two honest limits: DHCP is not offered (the hub never manages it), and `filtering/refresh` is
 a no-op because the hub tracks subscription URLs rather than their contents.
 
+## Backup and restore
+
+Everything the hub owns lives in one SQLite file, so *Settings → Backup* offers it as a
+single JSON document: rules, subscriptions, instance settings, and the list of instances.
+
+```bash
+curl -u admin:yourpassword http://adguardhub.lan/api/backup -o adguardhub-backup.json
+```
+
+**Instance passwords are never in it.** A backup is downloaded through a browser and then
+lives wherever you put it; ciphertext would be no better, since it is one leaked
+`ADGUARDHUB_SECRET_KEY` away from the plaintext and the key tends to end up in the same
+folder. Restored instances therefore come back needing their password typed in again, and
+the restore says how many.
+
+Restoring replaces the hub's rules, subscriptions and instance settings and pushes the
+result to every node. Two things make that safe to try: the file is validated in full
+*before* anything is written, so a wrong file leaves the hub untouched; and the state it
+replaces stays in the version history, so a restore is undone by rolling back to it.
+
+A node already connected keeps its credentials — a restore adds what is missing rather
+than overwriting what works.
+
 ## Notifications
 
 Configure any number of webhook targets under *Settings*. Each can subscribe to specific events
