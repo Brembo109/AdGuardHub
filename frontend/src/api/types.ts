@@ -238,6 +238,16 @@ export interface VersionRestoreResult {
   pushed: boolean
 }
 
+export interface BackupRestoreResult {
+  rules: number
+  filter_lists: number
+  sections: number
+  instances_added: number
+  /** Restored nodes carry no password: the backup deliberately holds none. */
+  instances_need_password: number
+  pushed: boolean
+}
+
 export interface HubSettings {
   reconcile_enabled: boolean
   reconcile_interval: number

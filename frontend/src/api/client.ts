@@ -1,5 +1,6 @@
 import type {
   AuthState,
+  BackupRestoreResult,
   ConfigSection,
   ConnectionResult,
   DashboardStats,
@@ -187,4 +188,11 @@ export const api = {
     get<VersionDiff>(`/api/versions/${id}/diff${query({ against })}`),
   restoreVersion: (id: number) =>
     post<VersionRestoreResult>(`/api/versions/${id}/restore`),
+
+  // The download is a plain link rather than a fetch: the endpoint answers with
+  // a Content-Disposition, and letting the browser follow it keeps the filename
+  // the server chose instead of rebuilding one around a blob.
+  backupUrl: () => '/api/backup',
+  restoreBackup: (document: unknown) =>
+    post<BackupRestoreResult>('/api/backup/restore', document),
 }
