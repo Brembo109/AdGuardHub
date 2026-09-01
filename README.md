@@ -140,9 +140,13 @@ docker run -d --name adguardhub \
   -v "$PWD/data:/data" \
   -e ADGUARDHUB_SECRET_KEY="$(openssl rand -base64 48)" \
   -e PUID=1000 -e PGID=1000 \
+  --log-opt max-size=10m --log-opt max-file=3 \
   --restart unless-stopped \
   ghcr.io/fgrfn/adguardhub:latest
 ```
+
+The two `--log-opt` flags cap what Docker keeps of the container's output. Without them the
+default driver keeps all of it forever — see [Logs](#logs).
 
 Then open <http://localhost> and create the admin account.
 
@@ -218,12 +222,52 @@ All settings are environment variables prefixed with `ADGUARDHUB_`.
 | `ADGUARDHUB_QUERYLOG_BUFFER_SIZE` | `2000` | Entries kept in the in-memory log buffer. |
 | `ADGUARDHUB_SESSION_MAX_AGE` | `1209600` | Session lifetime in seconds. |
 | `ADGUARDHUB_HTTP_TIMEOUT` | `10` | Per-request timeout when talking to instances. |
+| `ADGUARDHUB_LOG_LEVEL` | `INFO` | `DEBUG` adds the per-instance diagnostics — see [Logs](#logs). |
+| `ADGUARDHUB_LOG_FILE` | — | Also write a rotating log file at this path. Empty means stderr only. |
+| `ADGUARDHUB_LOG_FILE_MAX_BYTES` | `5242880` | Rotate the log file once it reaches this size. |
+| `ADGUARDHUB_LOG_FILE_BACKUPS` | `3` | How many rotated log files to keep. |
 
 `ADGUARDHUB_VERSION` is not in that list on purpose: it is build metadata, baked into the
 image from the release tag by the Release workflow, not something to set at runtime.
 
 The four interval/buffer timers only seed the initial values. Once the hub has started they are
 edited under *Settings → Sync & timers* and take effect on the next worker cycle — no restart.
+
+## Logs
+
+Two different things are called a log here, and they are not the same:
+
+- **The query log** is DNS traffic — what your clients asked for, aggregated across every
+  instance. It lives in the UI and is what you use day to day.
+- **The application log** is the hub talking about itself: what it did on start, a push that
+  failed, a wrong password. It goes to stderr, so `docker logs adguardhub` (or
+  `docker compose logs -f`) reads it back.
+
+At the default `INFO` you get startup, schema migrations, notification failures, and
+sign-ins. `ADGUARDHUB_LOG_LEVEL=DEBUG` adds the per-instance diagnostics — why a node's stats
+came back empty, why a query log poll returned nothing — which is what you want while something
+is misbehaving and nothing but noise the rest of the time. It also turns on the HTTP client's
+own narration, which is verbose: on a hub polling two nodes it accounts for the large majority
+of all output.
+
+**Sign-ins are logged.** A wrong password writes a `WARNING` naming the source address and
+which door was knocked on (the hub's login form, the AdGuard-compatible one, or Basic Auth),
+and the attempt that trips the rate limit says so once. The attempted username is deliberately
+not logged: with a single admin account it tells you nothing you don't know, and logging it
+would write a password to disk the first time someone types one into the wrong box.
+
+Set `ADGUARDHUB_LOG_FILE=/data/adguardhub.log` to also keep a rotating file (5 MB, three
+backups by default). Most deployments do not need it — the container runtime already keeps a
+copy — but it survives `docker rm` and is easier to hand to someone else. If the path cannot
+be written, the hub says so and carries on with stderr rather than refusing to start.
+
+Docker's default json-file driver keeps that copy **without any size limit**, which on a
+long-running hub is a disk that fills quietly. The Compose example caps it; if you use
+`docker run`, add the same:
+
+```
+--log-opt max-size=10m --log-opt max-file=3
+```
 
 ## What gets replicated
 

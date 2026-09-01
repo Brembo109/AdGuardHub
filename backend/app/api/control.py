@@ -27,7 +27,13 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from sqlalchemy import select
 
 from ..adapters.sections import SECTION_NAMES
-from ..deps import ControlUser, SessionDep, enforce_login_throttle
+from ..deps import (
+    ControlUser,
+    SessionDep,
+    enforce_login_throttle,
+    note_signin_failure,
+    note_signin_success,
+)
 from ..models import FilterList, Instance, ListKind, PayloadKind, Rule
 from ..schemas import ControlLogin
 from ..security import verify_password
@@ -82,16 +88,15 @@ async def login(
     """AdGuard's login, answered with the hub's own admin account."""
     _guard()
     from ..models import User
-    from ..runtime import get_login_throttle
     from .auth import _set_cookie
 
     source = enforce_login_throttle(request)
     result = await session.execute(select(User).where(User.username == payload.name))
     user = result.scalars().first()
     if user is None or not verify_password(payload.password, user.password_hash):
-        get_login_throttle().record_failure(source)
+        note_signin_failure(source, "AdGuard-compatible login")
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Invalid username or password")
-    get_login_throttle().record_success(source)
+    note_signin_success(source, "AdGuard-compatible login")
     _set_cookie(response, user.username)
     return {}
 
