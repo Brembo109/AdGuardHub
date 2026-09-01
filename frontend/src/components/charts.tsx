@@ -127,7 +127,7 @@ export function SeriesChart({ queries, blocked, unit }: SeriesChartProps) {
         fontWeight="600"
         textAnchor={peak > points * 0.7 ? 'end' : 'start'}
       >
-        {formatCount(queries[peak])} queries
+        {t('{count} queries', { count: formatCount(queries[peak]) })}
       </text>
 
       <g fill="var(--faint)" fontSize="10.5" textAnchor="middle">
