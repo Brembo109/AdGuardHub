@@ -31,6 +31,7 @@ from . import hubsettings
 from .config import managed_sections
 from .events import bus
 from .notify import EVENT_INSTANCE_UNREACHABLE, EVENT_PUSH_FAILED, notify
+from .retention import prune_applied_jobs
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +132,9 @@ async def push_to_instance(
     for kind in kinds:
         await close_jobs(session, instance, kind)
     await session.commit()
+    # The jobs just closed are history now. Trimming here rather than on a timer
+    # keeps the cap true even when reconciliation is switched off.
+    await prune_applied_jobs(session)
     await bus.publish(
         "instance.status",
         {"id": instance.id, "name": instance.name, "status": instance.status, "error": ""},
