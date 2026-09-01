@@ -1,9 +1,16 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { setFormatLocale } from '../format'
 import { Ctx, DICTS, LANGUAGE_KEY, fill, initialLanguage, type I18n, type Language } from '.'
 
 /** Holds the chosen language and hands `t` to the tree below. */
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [language, setStored] = useState<Language>(initialLanguage)
+
+  // Dates and counts are formatted by plain functions, not hooks, so the
+  // language has to reach them some other way. Set during render rather than in
+  // an effect: an effect runs *after* the first paint, which would render one
+  // frame of timestamps in the wrong locale before correcting them.
+  setFormatLocale(language)
 
   // The document is served with lang="en"; correct it for the language actually
   // rendered, so screen readers and the browser's own translation offer agree

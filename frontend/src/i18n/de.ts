@@ -461,6 +461,7 @@ export const de: Record<string, string> = {
   "No drift recorded yet.": "Noch keine Abweichung aufgezeichnet.",
   "Node": "Node",
   "Not enough history yet to draw a chart.": "Noch zu wenig Verlauf für ein Diagramm.",
+  "{count} queries": "{count} Anfragen",
   "Not pushed: {reason}": "Nicht übertragen: {reason}",
   "Nothing reported yet.": "Noch nichts gemeldet.",
   "processed": "verarbeitet",
