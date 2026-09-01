@@ -27,7 +27,11 @@ const CALL = /\bt\(\s*(['"])((?:\\.|(?!\1)[^\\])*?)\1/gs
 export function staticKeys() {
   const keys = new Set()
   for (const file of walk(SRC)) {
-    if (!/\.tsx?$/.test(file) || file.includes(`${join('src', 'i18n')}`)) continue
+    // Tests live beside the code they cover, so they are walked too — and a test
+    // that quotes a `t('…')` call while describing it would otherwise register a
+    // key nothing renders, failing this check for a string that does not exist.
+    if (!/\.tsx?$/.test(file) || /\.test\.tsx?$/.test(file)) continue
+    if (file.includes(`${join('src', 'i18n')}`)) continue
     const source = readFileSync(file, 'utf8')
     for (const match of source.matchAll(CALL)) {
       // Unescape the two sequences the source can contain.
