@@ -502,11 +502,28 @@ Checks — the same ones CI runs:
 
 ```bash
 cd backend && ruff check . && pytest
-cd frontend && npm run lint && npm run i18n:check && npm run build
+cd frontend && npm run lint && npm test && npm run i18n:check && npm run build
 ```
 
 In production the backend serves the built frontend from `ADGUARDHUB_STATIC_DIR`, so the whole
 thing is one container and one port.
+
+### Tests
+
+The backend is covered by pytest, driven through the API against an in-memory adapter double
+rather than a real AdGuard instance. `npm test` runs the frontend's, on Vitest with jsdom;
+`npm run test:watch` reruns them as you edit.
+
+The frontend suite is deliberately narrow. It covers the logic that has no other safety net and
+that has actually gone wrong: the locale the formatters follow, placeholder interpolation, the
+language a first-time visitor gets (including a private window where `localStorage` throws), and
+the two hand-drawn charts, whose axis rounding and text fitting were arrived at by measuring
+rendered strings. Pages and the API client are not covered — they are mostly plumbing, and the
+end-to-end behaviour they carry is already exercised by the backend suite.
+
+One convention worth knowing: a chart label is asserted **in German**. In English a bare
+`{n} queries` and a translated `t('{count} queries')` render identical text, so an English
+assertion would pass either way and pin nothing.
 
 ### Translations
 
