@@ -23,7 +23,12 @@ from ..models import DriftEvent, Instance, InstanceStatus, PayloadKind, utcnow
 from ..runtime import get_crypto
 from . import hubsettings
 from .events import bus
-from .notify import EVENT_INSTANCE_UNREACHABLE, EVENT_RECONCILE_FIX, notify
+from .notify import (
+    EVENT_INSTANCE_UNREACHABLE,
+    EVENT_RECONCILE_FIX,
+    notify,
+    notify_if_recovered,
+)
 from .retention import prune_drift_events
 from .sync import desired_filter_lists, desired_rules, desired_sections, push_kind
 
@@ -170,13 +175,16 @@ async def reconcile_instance(
         return report
 
     expected_sections = await desired_sections(session)
+    # Both the outage and the recovery notice are edge-triggered on this, and the
+    # branches below overwrite the status before either can be decided.
+    previous = instance.status
     adapter = build_adapter(instance, get_crypto())
     try:
         state = await adapter.pull_state(tuple(expected_sections))
     except (AdapterError, ValueError) as exc:
         await adapter.aclose()
         report.error = str(exc)
-        was_online = instance.status == InstanceStatus.online.value
+        was_online = previous == InstanceStatus.online.value
         instance.status = InstanceStatus.unreachable.value
         instance.last_error = report.error
         await session.commit()
@@ -237,6 +245,12 @@ async def reconcile_instance(
         )
     await session.commit()
     await prune_drift_events(session)
+
+    # Before any drift notice: "node-b is back" then "drift corrected on node-b"
+    # is the order the two actually happened in. A dry run still sends this —
+    # reaching a node is an observation, not a correction, and the status is
+    # recorded either way.
+    await notify_if_recovered(instance, previous)
 
     if correctable:
         await bus.publish("drift", {"instance": instance.name, "report": asdict(report)})

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
 from ..db import session_scope
-from ..models import NotifierTarget
+from ..models import Instance, InstanceStatus, NotifierTarget
 from .events import bus
 
 logger = logging.getLogger(__name__)
@@ -19,9 +19,15 @@ logger = logging.getLogger(__name__)
 # Events that can fire a notification. The UI offers these as checkboxes.
 EVENT_RECONCILE_FIX = "reconcile.fixed"
 EVENT_INSTANCE_UNREACHABLE = "instance.unreachable"
+EVENT_INSTANCE_RECOVERED = "instance.recovered"
 EVENT_PUSH_FAILED = "push.failed"
 
-KNOWN_EVENTS = (EVENT_RECONCILE_FIX, EVENT_INSTANCE_UNREACHABLE, EVENT_PUSH_FAILED)
+KNOWN_EVENTS = (
+    EVENT_RECONCILE_FIX,
+    EVENT_INSTANCE_UNREACHABLE,
+    EVENT_INSTANCE_RECOVERED,
+    EVENT_PUSH_FAILED,
+)
 NOTIFIER_TYPES = ("homeassistant", "discord", "gotify")
 
 
@@ -94,6 +100,31 @@ async def notify(event: str, title: str, message: str) -> None:
             await session.commit()
     except Exception:  # pragma: no cover - defensive
         logger.exception("Notification dispatch failed for event %s", event)
+
+
+async def notify_if_recovered(instance: Instance, previous: str) -> None:
+    """Announce a node that has come back — the other half of ``unreachable``.
+
+    Without this the hub only ever reported bad news: you were told at 3am that a
+    node had gone, and never that it returned, so the only way to learn the
+    outage was over was to go and look.
+
+    Edge-triggered on unreachable → online, exactly as the outage notice is
+    edge-triggered the other way. Announcing on *every* successful pass instead
+    would mean a message per reconciliation for a node that is merely still up,
+    which is how a useful alert becomes one people mute.
+
+    ``previous`` is the status read before the probe, not after: by the time this
+    is called the caller has already set the instance online.
+    """
+    if previous != InstanceStatus.unreachable.value:
+        return
+    await notify(
+        EVENT_INSTANCE_RECOVERED,
+        f"{instance.name} is reachable again",
+        f"AdGuardHub can reach {instance.base_url} again. "
+        "Anything queued for it is applied on the next retry pass.",
+    )
 
 
 async def test_target(session: AsyncSession, target: NotifierTarget) -> str:

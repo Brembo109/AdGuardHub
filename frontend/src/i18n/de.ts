@@ -266,6 +266,7 @@ export const de: Record<string, string> = {
   "Add notifier": "Ziel hinzufügen",
   "Added notifier {name}.": "Ziel {name} hinzugefügt.",
   "Allowed {min}–{max}.": "Erlaubt {min}–{max}.",
+  "An instance became reachable again": "Eine Instanz ist wieder erreichbar",
   "An instance went unreachable": "Eine Instanz wurde unerreichbar",
   "Application token": "Anwendungs-Token",
   "Applied on the next worker cycle. Out-of-range values are clamped rather than rejected.": "Wird beim nächsten Durchlauf übernommen. Werte außerhalb des Bereichs werden begrenzt, nicht abgelehnt.",
