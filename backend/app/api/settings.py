@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
 from ..deps import CurrentUser, SessionDep
 from ..models import NotifierTarget
+from ..runtime import get_login_throttle
 from ..schemas import (
     HubSettingsOut,
     HubSettingsUpdate,
@@ -46,6 +49,36 @@ def _validate_events(events: list[str]) -> str:
 async def onboarding_complete(_: CurrentUser, session: SessionDep) -> None:
     """The first-run walkthrough is done, or the operator chose to skip it."""
     await hubsettings.finish_onboarding(session)
+
+
+@router.get("/sign-ins")
+async def failed_sign_ins(_: CurrentUser) -> dict[str, Any]:
+    """Failed sign-ins and any lockout in force.
+
+    The throttle refuses an address for five minutes after enough failures, and
+    until now that was invisible from inside the hub: the operator saw the same
+    rejection as an attacker would, with nothing to say the password was fine and
+    the address was simply not being listened to. Reading the log meant leaving
+    the interface for a shell.
+    """
+    throttle = get_login_throttle()
+    return {
+        "failures": [
+            {
+                "source": item.source,
+                "door": item.door,
+                "reason": item.reason,
+                "at": item.at.isoformat().replace("+00:00", "Z"),
+            }
+            for item in throttle.recent_failures()
+        ],
+        "lockouts": [
+            {"source": source, "seconds_left": int(seconds) + 1}
+            for source, seconds in throttle.lockouts()
+        ],
+        "max_failures": throttle.max_failures,
+        "window_seconds": int(throttle.window),
+    }
 
 
 @router.get("/notifiers/meta")
