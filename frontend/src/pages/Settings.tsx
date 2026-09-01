@@ -7,9 +7,13 @@ import { Banner, Card, Empty, PageHeader } from '../components/ui'
 import { errorMessage, useResource } from '../hooks/useApi'
 import { useT } from '../i18n'
 
+// Keyed on the backend's KNOWN_EVENTS. A missing entry falls back to the raw
+// event id below, which reads as a bug rather than a label — backend/tests/
+// test_i18n_events.py fails the build instead.
 const EVENT_LABELS: Record<string, string> = {
   'reconcile.fixed': 'Reconciliation applied a fix',
   'instance.unreachable': 'An instance went unreachable',
+  'instance.recovered': 'An instance became reachable again',
   'push.failed': 'A push failed and was queued',
 }
 

@@ -30,7 +30,12 @@ from ..runtime import get_crypto
 from . import hubsettings
 from .config import managed_sections
 from .events import bus
-from .notify import EVENT_INSTANCE_UNREACHABLE, EVENT_PUSH_FAILED, notify
+from .notify import (
+    EVENT_INSTANCE_UNREACHABLE,
+    EVENT_PUSH_FAILED,
+    notify,
+    notify_if_recovered,
+)
 from .retention import prune_applied_jobs
 
 logger = logging.getLogger(__name__)
@@ -94,13 +99,16 @@ async def push_to_instance(
     reason: str,
 ) -> str:
     """Push ``kinds`` to one instance. Returns an error string, or "" on success."""
+    # Read once, before the probe: both notifications below are edge-triggered on
+    # it, and after the push either branch has already overwritten the status.
+    previous = instance.status
     adapter = build_adapter(instance, get_crypto())
     try:
         for kind in kinds:
             await push_kind(session, adapter, kind)
     except (AdapterError, ValueError) as exc:
         error = str(exc)
-        was_online = instance.status == InstanceStatus.online.value
+        was_online = previous == InstanceStatus.online.value
         instance.status = InstanceStatus.unreachable.value
         instance.last_error = error
         for kind in kinds:
@@ -139,6 +147,7 @@ async def push_to_instance(
         "instance.status",
         {"id": instance.id, "name": instance.name, "status": instance.status, "error": ""},
     )
+    await notify_if_recovered(instance, previous)
     return ""
 
 
@@ -305,6 +314,7 @@ async def check_instance(session: AsyncSession, instance: Instance) -> str:
     instance.last_seen_at = datetime.now(UTC)
     await session.commit()
     await _announce_status(instance, changed=was != instance.status)
+    await notify_if_recovered(instance, was)
     return ""
 
 

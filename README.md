@@ -428,7 +428,14 @@ or to all of them:
 | --- | --- |
 | `reconcile.fixed` | Reconciliation found (and corrected) drift on an instance |
 | `instance.unreachable` | An instance stopped responding |
+| `instance.recovered` | An instance started responding again |
 | `push.failed` | A push failed and went into the retry queue |
+
+The two instance events are **edge-triggered**: one message when a node goes,
+one when it comes back, however long the outage lasts and however often the hub
+polls in between. A target that subscribes to *all* events picks the new one up
+automatically; a target that lists its events explicitly has to add it, since
+silently widening a subscription you configured would be the wrong default.
 
 - **Home Assistant** — point it at `http://<ha>:8123/api/webhook/<id>` and trigger an automation
   on that webhook. The JSON body carries `event`, `title` and `message`.

@@ -13,6 +13,7 @@
   "Allowed and disallowed clients, and blocked hostnames.",
   "Allowed clients",
   "allowlist",
+  "An instance became reachable again",
   "An instance went unreachable",
   "Anonymise client IPs",
   "Answers with a shorter TTL are held this long anyway.",
