@@ -54,9 +54,9 @@ export default function Dashboard() {
         : t('Pushed the full configuration to {count} instance(s).', { count: result.instances })
     })
 
-  const reconcileNow = () =>
+  const reconcileNow = (applyFixes = true) =>
     run(async () => {
-      const reports: ReconcileReport[] = await api.reconcile(true)
+      const reports: ReconcileReport[] = await api.reconcile(applyFixes)
       // Report what was *found*, not just what was corrected: a difference that could
       // not be pushed away still belongs in the message, or the drift log below it
       // contradicts what this line says.
@@ -67,6 +67,20 @@ export default function Dashboard() {
 
       if (!withDrift.length && !unreachable.length) {
         return t('No drift found — every instance matches.')
+      }
+
+      // A check that changed nothing must not borrow the wording of one that did.
+      // Reusing the branches below would report drift it never attempted to push
+      // as drift that "could not be applied", which reads as a failure.
+      if (!applyFixes) {
+        const names = (list: ReconcileReport[]) => list.map((item) => item.instance_name).join(', ')
+        const parts: string[] = []
+        if (withDrift.length) parts.push(t('drift on {names}', { names: names(withDrift) }))
+        if (unreachable.length)
+          parts.push(t('could not reach {names}', { names: names(unreachable) }))
+        return t('Checked only, nothing was changed: {parts}. Use Reconcile to apply.', {
+          parts: parts.join('; '),
+        })
       }
 
       const names = (list: ReconcileReport[]) => list.map((item) => item.instance_name).join(', ')
@@ -110,7 +124,16 @@ export default function Dashboard() {
             <button onClick={forceSync} disabled={busy}>
               {t('Push everything now')}
             </button>
-            <button onClick={reconcileNow} disabled={busy}>
+            {/* Before Reconcile, because that is the order you would use them:
+                see what a run would touch, then let it. */}
+            <button
+              onClick={() => reconcileNow(false)}
+              disabled={busy}
+              title={t('Compare every instance against the hub and report differences without correcting them.')}
+            >
+              {t('Check only')}
+            </button>
+            <button onClick={() => reconcileNow()} disabled={busy}>
               {t('Reconcile')}
             </button>
           </>
