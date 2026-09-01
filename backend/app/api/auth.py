@@ -8,7 +8,7 @@ from sqlalchemy import select
 from ..config import get_settings
 from ..deps import CurrentUser, SessionDep, admin_exists
 from ..models import User
-from ..runtime import get_sessions, using_ephemeral_secret
+from ..runtime import get_credentials, get_sessions, using_ephemeral_secret
 from ..schemas import AuthState, LoginRequest, PasswordChange, SetupRequest
 from ..security import hash_password, verify_password
 from ..services import hubsettings
@@ -79,4 +79,7 @@ async def change_password(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Current password is incorrect")
     user.password_hash = hash_password(payload.new_password)
     await session.commit()
+    # The Basic Auth cache holds credentials that were accepted; the old password
+    # must stop working here at the same moment it stops working everywhere else.
+    get_credentials().forget_all()
     return {"ok": True}
