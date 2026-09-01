@@ -349,6 +349,17 @@ single admin account (bcrypt-hashed password, signed session cookie) and no mult
 Exposing it to the internet is not a supported deployment — put it behind a VPN or keep it on the
 LAN.
 
+Sign-ins are rate limited: ten failed attempts from one address within five minutes are answered
+with `429` and a `Retry-After` until the window passes. The limit is shared by all three ways in
+— the login form, `/control/login` and Basic Auth — and is applied *before* the password is
+hashed, so a locked-out source costs a dictionary lookup rather than the ~300 ms bcrypt spends.
+
+Failures are counted **per source address, never per account**. With one admin, locking the
+account would hand any device on the network a way to lock you out of your own hub. For the same
+reason the source is the connection's peer and not `X-Forwarded-For`: a header the client sets is
+a header the client can vary. Behind a reverse proxy that means attempts are counted against the
+proxy.
+
 ## Development
 
 Backend:
