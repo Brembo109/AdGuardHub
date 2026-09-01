@@ -24,6 +24,7 @@ from ..runtime import get_crypto
 from . import hubsettings
 from .events import bus
 from .notify import EVENT_INSTANCE_UNREACHABLE, EVENT_RECONCILE_FIX, notify
+from .retention import prune_drift_events
 from .sync import desired_filter_lists, desired_rules, desired_sections, push_kind
 
 logger = logging.getLogger(__name__)
@@ -235,6 +236,7 @@ async def reconcile_instance(
             )
         )
     await session.commit()
+    await prune_drift_events(session)
 
     if correctable:
         await bus.publish("drift", {"instance": instance.name, "report": asdict(report)})
