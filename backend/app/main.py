@@ -18,6 +18,7 @@ from .api import settings as settings_api
 from .config import get_settings
 from .db import DataDirError, dispose_db, init_db, session_scope
 from .deps import admin_exists
+from .logging_setup import configure as configure_logging
 from .models import User
 from .runtime import using_ephemeral_secret
 from .security import hash_password
@@ -26,7 +27,13 @@ from .services.querylog import querylog_worker
 from .services.reconcile import reconcile_worker
 from .services.sync import retry_worker
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+_settings = get_settings()
+configure_logging(
+    _settings.log_level,
+    log_file=_settings.log_file,
+    max_bytes=_settings.log_file_max_bytes,
+    backups=_settings.log_file_backups,
+)
 logger = logging.getLogger("adguardhub")
 
 def build_version() -> str:

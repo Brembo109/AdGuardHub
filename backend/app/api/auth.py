@@ -6,14 +6,16 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 from sqlalchemy import select
 
 from ..config import get_settings
-from ..deps import CurrentUser, SessionDep, admin_exists, enforce_login_throttle
-from ..models import User
-from ..runtime import (
-    get_credentials,
-    get_login_throttle,
-    get_sessions,
-    using_ephemeral_secret,
+from ..deps import (
+    CurrentUser,
+    SessionDep,
+    admin_exists,
+    enforce_login_throttle,
+    note_signin_failure,
+    note_signin_success,
 )
+from ..models import User
+from ..runtime import get_credentials, get_sessions, using_ephemeral_secret
 from ..schemas import AuthState, LoginRequest, PasswordChange, SetupRequest
 from ..security import hash_password, verify_password
 from ..services import hubsettings
@@ -68,9 +70,9 @@ async def login(
     result = await session.execute(select(User).where(User.username == payload.username))
     user = result.scalars().first()
     if user is None or not verify_password(payload.password, user.password_hash):
-        get_login_throttle().record_failure(source)
+        note_signin_failure(source, "hub login")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid username or password")
-    get_login_throttle().record_success(source)
+    note_signin_success(source, "hub login")
     _set_cookie(response, user.username)
     return AuthState(authenticated=True, username=user.username)
 

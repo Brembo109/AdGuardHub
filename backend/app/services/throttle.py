@@ -79,7 +79,13 @@ class LoginThrottle:
             return 0.0
         return entry.expires - moment
 
-    def record_failure(self, source: str, *, now: float | None = None) -> None:
+    def record_failure(self, source: str, *, now: float | None = None) -> int:
+        """Count one wrong password and return how many this source now has.
+
+        The count is returned so the caller can tell the failure that crosses the
+        limit from the ones before it, and log the lockout once rather than once
+        per refused request afterwards.
+        """
         moment = time.monotonic() if now is None else now
         entry = self._sources.get(source)
         if entry is None or entry.expires <= moment:
@@ -90,6 +96,7 @@ class LoginThrottle:
         # Each failure restarts the clock, so a steady trickle of guesses does
         # not sit just under the limit forever.
         entry.expires = moment + self.window
+        return entry.count
 
     def record_success(self, source: str) -> None:
         """A correct password clears the slate, so a typo costs nothing later."""

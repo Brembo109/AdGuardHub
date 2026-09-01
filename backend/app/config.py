@@ -38,6 +38,18 @@ class Settings(BaseSettings):
     # Serve the built frontend from this directory when it exists.
     static_dir: str = "./static"
 
+    # DEBUG turns on the per-instance diagnostics — why a node's stats or query
+    # log came back empty — which are too chatty to carry at INFO but are exactly
+    # what is wanted while something is misbehaving.
+    log_level: str = "INFO"
+
+    # Empty means stderr only, which is right in a container: Docker captures it
+    # and `docker logs` reads it back. Set a path to also write a rotating file,
+    # for a deployment that would rather keep its own.
+    log_file: str = ""
+    log_file_max_bytes: int = 5 * 1024 * 1024
+    log_file_backups: int = 3
+
     @property
     def database_path(self) -> str:
         return os.path.join(self.data_dir.rstrip("/"), "adguardhub.db")

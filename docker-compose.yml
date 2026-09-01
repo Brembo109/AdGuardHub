@@ -34,3 +34,20 @@ services:
       # ADGUARDHUB_RECONCILE_INTERVAL: "300"
       # ADGUARDHUB_RETRY_INTERVAL: "30"
       # ADGUARDHUB_QUERYLOG_POLL_INTERVAL: "5"
+
+      # Optional: DEBUG adds the per-instance diagnostics (and a lot of HTTP
+      # client chatter) while you are chasing a misbehaving node.
+      # ADGUARDHUB_LOG_LEVEL: "DEBUG"
+
+      # Optional: also keep a rotating log file inside the data volume. Docker
+      # already captures stderr, so this is only worth setting if you want a copy
+      # that survives `docker rm`.
+      # ADGUARDHUB_LOG_FILE: "/data/adguardhub.log"
+
+    # Without this, Docker's json-file driver keeps every line the container has
+    # ever written, forever. A hub that runs for months fills a disk quietly.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

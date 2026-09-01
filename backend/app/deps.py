@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+import logging
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
@@ -18,6 +19,10 @@ from .runtime import get_credentials, get_login_throttle, get_sessions
 from .security import verify_password
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
+
+# Its own logger, so an operator can raise or lower the volume on sign-ins
+# without touching the rest of the hub.
+auth_log = logging.getLogger("adguardhub.auth")
 
 
 async def admin_exists(session: AsyncSession) -> bool:
@@ -48,6 +53,46 @@ def client_source(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+def note_signin_failure(source: str, door: str) -> None:
+    """Count a wrong password and say so in the log.
+
+    Until now a wrong password left no trace anywhere: no log line, nothing in
+    the UI. Someone working through a password list looked exactly like silence,
+    and so did an operator locked out by the throttle wondering why.
+
+    The attempted username is deliberately left out. The hub has one admin
+    account, so the name adds nothing an operator does not already know, while
+    logging it would write a password to disk the first time someone types one
+    into the username field.
+    """
+    throttle = get_login_throttle()
+    count = throttle.record_failure(source)
+    if count == throttle.max_failures:
+        auth_log.warning(
+            "Locked out %s after %d failed sign-ins (%s); further attempts refused for %d seconds",
+            source,
+            count,
+            door,
+            int(throttle.window),
+        )
+    else:
+        auth_log.warning(
+            "Failed sign-in from %s (%s) — attempt %d of %d", source, door, count,
+            throttle.max_failures,
+        )
+
+
+def note_signin_success(source: str, door: str) -> None:
+    """Clear the count and record that someone signed in.
+
+    Only the two login forms report success. Basic Auth re-authenticates on every
+    single request, so logging it here would bury everything else — the same
+    problem this change exists to fix.
+    """
+    get_login_throttle().record_success(source)
+    auth_log.info("Signed in from %s (%s)", source, door)
+
+
 def enforce_login_throttle(request: Request) -> str:
     """Refuse a source that has failed too often, before any password is hashed.
 
@@ -57,6 +102,10 @@ def enforce_login_throttle(request: Request) -> str:
     source = client_source(request)
     wait = get_login_throttle().retry_after(source)
     if wait > 0:
+        # The lockout itself was logged once, when it started. Whoever tripped it
+        # decides how many refusals follow, so these stay at debug rather than
+        # handing an attacker a way to flood the log.
+        auth_log.debug("Refused a sign-in from %s: locked out for another %.0f s", source, wait)
         seconds = int(wait) + 1
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,
@@ -117,7 +166,7 @@ async def control_user(request: Request, session: SessionDep) -> User:
     source = enforce_login_throttle(request)
     user = await _user_from_basic_auth(request, session)
     if user is None:
-        get_login_throttle().record_failure(source)
+        note_signin_failure(source, "Basic Auth")
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,
             "Invalid username or password",
