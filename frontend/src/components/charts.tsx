@@ -147,6 +147,11 @@ export function BlockRateRing({ rate }: { rate: number }) {
   const radius = 52
   const circumference = 2 * Math.PI * radius
   const share = Math.max(0, Math.min(100, rate)) / 100
+  // Three digits and a decimal is one character too many for the ring. Dropping
+  // the decimal only there keeps every value you will realistically see at full
+  // size, instead of shrinking all of them to fit a state that means the network
+  // is blocking everything. Tested on the rendered string, since 99.96 rounds up.
+  const shown = rate >= 99.95 ? '100' : rate.toFixed(1)
 
   return (
     <svg
@@ -168,18 +173,22 @@ export function BlockRateRing({ rate }: { rate: number }) {
         strokeDasharray={`${circumference * share} ${circumference * (1 - share)}`}
         transform="rotate(-90 75 75)"
       />
+      {/* The ring leaves 89px clear inside the stroke. At 30px even "19.9%" ran
+          into the arc — measured at 104px. 23px puts the widest string this can
+          now show, "99.9%", at 80px. Fixed rather than scaled per value, so the
+          number does not resize itself as the rate moves. */}
       <text
         x="75"
-        y="72"
+        y="73"
         textAnchor="middle"
-        fontSize="30"
+        fontSize="23"
         fontWeight="680"
         fill="var(--text)"
         style={{ fontVariantNumeric: 'tabular-nums' }}
       >
-        {rate.toFixed(1)}%
+        {shown}%
       </text>
-      <text x="75" y="92" textAnchor="middle" fontSize="11.5" fill="var(--dim)">
+      <text x="75" y="90" textAnchor="middle" fontSize="11.5" fill="var(--dim)">
         {t('blocked')}
       </text>
     </svg>
