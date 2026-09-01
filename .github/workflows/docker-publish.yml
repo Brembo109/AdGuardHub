@@ -40,3 +40,51 @@ jobs:
             ghcr.io/${{ github.repository }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  tarball:
+    name: Build & attach the native install tarball
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      # Built here rather than on the target host: a native install often lands
+      # on an LXC container or a Raspberry Pi, and installing Node there just to
+      # produce static files would be a poor trade.
+      - name: Build the frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Assemble the tarball
+        run: |
+          set -eu
+          version="${{ steps.version.outputs.version }}"
+          stage="adguardhub-${version}"
+          mkdir -p "${stage}/packaging"
+          cp -a backend/app "${stage}/app"
+          cp -a frontend/dist "${stage}/static"
+          cp backend/requirements.txt "${stage}/requirements.txt"
+          cp packaging/adguardhub.service "${stage}/packaging/adguardhub.service"
+          printf '%s\n' "${version}" > "${stage}/VERSION"
+          # Compiled caches from the checkout would otherwise ship to users.
+          find "${stage}" -name '__pycache__' -type d -prune -exec rm -rf {} +
+          tar -czf "adguardhub-${version}.tar.gz" "${stage}"
+          tar -tzf "adguardhub-${version}.tar.gz" >/dev/null
+
+      - name: Attach it to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: adguardhub-${{ steps.version.outputs.version }}.tar.gz
