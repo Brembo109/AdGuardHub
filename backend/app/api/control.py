@@ -23,11 +23,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Response, status
+from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from sqlalchemy import select
 
 from ..adapters.sections import SECTION_NAMES
-from ..deps import ControlUser, SessionDep
+from ..deps import ControlUser, SessionDep, enforce_login_throttle
 from ..models import FilterList, Instance, ListKind, PayloadKind, Rule
 from ..schemas import ControlLogin
 from ..security import verify_password
@@ -76,16 +76,22 @@ async def _write_section(
 
 
 @router.post("/login")
-async def login(payload: ControlLogin, response: Response, session: SessionDep) -> dict[str, str]:
+async def login(
+    payload: ControlLogin, request: Request, response: Response, session: SessionDep
+) -> dict[str, str]:
     """AdGuard's login, answered with the hub's own admin account."""
     _guard()
     from ..models import User
+    from ..runtime import get_login_throttle
     from .auth import _set_cookie
 
+    source = enforce_login_throttle(request)
     result = await session.execute(select(User).where(User.username == payload.name))
     user = result.scalars().first()
     if user is None or not verify_password(payload.password, user.password_hash):
+        get_login_throttle().record_failure(source)
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Invalid username or password")
+    get_login_throttle().record_success(source)
     _set_cookie(response, user.username)
     return {}
 

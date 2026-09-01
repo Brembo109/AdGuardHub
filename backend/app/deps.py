@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .config import get_settings
 from .db import get_session
 from .models import User
-from .runtime import get_credentials, get_sessions
+from .runtime import get_credentials, get_login_throttle, get_sessions
 from .security import verify_password
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
@@ -41,6 +41,29 @@ async def current_user(request: Request, session: SessionDep) -> User:
 
 
 CurrentUser = Annotated[User, Depends(current_user)]
+
+
+def client_source(request: Request) -> str:
+    """What the throttle counts against — see services/throttle.py on why not XFF."""
+    return request.client.host if request.client else "unknown"
+
+
+def enforce_login_throttle(request: Request) -> str:
+    """Refuse a source that has failed too often, before any password is hashed.
+
+    Hashing first would leave untouched the CPU cost an attacker can impose,
+    which is half of what the throttle is for.
+    """
+    source = client_source(request)
+    wait = get_login_throttle().retry_after(source)
+    if wait > 0:
+        seconds = int(wait) + 1
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            f"Too many failed sign-in attempts. Try again in {seconds} seconds.",
+            headers={"Retry-After": str(seconds)},
+        )
+    return source
 
 
 async def _user_from_basic_auth(request: Request, session: AsyncSession) -> User | None:
@@ -88,8 +111,13 @@ async def control_user(request: Request, session: SessionDep) -> User:
     """
     if request.cookies.get(get_settings().session_cookie):
         return await current_user(request, session)
+
+    # Basic presents the password on every request, so this is the entry point an
+    # attacker would hammer: checked before the hash, like the login forms.
+    source = enforce_login_throttle(request)
     user = await _user_from_basic_auth(request, session)
     if user is None:
+        get_login_throttle().record_failure(source)
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,
             "Invalid username or password",
@@ -97,6 +125,7 @@ async def control_user(request: Request, session: SessionDep) -> User:
             # with credentials, and reports the 401 as a flat rejection.
             headers={"WWW-Authenticate": 'Basic realm="AdGuardHub"'},
         )
+    get_login_throttle().record_success(source)
     return user
 
 
