@@ -15,10 +15,18 @@ services:
     volumes:
       - ./data:/data
     environment:
-      # Required. Signs session cookies AND derives the key that encrypts the
-      # stored AdGuard credentials. Losing or changing it invalidates both.
-      # Generate one with: openssl rand -base64 48
-      ADGUARDHUB_SECRET_KEY: "change-me-to-a-long-random-string"
+      # Optional. Signs session cookies AND derives the key that encrypts the
+      # stored AdGuard credentials. Left unset — as it is here — the hub creates
+      # one on first start and keeps it in /data/secret.key, so nothing has to be
+      # configured and the credentials survive updates.
+      #
+      # Setting it is still the better option, because then the key lives outside
+      # the directory it protects. Generate one with `openssl rand -base64 48`
+      # and put it in a .env file next to this one:
+      # ADGUARDHUB_SECRET_KEY: "${ADGUARDHUB_SECRET_KEY:?set it in .env or delete this line}"
+      #
+      # Never paste an example value here. A key that is published is worse than
+      # no key at all: the hub would start, look healthy, and protect nothing.
 
       # The user that should own /data. Set these to the host user that owns the
       # mounted directory — on Unraid that is PUID=99, PGID=100.
