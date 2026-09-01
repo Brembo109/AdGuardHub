@@ -142,7 +142,7 @@ export default function Config() {
       {list.length && managed === 0 ? (
         <Banner kind="warn">
           {t(
-            'No settings are being replicated yet. Import an instance as the master on the Instances page — that adopts every area it exposes and switches them on.',
+            'No settings are being replicated yet. Either import an instance as the master on the Instances page, or fill in an area below and switch on Replicate.',
           )}
         </Banner>
       ) : null}
@@ -250,7 +250,7 @@ export default function Config() {
                           count: current.keys.length,
                           when: formatTime(current.updated_at),
                         })
-                      : t('Nothing imported yet — import an instance as the master first.')}
+                      : t('Empty — fill in only what the hub should own, or import a master.')}
                   </p>
                 </div>
                 <div className="actions">
@@ -270,14 +270,14 @@ export default function Config() {
                       }
                       setShowRaw(!showRaw)
                     }}
-                    disabled={busy || !current.has_data}
+                    disabled={busy}
                   >
                     {showRaw ? t('Back to the form') : t('Edit raw document')}
                   </button>
                   <button
                     className={`small${current.managed ? '' : ' primary'}`}
                     onClick={() => toggle(current)}
-                    disabled={busy || !current.has_data}
+                    disabled={busy}
                   >
                     {current.managed ? t('Stop replicating') : t('Replicate')}
                   </button>
@@ -294,9 +294,7 @@ export default function Config() {
                 </Banner>
               ) : null}
 
-              {!current.has_data ? (
-                <Empty>{t('Nothing imported yet — import an instance as the master first.')}</Empty>
-              ) : showRaw ? (
+              {showRaw ? (
                 <>
                   <label htmlFor={`data-${current.name}`}>
                     {t('Section document — exactly what is pushed to each instance')}
@@ -315,35 +313,33 @@ export default function Config() {
                 <p className="hint">{t('This section has no editable fields of its own.')}</p>
               )}
 
-              {current.has_data ? (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    borderTop: '1px solid var(--line)',
-                    marginTop: 20,
-                    paddingTop: 16,
-                    flexWrap: 'wrap',
-                  }}
-                >
-                  <button className="primary" onClick={() => save(current)} disabled={busy}>
-                    {current.managed ? t('Save and push') : t('Save')}
-                  </button>
-                  <button onClick={() => select(current)} disabled={busy}>
-                    {t('Discard changes')}
-                  </button>
-                  <p style={{ margin: '0 0 0 6px', color: 'var(--dim)', fontSize: 12.5 }}>
-                    {current.managed
-                      ? t(
-                          'Saving writes a new hub version and pushes this area to every instance immediately.',
-                        )
-                      : t(
-                          'This area is stored in the hub but not pushed. Switch on Replicate to send it.',
-                        )}
-                  </p>
-                </div>
-              ) : null}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  borderTop: '1px solid var(--line)',
+                  marginTop: 20,
+                  paddingTop: 16,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <button className="primary" onClick={() => save(current)} disabled={busy}>
+                  {current.managed ? t('Save and push') : t('Save')}
+                </button>
+                <button onClick={() => select(current)} disabled={busy}>
+                  {t('Discard changes')}
+                </button>
+                <p style={{ margin: '0 0 0 6px', color: 'var(--dim)', fontSize: 12.5 }}>
+                  {current.managed
+                    ? t(
+                        'Saving writes a new hub version and pushes this area to every instance immediately.',
+                      )
+                    : t(
+                        'This area is stored in the hub but not pushed. Switch on Replicate to send it.',
+                      )}
+                </p>
+              </div>
             </Card>
           ) : null}
         </div>

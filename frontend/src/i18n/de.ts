@@ -80,7 +80,6 @@ export const de: Record<string, string> = {
   "never": "nie",
   "New password": "Neues Passwort",
   "No instances yet.": "Noch keine Instanzen.",
-  "No settings are being replicated yet. Import an instance as the master on the Instances page — that adopts every area it exposes and switches them on.": "Es werden noch keine Einstellungen repliziert. Importiere auf der Seite Instanzen eine Instanz als Master — damit werden alle Bereiche übernommen, die sie anbietet, und eingeschaltet.",
   "Nodes": "Nodes",
   "Nothing buffered yet. The hub polls each instance every few seconds — add an instance and give it a moment.": "Noch nichts gepuffert. Der Hub fragt jede Instanz alle paar Sekunden ab — fügen Sie eine Instanz hinzu und geben Sie ihr einen Moment.",
   "One instance's current configuration becomes the hub's starting state. The others are overwritten with it — there is no merge between instances, by design. Pick the one whose rules you actually want to keep.": "Die aktuelle Konfiguration einer Instanz wird zum Startzustand des Hubs. Die anderen werden damit überschrieben — ein Zusammenführen zwischen Instanzen gibt es bewusst nicht. Wählen Sie die, deren Regeln Sie wirklich behalten wollen.",
@@ -286,8 +285,6 @@ export const de: Record<string, string> = {
   "Instance request timeout": "Zeitlimit für Instanz-Anfragen",
   "No configuration sections.": "Keine Konfigurationsbereiche.",
   "No notification targets configured.": "Keine Benachrichtigungsziele eingerichtet.",
-  "Nothing imported yet — import an instance as the master first.": "Noch nichts importiert — importieren Sie zuerst eine Instanz als Master.",
-  "Nothing imported yet — import an instance as the master on the Instances page.": "Noch nichts importiert — importieren Sie auf der Seite Instanzen eine Instanz als Master.",
   "Notifications": "Benachrichtigungen",
   "Other settings": "Weitere Einstellungen",
   "Poll the instances for query log entries": "Instanzen nach Protokolleinträgen abfragen",
@@ -489,4 +486,6 @@ export const de: Record<string, string> = {
   "import": "Import",
   "restore": "Wiederherstellung",
   "AdGuardHub {version}": "AdGuardHub {version}",
+  "Empty — fill in only what the hub should own, or import a master.": "Leer — tragen Sie nur ein, was der Hub besitzen soll, oder importieren Sie einen Master.",
+  "No settings are being replicated yet. Either import an instance as the master on the Instances page, or fill in an area below and switch on Replicate.": "Es werden noch keine Einstellungen repliziert. Importieren Sie entweder auf der Seite Instanzen eine Instanz als Master, oder füllen Sie unten einen Bereich aus und schalten Sie Replizieren ein.",
 }
