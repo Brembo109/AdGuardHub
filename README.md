@@ -178,6 +178,50 @@ Then open <http://localhost> and create the admin account.
 The container listens on **port 80**. If the host already serves something there,
 publish it elsewhere — `-p 8080:80` — the container-side port stays 80.
 
+### Without Docker (Debian / Ubuntu)
+
+For an LXC container, a VM or a Raspberry Pi, `install.sh` sets up AdGuardHub as a systemd
+service. Read it before you run it — it runs as root:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/fgrfn/adguardhub/main/install.sh -o install.sh
+less install.sh
+sudo sh install.sh
+```
+
+Or in one line, if you would rather not:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/fgrfn/adguardhub/main/install.sh | sudo sh
+```
+
+The script comes from `main` but installs the newest **release**, not the current state of the
+branch. It creates an `adguardhub` system user, installs to `/opt/adguardhub`, puts the database
+in `/var/lib/adguardhub`, and starts the service. It asks nothing: the admin account is created
+in the browser, and the encryption key looks after itself (see [The encryption key](#the-encryption-key)).
+
+| | |
+| --- | --- |
+| Settings | `/etc/adguardhub/adguardhub.env` — every `ADGUARDHUB_*` variable works here |
+| Data | `/var/lib/adguardhub` — **back this up**, it holds the database and the key |
+| Logs | `journalctl -u adguardhub -f` |
+| Upgrade | re-run the installer; your data and settings are left alone |
+| Remove | `systemctl disable --now adguardhub`, then delete `/opt/adguardhub`, `/var/lib/adguardhub`, `/etc/adguardhub` and `/etc/systemd/system/adguardhub.service` |
+
+A different port, or a specific version:
+
+```bash
+ADGUARDHUB_PORT=8080 sudo -E sh install.sh
+ADGUARDHUB_VERSION=v0.3.0 sudo -E sh install.sh
+```
+
+The service runs unprivileged, with `ProtectSystem=strict` and write access to nothing but its
+own data directory. Binding port 80 as a non-root user comes from `CAP_NET_BIND_SERVICE`, which
+is the only capability it keeps.
+
+**Debian and Ubuntu with systemd only.** On anything else the script stops and says so rather
+than half-installing — use the Docker image, which has no such requirement.
+
 ### Updating
 
 `docker compose up -d` on its own will **not** fetch a newer image: Docker reuses the
@@ -572,9 +616,11 @@ adguardhub/
 │   ├── src/i18n/         # English-keyed dictionaries + the completeness check
 │   └── scripts/
 ├── docs/screenshots/     # The images in this README
+├── packaging/            # systemd unit template for the native install
 ├── .github/workflows/    # ci.yml, docker-publish.yml
 ├── Dockerfile
-└── docker-compose.yml
+├── docker-compose.yml
+└── install.sh            # Native installer (Debian/Ubuntu + systemd)
 ```
 
 ## Roadmap

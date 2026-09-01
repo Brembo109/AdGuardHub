@@ -1,0 +1,242 @@
+#!/bin/sh
+#
+# AdGuardHub — native installer for Debian/Ubuntu with systemd.
+#
+#   curl -sSL https://raw.githubusercontent.com/fgrfn/adguardhub/main/install.sh | sh
+#
+# You are about to run a script you have not read. If you would rather look
+# first — and you would be right to — do it in two steps instead:
+#
+#   curl -sSL https://raw.githubusercontent.com/fgrfn/adguardhub/main/install.sh -o install.sh
+#   less install.sh
+#   sudo sh install.sh
+#
+# This script comes from `main`, but it installs the latest *release*, not the
+# current state of the branch. Handing someone an untested commit because they
+# ran a one-liner would be a poor trade.
+#
+# Re-running it upgrades an existing installation in place. Your data directory
+# and /etc/adguardhub/adguardhub.env are never touched.
+#
+# Environment overrides, all optional:
+#
+#   ADGUARDHUB_VERSION        install this release instead of the newest (e.g. v0.3.0)
+#   ADGUARDHUB_PORT           port to listen on (default 80)
+#   ADGUARDHUB_PREFIX         where the program goes (default /opt/adguardhub)
+#   ADGUARDHUB_DATA_DIR       where the database goes (default /var/lib/adguardhub)
+#   ADGUARDHUB_DOWNLOAD_BASE  where to fetch releases from, for a local mirror
+#
+set -eu
+
+REPO="fgrfn/adguardhub"
+SERVICE_USER="adguardhub"
+PREFIX="${ADGUARDHUB_PREFIX:-/opt/adguardhub}"
+DATA_DIR="${ADGUARDHUB_DATA_DIR:-/var/lib/adguardhub}"
+PORT="${ADGUARDHUB_PORT:-80}"
+DOWNLOAD_BASE="${ADGUARDHUB_DOWNLOAD_BASE:-https://github.com/${REPO}/releases/download}"
+API_BASE="${ADGUARDHUB_API_BASE:-https://api.github.com}"
+UNIT_PATH="/etc/systemd/system/adguardhub.service"
+ENV_DIR="/etc/adguardhub"
+
+WORK=""
+cleanup() {
+    [ -n "$WORK" ] && rm -rf "$WORK"
+}
+trap cleanup EXIT INT TERM
+
+say() { printf '\033[32m==>\033[0m %s\n' "$*"; }
+note() { printf '    %s\n' "$*"; }
+die() {
+    printf '\033[31mAdGuardHub install failed:\033[0m %s\n' "$*" >&2
+    exit 1
+}
+
+# --------------------------------------------------------------------------
+# What this script is willing to run on
+# --------------------------------------------------------------------------
+
+# Named narrowly on purpose. Covering every distribution badly helps nobody;
+# saying plainly that this one is not supported lets you install by hand from
+# the README instead of debugging a script that half-worked.
+require_supported_system() {
+    [ "$(id -u)" -eq 0 ] || die "run this as root (try: sudo sh install.sh)"
+    command -v apt-get >/dev/null 2>&1 ||
+        die "this installer supports Debian and Ubuntu. For anything else, the README has the manual steps and the Docker image."
+    command -v systemctl >/dev/null 2>&1 ||
+        die "systemd is required to run AdGuardHub as a service. On a system without it, use the Docker image."
+    command -v curl >/dev/null 2>&1 || apt_install curl
+}
+
+apt_install() {
+    say "Installing $*"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@" >/dev/null ||
+        die "apt-get could not install: $*"
+}
+
+install_dependencies() {
+    missing=""
+    command -v python3 >/dev/null 2>&1 || missing="$missing python3"
+    python3 -c 'import venv' >/dev/null 2>&1 || missing="$missing python3-venv"
+    command -v tar >/dev/null 2>&1 || missing="$missing tar"
+    [ -e /etc/ssl/certs/ca-certificates.crt ] || missing="$missing ca-certificates"
+    if [ -n "$missing" ]; then
+        say "Refreshing the package list"
+        DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null ||
+            die "apt-get update failed"
+        # shellcheck disable=SC2086
+        apt_install $missing
+    fi
+}
+
+# --------------------------------------------------------------------------
+# Which release
+# --------------------------------------------------------------------------
+
+resolve_version() {
+    if [ -n "${ADGUARDHUB_VERSION:-}" ]; then
+        printf '%s' "$ADGUARDHUB_VERSION"
+        return
+    fi
+    latest=$(curl -fsSL "${API_BASE}/repos/${REPO}/releases/latest" 2>/dev/null |
+        sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
+    [ -n "$latest" ] ||
+        die "could not work out the newest release. Name one explicitly, e.g. ADGUARDHUB_VERSION=v0.3.0 sh install.sh"
+    printf '%s' "$latest"
+}
+
+download_release() {
+    version="$1"
+    stripped="${version#v}"
+    url="${DOWNLOAD_BASE}/${version}/adguardhub-${stripped}.tar.gz"
+    say "Downloading AdGuardHub ${version}"
+    note "$url"
+    curl -fsSL "$url" -o "$WORK/release.tar.gz" ||
+        die "could not download $url — check that release exists and has a tarball attached."
+    # A 404 page saved as a file is the classic way this goes wrong quietly.
+    tar -tzf "$WORK/release.tar.gz" >/dev/null 2>&1 ||
+        die "the downloaded file is not a valid archive. The release may not have one attached yet."
+}
+
+# --------------------------------------------------------------------------
+# Installing
+# --------------------------------------------------------------------------
+
+create_user() {
+    if ! id "$SERVICE_USER" >/dev/null 2>&1; then
+        say "Creating the $SERVICE_USER system user"
+        useradd --system --home-dir "$DATA_DIR" --shell /usr/sbin/nologin "$SERVICE_USER" ||
+            die "could not create the $SERVICE_USER user"
+    fi
+}
+
+install_files() {
+    say "Installing to $PREFIX"
+    mkdir -p "$WORK/unpacked"
+    tar -xzf "$WORK/release.tar.gz" -C "$WORK/unpacked" --strip-components=1 ||
+        die "could not unpack the release"
+    for required in app static requirements.txt; do
+        [ -e "$WORK/unpacked/$required" ] ||
+            die "the release archive is missing '$required' — it may have been built incorrectly."
+    done
+
+    mkdir -p "$PREFIX"
+    # Replaced wholesale rather than merged, so a file deleted upstream does not
+    # linger and get imported. The venv is kept, because rebuilding it on every
+    # upgrade means a few minutes of compiling for no reason.
+    rm -rf "$PREFIX/app" "$PREFIX/static"
+    cp -a "$WORK/unpacked/app" "$WORK/unpacked/static" "$PREFIX/"
+    cp -a "$WORK/unpacked/requirements.txt" "$PREFIX/"
+}
+
+install_python_environment() {
+    if [ ! -x "$PREFIX/venv/bin/python" ]; then
+        say "Creating the Python environment"
+        python3 -m venv "$PREFIX/venv" || die "could not create a virtualenv in $PREFIX/venv"
+    fi
+    say "Installing Python dependencies (this takes a minute)"
+    "$PREFIX/venv/bin/pip" install --quiet --upgrade pip >/dev/null 2>&1 || true
+    "$PREFIX/venv/bin/pip" install --quiet -r "$PREFIX/requirements.txt" ||
+        die "could not install the Python dependencies"
+}
+
+prepare_data_dir() {
+    say "Preparing $DATA_DIR"
+    mkdir -p "$DATA_DIR" "$ENV_DIR"
+    chown -R "$SERVICE_USER:$SERVICE_USER" "$DATA_DIR"
+    # The database and the generated encryption key live here, and nobody else
+    # on the machine has any business reading either.
+    chmod 750 "$DATA_DIR"
+    if [ ! -e "$ENV_DIR/adguardhub.env" ]; then
+        cat >"$ENV_DIR/adguardhub.env" <<'ENVFILE'
+# Settings for AdGuardHub. This file is yours — upgrades never overwrite it.
+# Every ADGUARDHUB_* variable from the README works here, one per line.
+#
+# The encryption key is optional: with nothing set, the hub generates one on
+# first start and keeps it in its data directory. Setting it here instead keeps
+# the key out of the directory it protects, which is the stronger arrangement.
+# Generate one with: openssl rand -base64 48
+#
+# ADGUARDHUB_SECRET_KEY=...
+#
+# ADGUARDHUB_LOG_LEVEL=INFO
+ENVFILE
+        chmod 640 "$ENV_DIR/adguardhub.env"
+        chown root:"$SERVICE_USER" "$ENV_DIR/adguardhub.env"
+    fi
+}
+
+install_service() {
+    version="$1"
+    say "Installing the systemd service"
+    sed -e "s|@PREFIX@|$PREFIX|g" \
+        -e "s|@DATA@|$DATA_DIR|g" \
+        -e "s|@USER@|$SERVICE_USER|g" \
+        -e "s|@PORT@|$PORT|g" \
+        -e "s|@VERSION@|${version#v}|g" \
+        "$PREFIX/adguardhub.service.in" >"$UNIT_PATH" ||
+        die "could not write $UNIT_PATH"
+    rm -f "$PREFIX/adguardhub.service.in"
+    systemctl daemon-reload
+    systemctl enable --quiet adguardhub 2>/dev/null || true
+    systemctl restart adguardhub || die "the service did not start. Look at: journalctl -u adguardhub -n 50"
+}
+
+report() {
+    version="$1"
+    address=$(hostname -I 2>/dev/null | awk '{print $1}')
+    [ -n "$address" ] || address="this-host"
+    printf '\n'
+    say "AdGuardHub ${version} is running."
+    if [ "$PORT" = "80" ]; then
+        note "Open http://${address}/ and create the admin account."
+    else
+        note "Open http://${address}:${PORT}/ and create the admin account."
+    fi
+    note ""
+    note "Data:     $DATA_DIR   (back this up — it holds the database and the encryption key)"
+    note "Settings: $ENV_DIR/adguardhub.env"
+    note "Logs:     journalctl -u adguardhub -f"
+    note "Upgrade:  re-run this installer"
+}
+
+main() {
+    require_supported_system
+    install_dependencies
+    WORK=$(mktemp -d)
+    version=$(resolve_version)
+    download_release "$version"
+    create_user
+    install_files
+    # The unit template travels in the archive, so the service description
+    # always matches the release that is being installed.
+    [ -e "$WORK/unpacked/packaging/adguardhub.service" ] &&
+        cp "$WORK/unpacked/packaging/adguardhub.service" "$PREFIX/adguardhub.service.in"
+    [ -e "$PREFIX/adguardhub.service.in" ] ||
+        die "the release archive is missing its systemd unit template."
+    install_python_environment
+    prepare_data_dir
+    install_service "$version"
+    report "$version"
+}
+
+main "$@"

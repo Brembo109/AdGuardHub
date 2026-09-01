@@ -40,6 +40,15 @@ jobs:
       - run: npm run i18n:check
       - run: npm run build
 
+  installer:
+    name: Installer (shellcheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # People are invited to pipe this into a shell, so it gets checked like
+      # anything else that runs as root. shellcheck ships on the runner.
+      - run: shellcheck --shell=sh install.sh
+
   docker:
     name: Docker image builds
     runs-on: ubuntu-latest
