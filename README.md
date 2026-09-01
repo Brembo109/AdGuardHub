@@ -23,7 +23,7 @@
 </p>
 
 <details>
-<summary>More screenshots — dark theme, query log, instance settings</summary>
+<summary>More screenshots — dark theme, query log, rules, subscriptions, instances, settings, history, German</summary>
 
 <br />
 
@@ -31,16 +31,39 @@ Same dashboard, dark theme. Both ship; the default follows the operating system.
 
 <img src="./docs/screenshots/dashboard-dark.png" width="900" alt="The dashboard in the dark theme" />
 
-The aggregated query log. Every node's queries in one stream, newest first; a row opens onto
-the rule that matched, and allowing or blocking from here writes one rule that reaches every
-node at once.
+The aggregated query log. Every node's queries in one stream, newest first, with the node that
+answered in its own column; a row opens onto the rule that matched, and allowing or blocking
+from here writes one rule that reaches every node at once.
 
 <img src="./docs/screenshots/querylog.png" width="900" alt="The query log with one row expanded, showing the matched rule and the allow action" />
+
+The central rule set, in native AdGuard syntax. Three ways in — a custom rule, a domain to
+allow, or a pasted block — all writing to the same model.
+
+<img src="./docs/screenshots/rules.png" width="900" alt="The filtering rules page: entry forms above, the rule table below with block and allow badges" />
+
+Blocklist subscriptions. The hub tracks the URL and whether it is on; AdGuard Home still
+downloads and applies the list itself, so the 700k-domain lists never touch this database.
+
+<img src="./docs/screenshots/subscriptions.png" width="900" alt="The subscriptions page listing four blocklist URLs with their enabled state" />
+
+Instances. Each AdGuard Home is added once, with credentials encrypted before they are stored.
+
+<img src="./docs/screenshots/instances.png" width="900" alt="The instances page showing two connected nodes, both online, with their version and last sync time" />
 
 Instance settings. The left column answers the page's real question — what the hub owns, and
 what is left to each node.
 
 <img src="./docs/screenshots/instance-settings.png" width="900" alt="Instance settings, with the encryption section selected and its certificate warning shown" />
+
+Version history. Every change is a snapshot you can compare or roll back to.
+
+<img src="./docs/screenshots/history.png" width="900" alt="The history page listing five versions, each with compare and roll back actions" />
+
+The whole interface in German. The language follows the browser on first load and is switched
+from the top bar; dates and numbers follow the language, not the browser.
+
+<img src="./docs/screenshots/dashboard-de.png" width="900" alt="The dashboard in German" />
 
 </details>
 
@@ -66,6 +89,10 @@ AdGuardHub becomes the **single source of truth** for filtering rules, blocklist
   DHCP is deliberately excluded, since leases and interface bindings are per-host state
 - **Version history** — every change is snapshotted, so you can see what a sync carried,
   diff any two points, and roll back (the rollback is recorded too, so it can be undone)
+- **Backup and restore** — everything the hub owns as one JSON document, validated in full
+  before anything is written
+- **AdGuard-compatible API** — point an existing client (a phone remote, Home Assistant, a
+  script) at the hub instead of at one node, and what it changes is pushed everywhere
 - **Notifications** via configurable webhooks to Home Assistant, Discord, or Gotify
 
 ## The interface
@@ -203,6 +230,12 @@ rather than a SQLAlchemy traceback.
 2. **Pick a master** and hit *Import as master*. Its rules and subscriptions become the hub's
    starting state, and every other instance is overwritten with it on the next push. There is no
    merge between instances — that's the whole point.
+
+   Naming a master is not compulsory. Skip the step and the hub starts from an empty rule set,
+   which you then fill in here: settings you never touch stay switched off for replication, so
+   an area the hub has no opinion about is left to each node rather than being flattened by an
+   empty document. Import is the shortcut when one node already holds the configuration you
+   want; it is not the only way in.
 3. **Work only in AdGuardHub from here on.** Anything changed directly in a native AdGuard UI is
    detected by the next reconciliation run, corrected, and shown in the drift log.
 
@@ -315,6 +348,22 @@ snapshot. Under *History* you can:
   rollback itself is recorded so it can be undone in turn
 
 History is capped at the most recent 200 versions to keep the database small.
+
+### What else is capped
+
+Three tables would otherwise grow for as long as the hub runs. None of them grows quickly —
+rows appear when something goes wrong, so a healthy hub barely accumulates any — but a node
+that flaps for months is a different story:
+
+| Table | Kept | Why that number |
+| --- | --- | --- |
+| Version history | 200 | Enough to roll back through a bad week |
+| Drift log | 500 | What `/api/drift` will serve in one request at most |
+| Applied push jobs | 500 | Same, for `/api/jobs` |
+
+**The retry queue is never trimmed.** A pending or failed job is work still owed to an
+instance; dropping one would silently abandon a change that never reached a node, which is the
+exact failure the queue exists to prevent. Only jobs that already landed count as history.
 
 ## AdGuard-compatible API
 
@@ -462,6 +511,9 @@ adguardhub/
 │   │   └── main.py
 │   └── tests/
 ├── frontend/             # React + TypeScript (Vite)
+│   ├── src/i18n/         # English-keyed dictionaries + the completeness check
+│   └── scripts/
+├── docs/screenshots/     # The images in this README
 ├── .github/workflows/    # ci.yml, docker-publish.yml
 ├── Dockerfile
 └── docker-compose.yml
@@ -469,12 +521,27 @@ adguardhub/
 
 ## Roadmap
 
-v0.1.0 covers the MVP: instance management, the central rule model with instant push,
+**v0.1.0** was the MVP: instance management, the central rule model with instant push,
 reconciliation with a visible drift log, the aggregated query log, subscription management,
 single-user login, and the three notifier types.
 
-Planned, deliberately **not** in v1: Pi-hole support, per-client rule scoping, multi-user
-accounts, and a maintenance mode for pausing reconciliation on a single instance.
+**v0.2.0** is what the daily use of it asked for, in roughly that order — full configuration
+replication rather than rules alone, version history with diff and rollback, the
+AdGuard-compatible `/control` API so phone remotes and Home Assistant can point at the hub,
+German alongside English, backup and restore, rate-limited sign-ins, and caps on the tables
+that used to grow without end.
+
+Next, in no fixed order: a maintenance mode for pausing reconciliation on one instance while
+you work on it, translating the drift log's summaries (they are generated in the backend and
+stored as English text), and preserving `!` comment lines in the rule set — the hub currently
+drops them on import, and reconciliation then removes them from the node.
+
+Deliberately **not** planned before v1.0: per-client rule scoping and multi-user accounts.
+v1.0 is when Pi-hole support lands and the feature set has settled. The adapter interface it
+needs is already in place: push, reconcile and import all reach a node through `DnsAdapter`
+rather than calling AdGuard's API themselves, so a second adapter is a new file rather than a
+rewrite. What is *not* abstracted is the rule syntax — v1 stores AdGuard-native rules, by
+design, and translating them is part of the Pi-hole work rather than something already done.
 
 ## License
 
