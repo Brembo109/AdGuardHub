@@ -195,10 +195,16 @@ async def traffic_summary() -> dict[str, Any]:
         # shows a block rate shows the same number.
         "block_rate": (blocked / queries * 100) if queries else 0.0,
         "replaced_safebrowsing": int(data.get("num_replaced_safebrowsing") or 0),
-        # Passed through in whatever unit the instances report it in, and rendered
-        # the way AdGuard's own dashboard labels it. Scaling it here would mean
-        # guessing at a factor of 1000 that no reachable source confirms.
-        "avg_processing_time": float(data.get("avg_processing_time") or 0),
+        # AdGuard reports this in seconds: a node whose own dashboard says 11 ms
+        # sends 0.011. The hub used to pass it through and label it "ms", so the
+        # dashboard read 0.011 ms — a thousandfold understatement that looked
+        # plausible enough to go unnoticed. The unit is in the name now, because
+        # the one thing this field cannot afford again is being ambiguous.
+        #
+        # Only the hub's own dashboard gets the converted value. /control/stats
+        # serves cached_stats() unchanged, so a client built for AdGuard Home
+        # still reads the seconds it expects.
+        "avg_processing_time_ms": float(data.get("avg_processing_time") or 0) * 1000,
         "series_queries": [int(v) for v in data.get("dns_queries") or []],
         "series_blocked": [int(v) for v in data.get("blocked_filtering") or []],
         "time_units": str(data.get("time_units") or "hours"),

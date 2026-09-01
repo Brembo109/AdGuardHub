@@ -122,3 +122,37 @@ async def test_traffic_needs_a_session(client: httpx.AsyncClient) -> None:
     await client.post("/api/auth/logout")
 
     assert (await client.get("/api/traffic")).status_code == 401
+
+
+async def test_the_dashboard_gets_milliseconds_not_seconds(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """AdGuard reports seconds; the tile says "ms" and must mean it.
+
+    A node whose own dashboard reads 10 ms sends 0.010. Passing that through
+    under a "ms" label showed 0.010 ms — a thousandfold understatement, small
+    enough to look like a very fast resolver rather than like a bug.
+    """
+    await add_instance(auth_client, "a", A)
+    await add_instance(auth_client, "b", B)
+    # What two real nodes reporting 10 ms and 12 ms actually send.
+    FakeAdapter.state_for(A).stats = {"num_dns_queries": 100, "avg_processing_time": 0.010}
+    FakeAdapter.state_for(B).stats = {"num_dns_queries": 100, "avg_processing_time": 0.012}
+
+    body = (await auth_client.get("/api/traffic")).json()
+    assert body["avg_processing_time_ms"] == pytest.approx(11.0)
+
+
+async def test_the_adguard_surface_still_reports_seconds(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """Converting for our own tile must not rewrite AdGuard's own document.
+
+    /control/stats is read by clients written against AdGuard Home. They expect
+    seconds, and would misread a value helpfully scaled for somebody else's UI.
+    """
+    await add_instance(auth_client, "a", A)
+    FakeAdapter.state_for(A).stats = {"num_dns_queries": 100, "avg_processing_time": 0.011}
+
+    body = (await auth_client.get("/control/stats")).json()
+    assert body["avg_processing_time"] == pytest.approx(0.011)

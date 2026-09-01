@@ -185,7 +185,9 @@ export default function Dashboard() {
               <div className="label">{t('Blocked by safe browsing')}</div>
             </div>
             <div className="stat">
-              <div className="value">{live.avg_processing_time.toFixed(live.avg_processing_time < 1 ? 3 : 1)} ms</div>
+              <div className="value">
+                {live.avg_processing_time_ms.toFixed(live.avg_processing_time_ms < 1 ? 2 : 1)} ms
+              </div>
               <div className="label">{t('Average response time')}</div>
             </div>
           </div>
