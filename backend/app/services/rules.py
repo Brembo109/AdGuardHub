@@ -12,7 +12,14 @@ def is_comment(text: str) -> bool:
 
 
 def classify(text: str) -> RuleKind:
-    """AdGuard marks exception (allow) rules with a leading ``@@``."""
+    """AdGuard marks exception (allow) rules with a leading ``@@``.
+
+    Comments are classified before either, because a commented-out allow rule
+    (``! @@||example.com^``) is a comment, not an allow rule — reading the
+    ``@@`` first would file a disabled line under the rules it is not.
+    """
+    if is_comment(text):
+        return RuleKind.comment
     return RuleKind.allow if text.lstrip().startswith("@@") else RuleKind.block
 
 

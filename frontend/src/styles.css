@@ -711,6 +711,10 @@ td.right {
   background: var(--warn-soft);
 }
 
+/* `comment` deliberately has no rule of its own: the neutral base style is the
+   right signal for a line that filters nothing. Colouring it would put a note
+   on the same footing as the rules around it. */
+
 /* Blocked is an outcome, not a fault — it wears the series colour, not red. */
 .badge.blocked {
   color: var(--series-b-ink);

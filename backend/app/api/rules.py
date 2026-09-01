@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from ..deps import CurrentUser, SessionDep
 from ..models import PayloadKind, Rule, RuleKind, RuleOrigin
 from ..schemas import BulkRulesRequest, DomainRuleRequest, RuleCreate, RuleOut, RuleUpdate
-from ..services.rules import allow_rule_for_domain, block_rule_for_domain, classify, is_comment
+from ..services.rules import allow_rule_for_domain, block_rule_for_domain, classify
 from ..services.sync import schedule_sync
 from ..services.versions import record as _record
 
@@ -70,10 +70,6 @@ async def list_rules(
 
 @router.post("", response_model=RuleOut, status_code=status.HTTP_201_CREATED)
 async def create_rule(payload: RuleCreate, user: CurrentUser, session: SessionDep) -> Rule:
-    if is_comment(payload.text):
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, "Comments are not stored as rules"
-        )
     rule, created = await _add_rule(
         session, payload.text, payload.origin, payload.comment, payload.enabled
     )
@@ -158,11 +154,11 @@ async def block_domain(
 async def bulk_import(
     payload: BulkRulesRequest, user: CurrentUser, session: SessionDep
 ) -> list[Rule]:
-    """Paste a block of AdGuard syntax; blank lines and ``!``/``#`` comments are skipped."""
+    """Paste a block of AdGuard syntax. Blank lines are skipped; comments are kept."""
     created: list[Rule] = []
     for line in payload.text.splitlines():
         text = line.strip()
-        if not text or is_comment(text):
+        if not text:
             continue
         rule, was_created = await _add_rule(session, text, payload.origin, "")
         if was_created:

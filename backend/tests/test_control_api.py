@@ -82,9 +82,13 @@ async def test_setting_rules_from_an_app_reaches_every_instance(
     assert response.status_code == 200
     await drain_background()
 
+    # The comment survives, in place. A phone app sends the whole rule set back as
+    # it read it, so dropping comments here deleted them from every node the first
+    # time anybody edited a rule from their sofa.
     for url in (A, B):
         assert FakeAdapter.state_for(url).rules == [
             "||from-the-app.example^",
+            "! a comment",
             "@@||allow.example^",
         ]
 

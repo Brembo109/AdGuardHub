@@ -78,7 +78,7 @@ async def test_import_adopts_master_state_and_overwrites_the_rest(
     await add_instance(auth_client, "b", B)
 
     FakeAdapter.state_for(A).rules = [
-        "! a comment that is not a rule",
+        "! why these two exist",
         "",
         "||ads.example.com^",
         "@@||shop.example.com^",
@@ -89,13 +89,21 @@ async def test_import_adopts_master_state_and_overwrites_the_rest(
     FakeAdapter.state_for(B).rules = ["||stale-rule-from-b.com^"]
 
     result = (await auth_client.post(f"/api/instances/{master}/import", json={})).json()
-    assert result["rules_imported"] == 2
-    assert result["rules_skipped"] == 2
+    # The comment is adopted like any other line; only the blank one is dropped.
+    assert result["rules_imported"] == 3
+    assert result["rules_skipped"] == 1
     assert result["filter_lists_imported"] == 1
     await drain_background()
 
     rules = sorted(rule["text"] for rule in (await auth_client.get("/api/rules")).json())
-    assert rules == ["@@||shop.example.com^", "||ads.example.com^"]
+    assert rules == ["! why these two exist", "@@||shop.example.com^", "||ads.example.com^"]
 
-    # B's pre-existing state is overwritten, not merged (spec §7).
-    assert sorted(FakeAdapter.state_for(B).rules) == ["@@||shop.example.com^", "||ads.example.com^"]
+    # B's pre-existing state is overwritten, not merged (spec §7) — and it arrives
+    # in the master's original order, comment included, since a comment above the
+    # wrong rule explains nothing.
+    assert FakeAdapter.state_for(B).rules == [
+        "! why these two exist",
+        "||ads.example.com^",
+        "@@||shop.example.com^",
+    ]
+    assert "||stale-rule-from-b.com^" not in FakeAdapter.state_for(B).rules
