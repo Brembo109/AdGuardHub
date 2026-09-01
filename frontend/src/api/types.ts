@@ -128,7 +128,7 @@ export interface Traffic {
   block_rate: number
   replaced_safebrowsing: number
   /** In whatever unit the instances report it; rendered as AdGuard labels it. */
-  avg_processing_time: number
+  avg_processing_time_ms: number
   series_queries: number[]
   series_blocked: number[]
   time_units: string

@@ -423,7 +423,7 @@ class TrafficOut(BaseModel):
     block_rate: float
     replaced_safebrowsing: int
     # In whatever unit the instances report; see services/aggregate.py.
-    avg_processing_time: float
+    avg_processing_time_ms: float
     series_queries: list[int]
     series_blocked: list[int]
     time_units: str
