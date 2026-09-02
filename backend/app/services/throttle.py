@@ -34,7 +34,9 @@ one.
 from __future__ import annotations
 
 import time
+from collections import deque
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 # Ten wrong passwords in five minutes is far beyond a mistyped one and far below
 # anything that makes guessing worthwhile.
@@ -46,12 +48,28 @@ WINDOW_SECONDS = 300.0
 # dropped as it fills.
 MAX_TRACKED_SOURCES = 4096
 
+# What the Settings page shows. Kept in memory only: this is diagnostic detail
+# about who failed to get in, not configuration, and the database holds
+# configuration (spec §12). It is also the kind of thing that should not outlive
+# the process that observed it.
+MAX_REMEMBERED_FAILURES = 50
+
 
 @dataclass
 class _Attempts:
     count: int = 0
     # When the current window ends; failures before this are what counts.
     expires: float = 0.0
+
+
+@dataclass(slots=True)
+class FailedSignIn:
+    """One failure, as the Settings page shows it."""
+
+    source: str
+    door: str
+    reason: str
+    at: datetime
 
 
 @dataclass
@@ -61,6 +79,9 @@ class LoginThrottle:
     max_failures: int = MAX_FAILURES
     window: float = WINDOW_SECONDS
     _sources: dict[str, _Attempts] = field(default_factory=dict)
+    _recent: deque[FailedSignIn] = field(
+        default_factory=lambda: deque(maxlen=MAX_REMEMBERED_FAILURES)
+    )
 
     def retry_after(self, source: str, *, now: float | None = None) -> float:
         """Seconds this source must wait, or 0.0 when it may try again.
@@ -79,7 +100,14 @@ class LoginThrottle:
             return 0.0
         return entry.expires - moment
 
-    def record_failure(self, source: str, *, now: float | None = None) -> int:
+    def record_failure(
+        self,
+        source: str,
+        *,
+        now: float | None = None,
+        door: str = "",
+        reason: str = "",
+    ) -> int:
         """Count one wrong password and return how many this source now has.
 
         The count is returned so the caller can tell the failure that crosses the
@@ -96,7 +124,33 @@ class LoginThrottle:
         # Each failure restarts the clock, so a steady trickle of guesses does
         # not sit just under the limit forever.
         entry.expires = moment + self.window
+        if door:
+            self._recent.append(
+                FailedSignIn(source=source, door=door, reason=reason, at=datetime.now(UTC))
+            )
         return entry.count
+
+    def recent_failures(self) -> list[FailedSignIn]:
+        """Newest first, for the Settings page."""
+        return list(reversed(self._recent))
+
+    def lockouts(self, *, now: float | None = None) -> list[tuple[str, float]]:
+        """Sources currently refused, with the seconds each has left to wait.
+
+        Read rather than inferred from the failure list: a lockout is the thing
+        an operator is actually trying to find out about, and working it out from
+        timestamps in the UI would duplicate the rule that lives here.
+        """
+        moment = time.monotonic() if now is None else now
+        return sorted(
+            (
+                (source, entry.expires - moment)
+                for source, entry in self._sources.items()
+                if entry.count >= self.max_failures and entry.expires > moment
+            ),
+            key=lambda item: item[1],
+            reverse=True,
+        )
 
     def record_success(self, source: str) -> None:
         """A correct password clears the slate, so a typo costs nothing later."""

@@ -1,4 +1,4 @@
-"""Adapter registry — the seam that keeps a future Pi-hole adapter cheap (spec §3)."""
+"""Adapter registry — the seam that keeps core logic off AdGuard's API (spec §3)."""
 
 from __future__ import annotations
 

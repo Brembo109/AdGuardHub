@@ -142,11 +142,16 @@ export function HubSettingsForm() {
           )}
         </p>
 
-        <div className="row" style={{ marginTop: 10 }}>
+        {/* A grid, not a `.row`: that flex row bottom-aligns its children, so a
+            field whose help text wrapped to two lines pushed its own label and
+            input a line higher than its neighbours' — five timers sitting at two
+            different heights. `aligned` then keeps the inputs on one line too,
+            where a label wraps and the plain grid would step the input down. */}
+        <div className="fields-grid aligned" style={{ marginTop: 10 }}>
           {TIMERS.map((field) => {
             const [min, max] = value.limits[field.key] ?? [1, 100000]
             return (
-              <div className="field" key={field.key} style={{ flex: '1 1 220px' }}>
+              <div className="field" key={field.key}>
                 <label htmlFor={field.key}>
                   {t(field.label)} ({t(field.unit)})
                 </label>

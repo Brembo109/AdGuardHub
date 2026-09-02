@@ -17,6 +17,7 @@ import type {
   Rule,
   RuleKind,
   RuleOrigin,
+  SignInActivity,
   SyncResult,
   Traffic,
   UpdateStatus,
@@ -160,6 +161,7 @@ export const api = {
 
   notifiers: () => get<Notifier[]>('/api/settings/notifiers'),
   notifierMeta: () => get<{ types: string[]; events: string[] }>('/api/settings/notifiers/meta'),
+  signIns: () => get<SignInActivity>('/api/settings/sign-ins'),
   createNotifier: (payload: {
     name: string
     type: string

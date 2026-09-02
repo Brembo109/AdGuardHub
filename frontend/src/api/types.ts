@@ -262,6 +262,21 @@ export interface HubSettings {
   limits: Record<string, [number, number]>
 }
 
+/** One refused sign-in, as Settings shows it. */
+export interface FailedSignIn {
+  source: string
+  door: string
+  reason: string
+  at: string
+}
+
+export interface SignInActivity {
+  failures: FailedSignIn[]
+  lockouts: { source: string; seconds_left: number }[]
+  max_failures: number
+  window_seconds: number
+}
+
 /** How the hub was installed, which decides what it can do about an update. */
 export type InstallMethod = 'docker' | 'native' | 'source'
 

@@ -18,9 +18,10 @@ rather than trying to resolve conflicts after the fact.
 
 ## 3. Scope (v1)
 
-- **AdGuard Home only.** Pi-hole support is explicitly out of scope for v1, but the sync layer
-  must be built behind an adapter interface (`push_rules(instance, ruleset)` /
-  `pull_rules(instance)`) so a Pi-hole adapter can be added later without reworking core logic.
+- **AdGuard Home only**, and not as a staging post: other DNS filters are not planned. The
+  sync layer is still built behind an adapter interface (`push_rules(instance, ruleset)` /
+  `pull_rules(instance)`), because keeping core logic off a vendor's API is worth it on its
+  own — not because a second backend is coming.
 - Managed centrally: filtering rules (allow/block, all three AdGuard entry points — see §5),
   blocklist subscription URLs (enable/disable only, not individual domains), and instance-level
   settings (upstream DNS, DoH/DNSSEC, client settings).
@@ -44,8 +45,8 @@ central rule model:
 2. Manual custom filtering rules (AdGuard allow/block syntax)
 3. The separate Allowlist tab
 
-Rule storage in AdGuardHub is AdGuard-native (not an abstracted superset format), since v1 is
-AdGuard-only — see §3 on the adapter interface for future Pi-hole support.
+Rule storage in AdGuardHub is AdGuard-native (not an abstracted superset format): the hub
+targets AdGuard Home, so there is nothing to abstract the syntax for.
 
 ## 6. Sync mechanism
 
@@ -130,14 +131,14 @@ only) is the operator's responsibility, not something AdGuardHub needs to enforc
   └── logo.svg
   ```
 - **Versioning:** SemVer starting at `v0.1.0` for the first working MVP. Pre-1.0: breaking
-  changes allowed between minor versions. `v1.0.0` once Pi-hole support lands and the feature
-  set is considered stable for daily use.
+  changes allowed between minor versions. `v1.0.0` once the feature set is considered stable
+  for daily use.
 - **CI/CD:** GitHub Actions — lint + test on every push/PR; on every `vX.Y.Z` tag, build and
   publish a Docker image to `ghcr.io/fgrfn/adguardhub` (workflows already scaffolded).
 
 ## 14. Explicit non-goals for v1
 
-- Pi-hole support (planned, not built)
+- Support for DNS filters other than AdGuard Home — not planned at all, not merely deferred
 - Per-client rule scoping
 - Multi-user accounts / roles
 - Maintenance mode for individual instances

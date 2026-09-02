@@ -132,8 +132,8 @@ different languages.
       └──────────────────────────────────────────────────
 ```
 
-Instances are reached through an adapter interface (`push_rules` / `pull_rules` / …), so a
-Pi-hole adapter can be added later without reworking the sync core.
+Instances are reached through an adapter interface (`push_rules` / `pull_rules` / …), so the
+sync core never talks to AdGuard's API directly.
 
 ## Quick start
 
@@ -663,11 +663,13 @@ you work on it, and translating the drift log's summaries (they are generated in
 and stored as English text, so they stay English in the German interface).
 
 Deliberately **not** planned before v1.0: per-client rule scoping and multi-user accounts.
-v1.0 is when Pi-hole support lands and the feature set has settled. The adapter interface it
-needs is already in place: push, reconcile and import all reach a node through `DnsAdapter`
-rather than calling AdGuard's API themselves, so a second adapter is a new file rather than a
-rewrite. What is *not* abstracted is the rule syntax — v1 stores AdGuard-native rules, by
-design, and translating them is part of the Pi-hole work rather than something already done.
+v1.0 is when the feature set has settled for daily use, not a particular feature landing.
+
+Support for other DNS filters is **not** on the roadmap. AdGuardHub is an AdGuard Home tool.
+The seam for one exists anyway and is worth keeping on its own merits — push, reconcile and
+import all reach a node through `DnsAdapter` rather than calling AdGuard's API themselves,
+which is what keeps the sync core testable — but nothing is planned behind it, and the rule
+syntax is deliberately not abstracted: the hub stores AdGuard-native rules.
 
 ## License
 
