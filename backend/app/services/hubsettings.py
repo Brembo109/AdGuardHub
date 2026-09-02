@@ -41,6 +41,7 @@ class RuntimeSettings:
     querylog_buffer_size: int
     http_timeout: int
     external_api_enabled: bool
+    update_check_enabled: bool
 
 
 def _from_env() -> RuntimeSettings:
@@ -54,6 +55,7 @@ def _from_env() -> RuntimeSettings:
         querylog_buffer_size=env.querylog_buffer_size,
         http_timeout=int(env.http_timeout),
         external_api_enabled=True,
+        update_check_enabled=env.update_check,
     )
 
 
@@ -112,7 +114,12 @@ async def update(session: AsyncSession, changes: dict[str, object]) -> RuntimeSe
             continue
         if field in LIMITS:
             setattr(row, field, clamp(field, int(value)))  # type: ignore[arg-type]
-        elif field in {"reconcile_enabled", "querylog_enabled", "external_api_enabled"}:
+        elif field in {
+            "reconcile_enabled",
+            "querylog_enabled",
+            "external_api_enabled",
+            "update_check_enabled",
+        }:
             setattr(row, field, bool(value))
     await session.commit()
 
@@ -131,6 +138,7 @@ def _to_runtime(row: HubSettings) -> RuntimeSettings:
         querylog_buffer_size=row.querylog_buffer_size,
         http_timeout=row.http_timeout,
         external_api_enabled=row.external_api_enabled,
+        update_check_enabled=row.update_check_enabled,
     )
 
 

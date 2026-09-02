@@ -161,6 +161,9 @@ class HubSettings(Base):
     querylog_buffer_size: Mapped[int] = mapped_column(Integer, default=2000)
     http_timeout: Mapped[int] = mapped_column(Integer, default=10)
     external_api_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # One request to github.com every few hours, asking only what the newest
+    # release is. Off is a legitimate answer on an air-gapped network.
+    update_check_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     # First-run walkthrough. Kept here rather than in the browser: an operator who
     # sets the hub up on one machine should not be walked through it again on the
     # next, and a configured hub is a property of the hub, not of a browser.

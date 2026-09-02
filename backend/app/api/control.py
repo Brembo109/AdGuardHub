@@ -44,6 +44,7 @@ from ..services.hubsettings import current as current_settings
 from ..services.querylog import buffer
 from ..services.rules import classify
 from ..services.sync import schedule_sync
+from ..version import VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -118,8 +119,6 @@ async def logout(response: Response) -> dict[str, str]:
 @router.get("/status")
 async def status_endpoint(user: ControlUser, session: SessionDep) -> dict[str, Any]:
     _guard()
-    from ..main import VERSION
-
     dns = await _section(session, "dns")
     instances = (
         (await session.execute(select(Instance).where(Instance.enabled.is_(True))))

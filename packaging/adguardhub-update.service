@@ -1,0 +1,26 @@
+# Upgrades AdGuardHub, when the path unit next door says one was asked for.
+#
+# This runs as root and does what an operator does by hand: fetch the installer
+# and run it. It takes no arguments from the request — the trigger file is empty
+# and is removed before anything else happens — so a request can only ever mean
+# "install the newest release", never "install this URL" or "this version".
+#
+# Fetching over https from GitHub is the trust boundary here, and it is the same
+# one the operator crossed when they installed this in the first place.
+[Unit]
+Description=Upgrade AdGuardHub to the newest release
+Documentation=https://github.com/fgrfn/adguardhub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=ADGUARDHUB_DATA_DIR=@DATA@
+Environment=ADGUARDHUB_SERVICE_USER=@USER@
+# Removed first, not last: were it removed at the end, a failed upgrade would
+# leave the file in place for the path unit to fire on again the moment this
+# exits. One request, one attempt; a failure waits for a person.
+ExecStartPre=/bin/rm -f @DATA@/.update-requested
+ExecStart=@PREFIX@/adguardhub-update.sh
+# The installer compiles a virtualenv on a slow box. Generous, but not infinite.
+TimeoutStartSec=1800

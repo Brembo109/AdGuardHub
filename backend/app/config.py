@@ -35,6 +35,10 @@ class Settings(BaseSettings):
 
     http_timeout: float = 10.0
 
+    # Whether to ask GitHub for the newest release. The default for a fresh
+    # database; after that the UI owns it.
+    update_check: bool = True
+
     # Serve the built frontend from this directory when it exists.
     static_dir: str = "./static"
 

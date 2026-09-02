@@ -20,6 +20,8 @@ import type {
   SignInActivity,
   SyncResult,
   Traffic,
+  UpdateRun,
+  UpdateStatus,
   Version,
   VersionDiff,
   VersionRestoreResult,
@@ -175,6 +177,11 @@ export const api = {
   deleteNotifier: (id: number) => del(`/api/settings/notifiers/${id}`),
   testNotifier: (id: number) =>
     post<{ ok: string; error: string }>(`/api/settings/notifiers/${id}/test`),
+
+  updateStatus: (force = false) =>
+    get<UpdateStatus>(`/api/settings/update${query({ force })}`),
+  updateRun: () => get<UpdateRun>('/api/settings/update/run'),
+  startUpdate: () => post<UpdateRun>('/api/settings/update/run'),
 
   hubSettings: () => get<HubSettings>('/api/settings/hub'),
   finishOnboarding: () => post<void>('/api/settings/onboarding-complete'),

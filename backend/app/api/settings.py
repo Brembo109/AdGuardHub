@@ -7,9 +7,10 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
+from ..config import get_settings
 from ..deps import CurrentUser, SessionDep
 from ..models import NotifierTarget
-from ..runtime import get_login_throttle
+from ..runtime import get_login_throttle, get_update_checker
 from ..schemas import (
     HubSettingsOut,
     HubSettingsUpdate,
@@ -17,8 +18,9 @@ from ..schemas import (
     NotifierOut,
     NotifierUpdate,
 )
-from ..services import hubsettings
+from ..services import hubsettings, selfupdate, updates
 from ..services.notify import KNOWN_EVENTS, NOTIFIER_TYPES, test_target
+from ..services.updates import install_method
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -79,6 +81,79 @@ async def failed_sign_ins(_: CurrentUser) -> dict[str, Any]:
         "max_failures": throttle.max_failures,
         "window_seconds": int(throttle.window),
     }
+
+
+@router.get("/update")
+async def update_status(_: CurrentUser, session: SessionDep, force: bool = False) -> dict[str, Any]:
+    """Whether a newer release exists, and whether this install could take it.
+
+    The answer is cached for hours, so the interface can ask on every page load
+    without that meaning a request to GitHub on every page load. ``force`` is the
+    "check now" button, and is the only way to get past the cache.
+
+    A hub with no internet reports the failure in `error` and nothing else: it is
+    a convenience that could not be provided, not a fault in the hub.
+    """
+    values = await hubsettings.load(session)
+    state = await get_update_checker().get(enabled=values.update_check_enabled, force=force)
+    return {
+        **updates.as_dict(state),
+        # The checker knows how the hub was installed; only here does it also
+        # know whether the trigger the button writes could actually be written.
+        "self_update": state.self_update and selfupdate.available(get_settings().data_dir),
+        "enabled": values.update_check_enabled,
+    }
+
+
+def _run_out(run: selfupdate.UpdateRun) -> dict[str, Any]:
+    return {
+        "requested": run.requested,
+        "running": run.running,
+        "finished": run.finished,
+        "stalled": run.stalled,
+        "exit_status": run.exit_status,
+        "log": run.log,
+    }
+
+
+@router.get("/update/run")
+async def update_run(_: CurrentUser) -> dict[str, Any]:
+    """How far the upgrade this hub was asked to perform has got.
+
+    Read from the file the privileged updater writes rather than held in memory,
+    because the upgrade restarts this process halfway through — the state has to
+    survive the thing it is describing.
+    """
+    return _run_out(selfupdate.read_run(get_settings().data_dir))
+
+
+@router.post("/update/run")
+async def start_update(_: CurrentUser) -> dict[str, Any]:
+    """Ask to be upgraded. The hub does not perform it and cannot.
+
+    All this does is create an empty file in the hub's own data directory. A
+    systemd path unit watches for it and a root oneshot unit does the work; the
+    hub has neither the privilege nor a way to influence what the upgrade
+    installs. See services/selfupdate.py.
+    """
+    data_dir = get_settings().data_dir
+    if install_method() != "native":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "This hub cannot upgrade itself. See Settings → Updates for how to upgrade it.",
+        )
+    if not selfupdate.available(data_dir):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "The hub cannot write to its data directory, so it cannot ask to be upgraded.",
+        )
+    try:
+        selfupdate.request(data_dir)
+    except OSError as caught:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, f"Could not ask to be upgraded: {caught}"
+        ) from caught
+    return _run_out(selfupdate.read_run(data_dir))
 
 
 @router.get("/notifiers/meta")

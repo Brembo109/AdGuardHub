@@ -313,6 +313,7 @@ All settings are environment variables prefixed with `ADGUARDHUB_`.
 | `ADGUARDHUB_QUERYLOG_BUFFER_SIZE` | `2000` | Entries kept in the in-memory log buffer. |
 | `ADGUARDHUB_SESSION_MAX_AGE` | `1209600` | Session lifetime in seconds. |
 | `ADGUARDHUB_HTTP_TIMEOUT` | `10` | Per-request timeout when talking to instances. |
+| `ADGUARDHUB_UPDATE_CHECK` | `true` | Seeds whether the hub looks for new releases — see [Update checks](#update-checks). |
 | `ADGUARDHUB_LOG_LEVEL` | `INFO` | `DEBUG` adds the per-instance diagnostics — see [Logs](#logs). |
 | `ADGUARDHUB_LOG_FILE` | — | Also write a rotating log file at this path. Empty means stderr only. |
 | `ADGUARDHUB_LOG_FILE_MAX_BYTES` | `5242880` | Rotate the log file once it reaches this size. |
@@ -323,6 +324,56 @@ image from the release tag by the Release workflow, not something to set at runt
 
 The four interval/buffer timers only seed the initial values. Once the hub has started they are
 edited under *Settings → Sync & timers* and take effect on the next worker cycle — no restart.
+
+## Update checks
+
+The hub asks GitHub what the newest release is, at most once every few hours, and says so in a
+banner and under *Settings → Updates* when it is behind. That request goes to `api.github.com`
+and carries nothing about your hub — no version, no identifier, no telemetry of any kind. It is
+one plain `GET` of the public releases endpoint, and the answer is cached so that opening the
+interface does not mean asking again.
+
+A hub on a network with no route out is not broken by this: the failed check is reported in the
+Updates card as a check that got no answer, retried in a few minutes rather than a few hours,
+and nothing else. To stop it entirely, untick *Check for new releases* — or start with
+`ADGUARDHUB_UPDATE_CHECK=false`, which seeds the setting on a fresh database.
+
+**Applying the update is not something the hub does for you.** How you upgrade depends on how
+you installed, so the card shows the one that matches:
+
+| Installed as | Upgrade with |
+| --- | --- |
+| Docker | `docker compose pull && docker compose up -d` — a container cannot replace its own image; your data volume is untouched |
+| Native (`install.sh`) | the **Update this hub** button, or re-run the installer yourself; either way it upgrades in place and never touches your data directory or `adguardhub.env` |
+| A checkout | whatever you normally do with that checkout |
+
+### The update button, and why it is safe
+
+A native install can be told to upgrade itself from the interface. The hub does not do the
+upgrading — it holds none of the privilege that would take, and is not given any.
+
+It runs as its own unprivileged user under `ProtectSystem=strict`: it cannot write to `/opt`,
+cannot restart itself, and has no sudo rule. An update button is not a good enough reason to
+change that, so instead the hub creates **one empty file** in its own data directory. A systemd
+path unit (`adguardhub-update.path`) watches for that file, and a root oneshot unit
+(`adguardhub-update.service`) does the privileged half: it fetches `install.sh` over https from
+this repository and runs it, exactly as you would by hand.
+
+The trigger file is empty on purpose. It carries no version, no URL and no arguments, so the
+worst anyone with your admin password can cause through it is *the newest official release,
+from GitHub, over TLS* — the same thing that got installed in the first place. The file is
+removed before the upgrade starts, so a failure waits for a person rather than looping.
+
+The updater writes its output to `update.log` in the data directory, which is what the progress
+view in the interface is reading; the hub is stopped and restarted partway through, so that log
+is the only place the state can survive. If the upgrade fails, nothing is rolled back and the
+hub keeps running the version it had.
+
+Your nodes keep answering DNS throughout — they do not depend on the hub to resolve.
+
+Hubs installed before this existed write a file nothing is watching. The interface says so
+rather than spinning forever: re-run the installer once by hand, and the button works from then
+on.
 
 ## Logs
 

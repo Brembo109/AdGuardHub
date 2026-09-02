@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from app.main import build_version
+from app.version import build_version
 
 ROOT = Path(__file__).resolve().parents[2]
 

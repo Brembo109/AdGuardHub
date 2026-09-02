@@ -507,6 +507,48 @@ label {
 .footer a:hover {
   color: var(--accent-ink);
   text-decoration: underline;
+/* A banner with an action in it. The action goes to the far end rather than
+   trailing the sentence, where it reads as another word of it. */
+.banner-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* The installer's own output, streamed back while an upgrade runs. Bounded and
+   scrolled: it is progress to glance at, not a document to read. */
+.run-log {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.45;
+  background: var(--input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin: 12px 0 0;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--dim);
+}
+
+/* A command to paste into a shell. Wraps rather than scrolls: the installer
+   one-liner is long, and a line you have to scroll to read is a line you copy
+   half of. */
+.command {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  background: var(--input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 9px 11px;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text);
 }
 
 .page-header {

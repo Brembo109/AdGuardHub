@@ -257,6 +257,7 @@ export interface HubSettings {
   querylog_buffer_size: number
   http_timeout: number
   external_api_enabled: boolean
+  update_check_enabled: boolean
   /** Accepted [min, max] per field, so the form can bound its inputs. */
   limits: Record<string, [number, number]>
 }
@@ -274,4 +275,34 @@ export interface SignInActivity {
   lockouts: { source: string; seconds_left: number }[]
   max_failures: number
   window_seconds: number
+}
+
+/** How the hub was installed, which decides what it can do about an update. */
+export type InstallMethod = 'docker' | 'native' | 'source'
+
+export interface UpdateStatus {
+  current: string
+  /** Empty when the check is off, found nothing, or could not be made. */
+  latest: string
+  update_available: boolean
+  release_url: string
+  published_at: string
+  install_method: InstallMethod
+  /** Whether this install could apply the update itself. */
+  self_update: boolean
+  checked_at: number
+  /** Why the last check produced no answer. Empty is not an error. */
+  error: string
+  enabled: boolean
+}
+
+/** An upgrade the hub asked systemd to perform, as far as the hub can see it. */
+export interface UpdateRun {
+  requested: boolean
+  running: boolean
+  finished: boolean
+  /** Asked for, but nothing picked it up — the update units are not installed. */
+  stalled: boolean
+  exit_status: number | null
+  log: string
 }
