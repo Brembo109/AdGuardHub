@@ -190,7 +190,14 @@ finds one of its own documented placeholders, and says what to do instead.
 ## Staying up to date
 
 The hub asks GitHub what the newest release is, at most once every few hours, and says so in a
-banner and under *Settings → Updates* when it is behind. That request goes to `api.github.com`
+banner and under *Settings → Updates* when it is behind. The banner is dismissible per release —
+a bar you cannot get rid of teaches you to stop reading bars — and a dot beside *Settings* in
+the top bar stays until the hub is current, so dismissing the banner silences the interruption
+without hiding the release. Because the answer is cached for a few hours, a release published
+this morning may not show until the cache expires; **Check now** on the Updates page asks
+immediately.
+
+That request goes to `api.github.com`
 and carries nothing about your hub — no version, no identifier, no telemetry of any kind. It is
 one plain `GET` of the public releases endpoint, and the answer is cached so that opening the
 interface does not mean asking again.

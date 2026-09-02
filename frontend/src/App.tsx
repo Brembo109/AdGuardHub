@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { api } from './api/client'
+import type { UpdateStatus } from './api/types'
 import { useAuth } from './auth'
 import { Footer } from './components/Footer'
 import { SyncStatus } from './components/SyncStatus'
 import { UpdateNotice } from './components/UpdateNotice'
 import { IconMenu, IconMonitor, IconMoon, IconSun } from './components/icons'
 import { Banner } from './components/ui'
+import { useResource } from './hooks/useApi'
 import { useEventStream } from './hooks/useEventStream'
 import { useTheme } from './hooks/useTheme'
 import { LANGUAGES, useI18n } from './i18n'
@@ -50,6 +53,16 @@ const NAV: { to: string; label: string; covers?: string[] }[] = [
   { to: '/settings', label: 'Settings' },
 ]
 
+/**
+ * The one nav entry that carries a state rather than only a destination.
+ *
+ * A newer release is announced by the bar under the nav, which is dismissible on
+ * purpose. Dismissing it used to leave nothing at all: the only remaining trace
+ * was a page you had to already suspect and go looking at. The dot is that trace
+ * — never in the way, never dismissible, gone when the hub is current.
+ */
+const UPDATES_LIVE_UNDER = '/settings'
+
 // The names the backend actually publishes (services/sync.py, reconcile.py) that
 // change what the status pill should say. Query log traffic is deliberately not
 // among them — it fires constantly and says nothing about whether nodes agree.
@@ -67,6 +80,11 @@ export default function App() {
   const connected = useEventStream((event) => {
     if (SYNC_EVENTS.has(event.event)) setTick((value) => value + 1)
   })
+
+  // Fetched here rather than in each of the two things that show it, so opening
+  // any page is one question about releases instead of two.
+  const update = useResource<UpdateStatus>(() => api.updateStatus())
+  const updateAvailable = Boolean(update.data?.update_available)
 
   if (loading) {
     return (
@@ -109,6 +127,14 @@ export default function App() {
               }
             >
               {t(item.label)}
+              {item.to === UPDATES_LIVE_UNDER && updateAvailable ? (
+                <span
+                  className="nav-dot"
+                  role="img"
+                  aria-label={t('An update is available')}
+                  title={t('An update is available')}
+                />
+              ) : null}
             </NavLink>
           ))}
         </div>
@@ -167,7 +193,7 @@ export default function App() {
           </Banner>
         ) : null}
 
-        <UpdateNotice />
+        <UpdateNotice status={update.data} />
 
         <Routes>
           <Route path="/onboarding" element={<Onboarding />} />
