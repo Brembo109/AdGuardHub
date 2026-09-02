@@ -7,8 +7,18 @@ on:
 
 jobs:
   backend:
-    name: Backend (lint + tests)
+    # Both Pythons that actually run this code. The image is built on 3.12, but a
+    # native install uses whatever the distribution ships — 3.13 on Debian 13 —
+    # and that difference is not academic: SQLAlchemy declares greenlet under a
+    # marker ending in python_version < "3.13", so the async engine was installed
+    # with nothing to drive it and the hub died on its first query. Testing one
+    # version tested the half of the users that were fine.
+    name: Backend (lint + tests, Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
     defaults:
       run:
         working-directory: backend
@@ -16,7 +26,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
       - run: pip install -r requirements.txt -r requirements-dev.txt
       - run: ruff check .
       - run: pytest
@@ -50,7 +60,7 @@ jobs:
       - run: shellcheck --shell=sh install.sh packaging/adguardhub-update.sh
 
   docker:
-    name: Docker image builds
+    name: Docker image builds and starts
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -59,5 +69,56 @@ jobs:
         with:
           context: .
           push: false
+          # Into the daemon rather than nowhere: an image that builds is not the
+          # same claim as an image that runs, and the second one is what people
+          # get. The entrypoint's chown-then-drop dance and the app's own startup
+          # checks have no other test.
+          load: true
+          tags: adguardhub:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Start it on a bind mount and wait for /api/health
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/data"
+          # A host directory owned by an ordinary user, which is the case the
+          # entrypoint exists for: the image cannot know that ownership at build
+          # time, so it fixes /data at start and drops to PUID:PGID.
+          docker run -d --name adguardhub-ci \
+            -p 8080:80 \
+            -v "$RUNNER_TEMP/data:/data" \
+            -e PUID="$(id -u)" -e PGID="$(id -g)" \
+            adguardhub:ci
+
+          for _ in $(seq 30); do
+            # Errors are expected while it is still starting; the container's own
+            # log is printed below if it never gets there, which says more.
+            if curl -fsS http://127.0.0.1:8080/api/health 2>/dev/null | grep -q '"status":"ok"'; then
+              echo "the hub answered"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "::error::the container never answered on /api/health"
+          docker logs adguardhub-ci
+          exit 1
+
+      - name: Check it dropped privileges and wrote the database
+        run: |
+          set -eu
+          # PID 1 is uvicorn, exec'd through gosu, so /proc/1's owner is the uid
+          # the application actually runs as. Root here would mean the drop
+          # silently stopped happening.
+          uid=$(docker exec adguardhub-ci stat -c '%u' /proc/1)
+          [ "$uid" = "$(id -u)" ] ||
+            { echo "::error::the app runs as uid $uid, expected $(id -u)"; exit 1; }
+          # And the bind mount is writable as that user, which is the other half
+          # of what the entrypoint promises.
+          [ -s "$RUNNER_TEMP/data/adguardhub.db" ] ||
+            { echo "::error::no database was written to the bind mount"; ls -la "$RUNNER_TEMP/data"; exit 1; }
+
+      - name: Stop it
+        if: always()
+        run: docker rm -f adguardhub-ci >/dev/null 2>&1 || true
