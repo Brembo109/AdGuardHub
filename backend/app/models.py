@@ -92,6 +92,16 @@ class Instance(Base):
     status: Mapped[str] = mapped_column(String(20), default=InstanceStatus.unknown.value)
     # The AdGuard Home version reported by /control/status, refreshed on every probe.
     version: Mapped[str] = mapped_column(String(40), default="")
+    # What the node says about its own updates, refreshed on the reconcile timer.
+    # Empty means nothing to install; update_error means the hub could not find
+    # out, which is deliberately not the same thing.
+    #
+    # server_default as well as default: the auto-migration writes these columns
+    # with a SQL-level DEFAULT, so without it a freshly created database and an
+    # upgraded one would carry different definitions of the same column.
+    update_version: Mapped[str] = mapped_column(String(40), default="", server_default="")
+    update_url: Mapped[str] = mapped_column(String(500), default="", server_default="")
+    update_error: Mapped[str] = mapped_column(Text, default="", server_default="")
     last_error: Mapped[str] = mapped_column(Text, default="")
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

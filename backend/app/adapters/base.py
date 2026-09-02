@@ -59,6 +59,24 @@ class QueryLogEntry:
     upstream: str = ""
 
 
+@dataclass(slots=True)
+class RemoteUpdate:
+    """What a node says about its own version, as far as it will say anything.
+
+    Every field is optional on purpose. A node may have its update check turned
+    off, may be a build that predates the endpoint, or may simply be unreachable
+    — and "the hub could not find out" has to be distinguishable from "there is
+    nothing to install", because only one of them is worth showing.
+    """
+
+    current: str = ""
+    latest: str = ""
+    available: bool = False
+    url: str = ""
+    #: Why there is no answer. Empty when the node answered.
+    error: str = ""
+
+
 class DnsAdapter(ABC):
     """Contract for pushing and pulling managed state."""
 
@@ -99,6 +117,14 @@ class DnsAdapter(ABC):
     @abstractmethod
     async def push_section(self, name: str, data: dict[str, Any]) -> None:
         """Apply one configuration section."""
+
+    async def check_update(self) -> RemoteUpdate:
+        """Whether the backend has a newer version of itself available.
+
+        Not abstract: a backend that cannot answer is a backend with nothing to
+        report, not one that fails to load. The default says exactly that.
+        """
+        return RemoteUpdate(error="this backend does not report updates")
 
     def supported_sections(self) -> tuple[str, ...]:
         return ()

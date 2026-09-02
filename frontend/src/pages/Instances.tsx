@@ -7,7 +7,9 @@ import { Badge, Banner, Card, Empty, PageHeader } from '../components/ui'
 import { IconDots } from '../components/icons'
 import { formatTime } from '../format'
 import { errorMessage, useResource } from '../hooks/useApi'
+import { NodeUpdate } from '../components/NodeUpdate'
 import { useT } from '../i18n'
+import { behindLabel, nodesBehind } from '../nodes'
 
 export default function Instances() {
   const t = useT()
@@ -198,6 +200,21 @@ export default function Instances() {
         </p>
       </div>
 
+      {nodesBehind(instances.data).length ? (
+        <Banner kind="warn">
+          {/* Two sentences rather than one with "(s)": "1 Ihrer Nodes haben" is
+              wrong in German and "1 of your nodes have" is wrong in English. */}
+          {nodesBehind(instances.data).length === 1
+            ? t('One node has a newer AdGuard Home available: {names}.', {
+                names: behindLabel(nodesBehind(instances.data)),
+              })
+            : t('{count} nodes have a newer AdGuard Home available: {names}.', {
+                count: nodesBehind(instances.data).length,
+                names: behindLabel(nodesBehind(instances.data)),
+              })}
+        </Banner>
+      ) : null}
+
       {instances.data && instances.data.length ? (
         <div className="cards-3">
           {instances.data.map((instance) => (
@@ -292,7 +309,8 @@ function NodeCard({
         <div>
           <div className="dl">{t('Version')}</div>
           <div style={{ fontSize: 13 }}>
-            {instance.version || <span style={{ color: 'var(--faint)' }}>{t('unknown')}</span>}
+            {instance.version || <span style={{ color: 'var(--faint)' }}>{t('unknown')}</span>}{' '}
+            <NodeUpdate instance={instance} />
           </div>
         </div>
         <div>

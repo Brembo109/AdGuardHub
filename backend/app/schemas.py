@@ -129,6 +129,11 @@ class InstanceOut(ORMModel):
     status: str
     # AdGuard Home's own version, as last reported by the instance.
     version: str
+    # Empty when there is nothing to install. `update_error` is the separate
+    # case of the hub not having been able to find out.
+    update_version: str
+    update_url: str
+    update_error: str
     last_error: str
     last_seen_at: datetime | None
     last_synced_at: datetime | None

@@ -24,6 +24,11 @@ export interface Instance {
   status: 'unknown' | 'online' | 'unreachable' | 'disabled'
   /** AdGuard Home's own version, as last reported by the instance. */
   version: string
+  /** A newer AdGuard Home the node knows about. Empty means nothing to install. */
+  update_version: string
+  update_url: string
+  /** Why the node could not be asked — not the same as "nothing to install". */
+  update_error: string
   last_error: string
   last_seen_at: string | null
   last_synced_at: string | null

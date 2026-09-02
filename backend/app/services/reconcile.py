@@ -206,6 +206,15 @@ async def reconcile_instance(
     with contextlib.suppress(AdapterError, ValueError):
         instance.version = await adapter.check()
 
+    # Asked here for the same reason as the version: this is the only thing that
+    # talks to every node on a timer. The node answers from its own cached check
+    # rather than reaching out, so this costs one local request.
+    with contextlib.suppress(AdapterError, ValueError):
+        update = await adapter.check_update()
+        instance.update_version = update.latest if update.available else ""
+        instance.update_url = update.url if update.available else ""
+        instance.update_error = update.error
+
     candidates = [
         diff_rules(await desired_rules(session), state.rules),
         diff_filter_lists(await desired_filter_lists(session), state.filter_lists),
