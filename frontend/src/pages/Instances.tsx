@@ -75,6 +75,18 @@ export default function Instances() {
         : t('{name} is now enabled.', { name: instance.name })
     })
 
+  const toggleMaintenance = (instance: Instance) =>
+    run(async () => {
+      await api.updateInstance(instance.id, { maintenance: !instance.maintenance })
+      return instance.maintenance
+        ? t('{name} is back under the hub. Anything it missed is being applied now.', {
+            name: instance.name,
+          })
+        : t('{name} is in maintenance. It will not be pushed to or corrected until you end it.', {
+            name: instance.name,
+          })
+    })
+
   const test = (instance: Instance) =>
     run(async () => {
       const result = await api.testInstance(instance.id)
@@ -230,6 +242,7 @@ export default function Instances() {
               onPush={() => push(instance)}
               onImport={() => importFrom(instance)}
               onToggle={() => toggle(instance)}
+              onToggleMaintenance={() => toggleMaintenance(instance)}
               onRemove={() => remove(instance)}
             />
           ))}
@@ -251,6 +264,7 @@ interface NodeCardProps {
   onPush: () => void
   onImport: () => void
   onToggle: () => void
+  onToggleMaintenance: () => void
   onRemove: () => void
 }
 
@@ -267,6 +281,7 @@ function NodeCard({
   onPush,
   onImport,
   onToggle,
+  onToggleMaintenance,
   onRemove,
 }: NodeCardProps) {
   const t = useT()
@@ -307,6 +322,16 @@ function NodeCard({
       <div className="mono" style={{ color: 'var(--dim)', marginBottom: 16 }}>
         {instance.base_url}
       </div>
+
+      {instance.maintenance ? (
+        // Said on the card rather than only in the badge: "nothing is reaching
+        // this node" is alarming until you know you asked for it.
+        <p className="hint" style={{ margin: '-8px 0 16px' }}>
+          {t(
+            'Held back on purpose: no pushes, no corrections. Changes you make meanwhile are queued and applied when you end maintenance.',
+          )}
+        </p>
+      ) : null}
 
       <div className="node-facts">
         <div>
@@ -365,6 +390,9 @@ function NodeCard({
             <div className="menu-list">
               <button onClick={run(onImport)}>{t('Import as master')}</button>
               <button onClick={run(onToggle)}>{instance.enabled ? t('Disable') : t('Enable')}</button>
+              <button onClick={run(onToggleMaintenance)}>
+                {instance.maintenance ? t('End maintenance') : t('Start maintenance')}
+              </button>
               <button className="danger" onClick={run(onRemove)}>
                 {t('Remove')}
               </button>

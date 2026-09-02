@@ -97,3 +97,27 @@ that flaps for months is a different story:
 **The retry queue is never trimmed.** A pending or failed job is work still owed to an
 instance; dropping one would silently abandon a change that never reached a node, which is the
 exact failure the queue exists to prevent. Only jobs that already landed count as history.
+
+## Maintenance: holding one node back
+
+Sometimes a node is yours for an hour — you are upgrading AdGuard Home on it, moving it to
+another host, or testing something in its native UI. The hub's whole purpose works against you
+there: a push overwrites what you just did, and reconciliation puts it back within five minutes.
+
+*Instances → ⋯ → Start maintenance* stops both for that one node. It keeps answering DNS the
+entire time; nothing about maintenance touches what the node is actually doing for your network.
+
+What makes it a pause rather than a gap is what happens to the work in between. Every change you
+make in the hub while a node is held back is written to the same retry queue an unreachable node
+uses, so ending maintenance replays it and the node catches up at once — no waiting for the retry
+timer, nothing to press. The queue is visible under *Instances* while it waits.
+
+| | Disabled | Maintenance |
+| --- | --- | --- |
+| Pushes | not sent, not kept | not sent, **queued** |
+| Reconciliation | skipped | skipped |
+| Outage notifications | none | none |
+| On switching back | nothing happens until you push | queued work is applied immediately |
+
+Disabling an instance says "this is not mine any more". Maintenance says "this is mine, hands off
+for a moment" — which is why only one of the two remembers.

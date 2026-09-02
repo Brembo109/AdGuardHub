@@ -26,7 +26,13 @@ from ..schemas import (
 from ..services.aggregate import invalidate_stats_cache
 from ..services.events import bus
 from ..services.importer import import_from_instance
-from ..services.sync import ALL_KINDS, check_instance, push_to_instance, schedule_sync
+from ..services.sync import (
+    ALL_KINDS,
+    check_instance,
+    process_retry_queue,
+    push_to_instance,
+    schedule_sync,
+)
 from ..services.versions import record as _record
 
 router = APIRouter(prefix="/api/instances", tags=["instances"])
@@ -42,6 +48,7 @@ def to_out(instance: Instance) -> InstanceOut:
         has_password=bool(instance.password_encrypted),
         verify_tls=instance.verify_tls,
         enabled=instance.enabled,
+        maintenance=instance.maintenance,
         status=instance.status,
         version=instance.version,
         update_version=instance.update_version,
@@ -164,10 +171,16 @@ async def update_instance(
         instance.password_encrypted = get_crypto().encrypt(password) if password else ""
     adapter_session.store.forget(previous_key)
     adapter_session.store.forget((instance.base_url, instance.username))
-    if "enabled" in data:
-        instance.status = (
-            InstanceStatus.unknown.value if instance.enabled else InstanceStatus.disabled.value
-        )
+    if "enabled" in data or "maintenance" in data:
+        # Disabled wins over maintenance: an instance nobody syncs at all is not
+        # "being worked on". Otherwise the status is cleared rather than guessed —
+        # the probe below, or the next push, writes what is actually true.
+        if not instance.enabled:
+            instance.status = InstanceStatus.disabled.value
+        elif instance.maintenance:
+            instance.status = InstanceStatus.maintenance.value
+        else:
+            instance.status = InstanceStatus.unknown.value
     try:
         await session.commit()
     except IntegrityError as exc:
@@ -175,8 +188,14 @@ async def update_instance(
         raise HTTPException(status.HTTP_409_CONFLICT, "An instance with that name exists") from exc
     invalidate_stats_cache()
     await _announce_list()
-    if instance.enabled:
+    if instance.enabled and not instance.maintenance:
         await check_instance(session, instance)
+        # Everything the hub could not send while the node was held back is
+        # waiting in the retry queue. Replaying it here is what makes maintenance
+        # a pause rather than a gap: the node catches up the moment it is
+        # released, instead of waiting for the retry timer to come round.
+        if data.get("maintenance") is False:
+            await process_retry_queue(session)
     return to_out(instance)
 
 

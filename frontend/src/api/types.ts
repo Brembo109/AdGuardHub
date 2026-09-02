@@ -21,7 +21,10 @@ export interface Instance {
   has_password: boolean
   verify_tls: boolean
   enabled: boolean
-  status: 'unknown' | 'online' | 'unreachable' | 'disabled'
+  /** Held back on purpose while somebody works on the node. Not a fault: what
+   *  the hub would have pushed is queued and replayed on release. */
+  maintenance: boolean
+  status: 'unknown' | 'online' | 'unreachable' | 'disabled' | 'maintenance'
   /** AdGuard Home's own version, as last reported by the instance. */
   version: string
   /** A newer AdGuard Home the node knows about. Empty means nothing to install. */

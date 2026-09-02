@@ -1,8 +1,11 @@
 """Drift detection and auto-correction (spec §6).
 
 Anything changed on an instance out-of-band — after downtime, or by someone using the
-native UI despite §2 — is detected here, corrected, and written to the drift log. There
-is no maintenance mode in v1: a correction is always applied, but never silently.
+native UI despite §2 — is detected here, corrected, and written to the drift log. A
+correction is always applied, but never silently.
+
+The one exception is an instance in maintenance: there somebody is working on the node
+deliberately, and correcting them every five minutes is the opposite of helping.
 """
 
 from __future__ import annotations
@@ -207,6 +210,10 @@ async def reconcile_instance(
 ) -> InstanceReport:
     report = InstanceReport(instance.id, instance.name, checked=False)
     if not instance.enabled:
+        return report
+    # The point of maintenance mode: whatever the operator is doing to this node
+    # by hand, reconciliation would undo it within five minutes.
+    if instance.maintenance:
         return report
 
     expected_sections = await desired_sections(session)

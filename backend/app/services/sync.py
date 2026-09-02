@@ -164,6 +164,15 @@ async def sync_all(
     instances = list(result.scalars().all())
     errors: dict[str, str] = {}
     for instance in instances:
+        # A node in maintenance is being worked on by hand, and a push would
+        # overwrite exactly that work. The change is not dropped, though: it goes
+        # to the same queue an unreachable node uses, and is replayed when
+        # maintenance ends. That is the whole difference from disabling it.
+        if instance.maintenance:
+            for kind in kinds:
+                await queue_job(session, instance, kind, reason or "maintenance", "")
+            await session.commit()
+            continue
         error = await push_to_instance(session, instance, kinds, reason)
         if error:
             errors[instance.name] = error
@@ -254,7 +263,11 @@ async def process_retry_queue(session: AsyncSession) -> int:
     result = await session.execute(
         select(PushJob, Instance)
         .join(Instance, Instance.id == PushJob.instance_id)
-        .where(PushJob.status != JobStatus.applied.value, Instance.enabled.is_(True))
+        .where(
+            PushJob.status != JobStatus.applied.value,
+            Instance.enabled.is_(True),
+            Instance.maintenance.is_(False),
+        )
         .order_by(PushJob.id.asc())
     )
     rows = list(result.all())

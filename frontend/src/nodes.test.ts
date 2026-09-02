@@ -17,6 +17,7 @@ function node(overrides: Partial<Instance>): Instance {
     has_password: true,
     verify_tls: true,
     enabled: true,
+    maintenance: false,
     status: 'online',
     version: 'v0.107.60',
     update_version: '',

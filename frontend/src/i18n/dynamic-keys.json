@@ -92,6 +92,7 @@
   "Load balance",
   "Log",
   "Log queries",
+  "maintenance",
   "Maximum cached TTL",
   "Minimum cached TTL",
   "Notifications",

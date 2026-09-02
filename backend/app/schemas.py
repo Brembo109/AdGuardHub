@@ -103,6 +103,7 @@ class InstanceUpdate(BaseModel):
     password: str | None = None
     verify_tls: bool | None = None
     enabled: bool | None = None
+    maintenance: bool | None = None
 
     @field_validator("base_url")
     @classmethod
@@ -126,6 +127,7 @@ class InstanceOut(ORMModel):
     has_password: bool
     verify_tls: bool
     enabled: bool
+    maintenance: bool
     status: str
     # AdGuard Home's own version, as last reported by the instance.
     version: str
