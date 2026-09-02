@@ -280,3 +280,14 @@ export interface UpdateStatus {
   error: string
   enabled: boolean
 }
+
+/** An upgrade the hub asked systemd to perform, as far as the hub can see it. */
+export interface UpdateRun {
+  requested: boolean
+  running: boolean
+  finished: boolean
+  /** Asked for, but nothing picked it up — the update units are not installed. */
+  stalled: boolean
+  exit_status: number | null
+  log: string
+}

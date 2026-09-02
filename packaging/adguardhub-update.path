@@ -1,0 +1,23 @@
+# Watches for the hub asking to be upgraded.
+#
+# The hub runs as an unprivileged user with ProtectSystem=strict: it cannot write
+# to /opt, cannot restart itself, and — deliberately — has no sudo rule and no
+# way to get one. Giving it any of those to support an update button would hand
+# a web application root on the machine it is installed on.
+#
+# So it does not get them. It creates one empty file in the only directory it can
+# write, and systemd does the privileged half. The hub's power stops at "an
+# upgrade was requested"; what an upgrade *is* lives in the unit next door, where
+# the hub cannot reach it.
+[Unit]
+Description=Watch for an AdGuardHub upgrade request
+Documentation=https://github.com/fgrfn/adguardhub
+
+[Path]
+# The file carries nothing — no version, no arguments. Its existence is the whole
+# message, so there is nothing in it for the hub to influence the upgrade with.
+PathExists=@DATA@/.update-requested
+Unit=adguardhub-update.service
+
+[Install]
+WantedBy=multi-user.target

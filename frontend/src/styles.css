@@ -478,6 +478,24 @@ label {
   flex-wrap: wrap;
 }
 
+/* The installer's own output, streamed back while an upgrade runs. Bounded and
+   scrolled: it is progress to glance at, not a document to read. */
+.run-log {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.45;
+  background: var(--input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin: 12px 0 0;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--dim);
+}
+
 /* A command to paste into a shell. Wraps rather than scrolls: the installer
    one-liner is long, and a line you have to scroll to read is a line you copy
    half of. */
