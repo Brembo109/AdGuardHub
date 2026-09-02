@@ -7,7 +7,10 @@ import { Badge, Banner, Card, Empty, PageHeader } from '../components/ui'
 import { IconWarning } from '../components/icons'
 import { formatTime } from '../format'
 import { errorMessage, useResource } from '../hooks/useApi'
+import { SubTabs } from '../components/SubTabs'
 import { useT } from '../i18n'
+import { INSTANCE_TABS } from '../nav'
+
 
 /**
  * The instance-level settings AdGuardHub replicates. Everything the master exposes
@@ -117,6 +120,7 @@ export default function Config() {
         title={t('Instance settings')}
         description={t('What the hub replicates to every node. A replicated area is owned by the hub — change it here, and reconciliation puts it back if a node drifts. DHCP is never touched: leases and interface bindings belong to the individual host.')}
       />
+      <SubTabs tabs={INSTANCE_TABS} />
 
       {error ? <Banner kind="error">{error}</Banner> : null}
       {message ? <Banner kind="ok">{message}</Banner> : null}

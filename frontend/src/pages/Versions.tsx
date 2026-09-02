@@ -185,7 +185,7 @@ export default function Versions() {
           ) : (
             <>
               <EntryDiff title={t('Rules')} entry={diff.changes.rules} />
-              <EntryDiff title={t('Subscriptions')} entry={diff.changes.filter_lists} />
+              <EntryDiff title={t('Filter lists')} entry={diff.changes.filter_lists} />
               <SectionDiff sections={diff.changes.sections} />
             </>
           )}

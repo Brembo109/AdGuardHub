@@ -7,7 +7,10 @@ import { Badge, Banner, Card, Empty, PageHeader } from '../components/ui'
 import { IconDots } from '../components/icons'
 import { formatTime } from '../format'
 import { errorMessage, useResource } from '../hooks/useApi'
+import { SubTabs } from '../components/SubTabs'
 import { useT } from '../i18n'
+import { INSTANCE_TABS } from '../nav'
+
 
 export default function Instances() {
   const t = useT()
@@ -148,6 +151,7 @@ export default function Instances() {
         title={t('Instances')}
         description={t('Add each AdGuard Home instance once. Credentials are encrypted at rest with the key from ADGUARDHUB_SECRET_KEY and are never sent back to the browser.')}
       />
+      <SubTabs tabs={INSTANCE_TABS} />
 
       {error ? <Banner kind="error">{error}</Banner> : null}
       {message ? <Banner kind="ok">{message}</Banner> : null}
