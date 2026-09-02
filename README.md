@@ -23,7 +23,7 @@
 </p>
 
 <details>
-<summary>More screenshots — dark theme, query log, rules, subscriptions, instances, settings, history, German</summary>
+<summary>More screenshots — dark theme, query log, rules, filter lists, instances, settings, history, German</summary>
 
 <br />
 
@@ -42,10 +42,10 @@ allow, or a pasted block — all writing to the same model.
 
 <img src="./docs/screenshots/rules.png" width="900" alt="The filtering rules page: entry forms above, the rule table below with block and allow badges" />
 
-Blocklist subscriptions. The hub tracks the URL and whether it is on; AdGuard Home still
+Filter lists. The hub tracks the URL and whether it is on; AdGuard Home still
 downloads and applies the list itself, so the 700k-domain lists never touch this database.
 
-<img src="./docs/screenshots/subscriptions.png" width="900" alt="The subscriptions page listing four blocklist URLs with their enabled state" />
+<img src="./docs/screenshots/subscriptions.png" width="900" alt="The filter lists page listing four blocklist URLs with their enabled state" />
 
 Instances. Each AdGuard Home is added once, with credentials encrypted before they are stored.
 
@@ -97,8 +97,11 @@ AdGuardHub becomes the **single source of truth** for filtering rules, blocklist
 
 ## The interface
 
-A flat top bar carries all eight areas, the way AdGuard Home's own UI does, and a status
-element that is never off screen: green while every node carries the current configuration,
+A flat top bar carries seven areas, the way AdGuard Home's own UI does, with a second level of
+tabs on the pages that cover more than one thing — filtering and its lists, a node and what is
+replicated to it, the five parts of Settings. Every tab is a real route, so it can be
+bookmarked and reached with the back button; nothing hides behind a hover. Beside the bar sits a
+status element that is never off screen: green while every node carries the current configuration,
 amber while a push waits in the retry queue, red when a node is unreachable or reconciliation
 found drift. The whole point of the hub is that the nodes agree; when they stop agreeing, that
 has to find you rather than wait to be looked up.
@@ -690,6 +693,16 @@ replication rather than rules alone, version history with diff and rollback, the
 AdGuard-compatible `/control` API so phone remotes and Home Assistant can point at the hub,
 German alongside English, backup and restore, rate-limited sign-ins, and caps on the tables
 that used to grow without end.
+
+**v0.3.0** made the hub say what it knows about itself: update checks against this repository,
+a one-click self-update for native installs, and a native installer for Debian and Ubuntu.
+
+**v0.4.0** is mostly about finding things. The top bar dropped from nine entries to seven and
+the pages that cover more than one thing grew tabs, so Settings is five linkable pages rather
+than six cards stacked down one. Each node now says whether a newer AdGuard Home is waiting for
+it — and says so distinctly when it could not be asked, which is not the same as being current.
+The hub's own log is readable in the interface, so diagnosing it no longer starts with finding
+a shell.
 
 Next, in no fixed order: a maintenance mode for pausing reconciliation on one instance while
 you work on it, and translating the drift log's summaries (they are generated in the backend
