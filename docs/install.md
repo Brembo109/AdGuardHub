@@ -1,11 +1,9 @@
 # Installing AdGuardHub
 
-Three ways in: a container, a `docker run`, or a native systemd service. Whichever you
-pick, the admin account is created in the browser on first open — nothing is configured
-up front.
+Two ways in: a container with Docker Compose, or a native systemd service. Either way the
+admin account is created in the browser on first open — nothing is configured up front.
 
 - [Docker Compose](#docker-compose)
-- [docker run](#docker-run)
 - [Without Docker (Debian / Ubuntu)](#without-docker-debian--ubuntu)
 - [File permissions (PUID / PGID)](#file-permissions-puid--pgid)
 - [The encryption key](#the-encryption-key)
@@ -45,22 +43,16 @@ docker compose up -d
 Then open <http://localhost> and create the admin account.
 
 The container listens on **port 80**. If the host already serves something there,
-publish it elsewhere — `-p 8080:80` — the container-side port stays 80.
+publish it elsewhere — `"8080:80"` — the container-side port stays 80.
 
-## docker run
+The `logging:` block is not decoration either. Docker's default driver keeps every line the
+container has ever written, without limit, which on a hub that runs for months is a disk that
+fills quietly — see [Logs](operations.md#logs).
 
-```bash
-docker run -d --name adguardhub \
-  -p 80:80 \
-  -v "$PWD/data:/data" \
-  -e PUID=1000 -e PGID=1000 \
-  --log-opt max-size=10m --log-opt max-file=3 \
-  --restart unless-stopped \
-  ghcr.io/fgrfn/adguardhub:latest
-```
-
-The two `--log-opt` flags cap what Docker keeps of the container's output. Without them the
-default driver keeps all of it forever — see [Logs](operations.md#logs).
+**A bare `docker run` is not a supported way to install this.** It works, but everything the
+compose file carries — the volume, the log caps, the restart policy, the port mapping — then
+lives only in your shell history, and the upgrade a year later is a command nobody can
+reconstruct. Compose keeps that in a file you can read.
 
 ## Without Docker (Debian / Ubuntu)
 
@@ -185,16 +177,21 @@ and nothing else. To stop it entirely, untick *Check for new releases* — or st
 | Native (`install.sh`) | the **Update this hub** button, or re-run the installer yourself; either way it upgrades in place and never touches your data directory or `adguardhub.env` |
 | A checkout | whatever you normally do with that checkout |
 
-`docker compose` reads its file from the directory it runs in. Somewhere else, or on a hub
-started with plain `docker run`, it answers `no configuration file provided: not found` — which
-is about the directory, not about the hub. Without a compose file, pull the image and replace
-the container instead, then start it again with the `docker run` command you used the first
-time; the data volume it mounts survives all three steps:
+`docker compose` reads its file from the directory it runs in. Run it somewhere else and it
+answers `no configuration file provided: not found`, which is about the directory rather than
+about the hub.
+
+If that message appears because the container was started without compose at all, this is the
+moment to move it onto one. Write the compose file above, point its `volumes:` at the directory
+the running container already uses, then:
 
 ```bash
-docker pull ghcr.io/fgrfn/adguardhub:latest
 docker rm -f adguardhub
+docker compose up -d
 ```
+
+Nothing is lost in the swap: the database and the encryption key live in that directory, not in
+the container.
 
 `docker compose up -d` on its own will **not** fetch a newer image: Docker reuses the cached one
 whenever the tag already exists locally. To run your own checkout instead of the published

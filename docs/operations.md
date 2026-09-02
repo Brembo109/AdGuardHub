@@ -39,12 +39,8 @@ copy — but it survives `docker rm` and is easier to hand to someone else. If t
 be written, the hub says so and carries on with stderr rather than refusing to start.
 
 Docker's default json-file driver keeps that copy **without any size limit**, which on a
-long-running hub is a disk that fills quietly. The Compose example caps it; if you use
-`docker run`, add the same:
-
-```
---log-opt max-size=10m --log-opt max-file=3
-```
+long-running hub is a disk that fills quietly. The `logging:` block in the
+[Compose example](install.md#docker-compose) caps it at three files of 10 MB; keep it.
 
 ## Backup and restore
 
