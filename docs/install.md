@@ -40,7 +40,32 @@ services:
 docker compose up -d
 ```
 
-Then open <http://localhost> and create the admin account.
+Then open the hub at `http://<host>` — the address of the machine you started it on, not the one
+you are browsing from — and create the admin account. Published on another port, it is
+`http://<host>:8080`.
+
+### Where the data goes
+
+`./data:/data` is two different things either side of the colon. The right-hand `/data` is a path
+*inside* the container and never appears on your host; the left-hand side is yours to choose, and
+it is the directory you will be backing up. Relative, as above, it sits next to the compose file —
+self-contained, and a move is "copy the folder". An absolute path is the better answer once this
+is a permanent installation, because it does not depend on where you happen to be standing:
+
+```yaml
+- /mnt/user/appdata/adguardhub:/data   # Unraid
+- /srv/adguardhub/data:/data           # /srv is where service data belongs
+- /var/lib/adguardhub:/data            # the same path the native installer uses
+```
+
+The last one is worth a thought: pick it and the hub's data lives at the same place whichever way
+it was installed, so your backup rule is one line rather than two, and moving from the container
+to the native install later means the database is already where the service looks for it. The one
+thing that move still needs is ownership — the container writes as `PUID:PGID`, the service runs
+as `adguardhub`, so `chown -R adguardhub:adguardhub /var/lib/adguardhub` before starting it.
+
+Whatever you choose, back up that directory as a whole. It holds `adguardhub.db` **and**
+`secret.key`, and one without the other cannot read your stored instance passwords.
 
 The container listens on **port 80**. If the host already serves something there,
 publish it elsewhere — `"8080:80"` — the container-side port stays 80.
