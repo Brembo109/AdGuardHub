@@ -107,13 +107,15 @@ def read_run(data_dir: str) -> UpdateRun:
     now = time.time()
     trigger = trigger_path(data_dir)
     requested = os.path.exists(trigger)
+    requested_at = _mtime(trigger) if requested else None
+
+    path = log_path(data_dir)
+    written_at = _mtime(path)
+    age = None if written_at is None else now - written_at
 
     log = ""
-    age: float | None = None
-    path = log_path(data_dir)
     try:
         size = os.path.getsize(path)
-        age = now - os.path.getmtime(path)
         with open(path, encoding="utf-8", errors="replace") as handle:
             if size > MAX_LOG_BYTES:
                 handle.seek(size - MAX_LOG_BYTES)
@@ -124,28 +126,45 @@ def read_run(data_dir: str) -> UpdateRun:
         # No log yet, or no upgrade has run since this hub was installed.
         pass
 
-    match = EXIT_MARKER.search(log)
-    finished = match is not None
+    # Two ways the log on disk belongs to some earlier upgrade rather than to
+    # whatever is happening now.
+    #
+    # Age is the obvious one: a log nobody has written to for fifteen minutes is
+    # history. The second one is the request itself. The updater truncates the log
+    # when it starts, so between pressing the button and the path unit firing, the
+    # only log on disk is the *previous* upgrade's — and it still ends in its
+    # [exit 0]. Reading that as this run's outcome made the second upgrade of a
+    # hub's life unreportable: the run came back neither running nor finished, so
+    # the interface dropped straight back to an idle button while the upgrade it
+    # had just asked for went ahead behind it.
+    superseded = (
+        requested_at is not None and written_at is not None and requested_at > written_at
+    )
+    previous = (age is not None and age > RECENT_SECONDS) or superseded
 
-    # A log from a previous upgrade is history, not a run in progress.
-    stale = age is not None and age > RECENT_SECONDS
-    started = bool(log) and not stale
+    match = EXIT_MARKER.search(log)
+    finished = match is not None and not previous
+    started = bool(log) and not previous
 
     waiting = 0.0
-    if requested:
-        try:
-            waiting = now - os.path.getmtime(trigger)
-        except OSError:
-            waiting = 0.0
+    if requested_at is not None:
+        waiting = now - requested_at
 
     stalled = requested and not started and waiting > STALLED_AFTER
 
     return UpdateRun(
         requested=requested,
         running=(requested or started) and not finished and not stalled,
-        finished=finished and not stale,
+        finished=finished,
         stalled=stalled,
-        exit_status=int(match.group(1)) if match and not stale else None,
+        exit_status=int(match.group(1)) if match and not previous else None,
         age=age,
-        log="" if stale else log,
+        log="" if previous else log,
     )
+
+
+def _mtime(path: str) -> float | None:
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return None

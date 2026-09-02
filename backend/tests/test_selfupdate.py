@@ -136,6 +136,52 @@ def test_last_month_s_upgrade_is_not_this_afternoon_s(tmp_path) -> None:
     assert run.exit_status is None
 
 
+def test_a_second_upgrade_is_not_read_as_the_first_one_ending(tmp_path) -> None:
+    """Reported from a real hub: the button did nothing on the second press.
+
+    The updater truncates the log when it starts, so between the press and the
+    path unit firing, the only log on disk is the previous upgrade's — ending in
+    its own ``[exit 0]``. Reading that as this run's outcome meant the request
+    came back neither running nor finished, and the interface dropped straight
+    back to an idle button while the upgrade went ahead behind it.
+    """
+    write_log(tmp_path, "[start] last week\n[exit 0]\n", age=selfupdate.RECENT_SECONDS + 300)
+    selfupdate.request(str(tmp_path))
+
+    run = selfupdate.read_run(str(tmp_path))
+    assert run.requested and run.running
+    # Last week's success is not this press's outcome, and must not be shown.
+    assert not run.finished
+    assert run.exit_status is None
+    assert run.log == ""
+
+
+def test_pressing_again_just_after_an_upgrade_does_not_report_that_one(tmp_path) -> None:
+    """The same fault, with a log too recent for the age check to catch it."""
+    write_log(tmp_path, "[start] a moment ago\n[exit 0]\n", age=5)
+    selfupdate.request(str(tmp_path))
+
+    run = selfupdate.read_run(str(tmp_path))
+    assert run.running and not run.finished
+    assert run.exit_status is None
+
+
+def test_the_log_takes_over_once_the_updater_starts_writing(tmp_path) -> None:
+    """The trigger is removed first, so the new log is this run's from then on."""
+    write_log(tmp_path, "[start] last week\n[exit 0]\n", age=selfupdate.RECENT_SECONDS + 300)
+    selfupdate.request(str(tmp_path))
+    os.remove(selfupdate.trigger_path(str(tmp_path)))
+    write_log(tmp_path, "[start] now\n[fetch] …\n")
+
+    run = selfupdate.read_run(str(tmp_path))
+    assert run.running and not run.finished
+    assert "now" in run.log
+
+    write_log(tmp_path, "[start] now\n[done] AdGuardHub was upgraded.\n[exit 0]\n")
+    done = selfupdate.read_run(str(tmp_path))
+    assert done.finished and not done.running and done.exit_status == 0
+
+
 def test_only_the_tail_of_a_long_log_is_kept(tmp_path) -> None:
     """The installer is chatty; the operator is watching the end of it."""
     write_log(tmp_path, "x" * (selfupdate.MAX_LOG_BYTES * 2) + "\n[exit 0]\n")
