@@ -213,6 +213,37 @@ install_files() {
     cp -a "$WORK/unpacked/requirements.txt" "$PREFIX/"
 }
 
+# What the last successful dependency install was for. Kept in $PREFIX, which an
+# upgrade does not wipe — only app/ and static/ are replaced.
+STAMP="$PREFIX/.dependencies-installed"
+
+# The requirements file and the interpreter that installed against it.
+#
+# Both, because a distribution upgrade that moves python3 leaves a venv nothing
+# can import from, and matching the file alone would skip straight past that.
+dependency_fingerprint() {
+    printf '%s %s\n' \
+        "$(sha256sum "$PREFIX/requirements.txt" | cut -d' ' -f1)" \
+        "$("$PREFIX/venv/bin/python" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+}
+
+# Whether the venv can actually import what the hub needs to start.
+#
+# The stamp is a claim about the past, and a venv can be broken by something that
+# never touched requirements.txt — a pip run killed halfway, a package removed by
+# hand. Checking costs a fraction of a second against the minute the stamp saves,
+# and re-running the installer stays the way to repair an install rather than
+# something the stamp can talk you out of.
+#
+# greenlet is in the list on purpose: v0.4.0 shipped without it on Python 3.13
+# and died on its first database query, which is exactly the shape of fault a
+# skipped pip run could otherwise reintroduce silently.
+dependencies_importable() {
+    "$PREFIX/venv/bin/python" - >/dev/null 2>&1 <<'PYTHON'
+import fastapi, greenlet, httpx, sqlalchemy, uvicorn  # noqa: F401
+PYTHON
+}
+
 install_python_environment() {
     # Both, not just the interpreter. A venv whose ensurepip step failed still
     # has bin/python — the symlinks are made before pip is installed — so
@@ -226,11 +257,27 @@ install_python_environment() {
         rm -rf "$PREFIX/venv"
         python3 -m venv "$PREFIX/venv" ||
             die "could not create a virtualenv in $PREFIX/venv. The error above is python3's own; if it mentions ensurepip, install your distribution's python3-venv package and run this script again."
+        # A rebuilt venv has nothing in it, whatever the old stamp claimed.
+        rm -f "$STAMP"
     fi
+
+    fingerprint=$(dependency_fingerprint)
+    # pip spends about a minute proving that what is installed is installed, and
+    # it does that on every upgrade. Most upgrades move no dependency at all —
+    # and that minute is the bulk of the window in which the hub is being
+    # replaced, so it is worth not spending twice for nothing.
+    if [ -f "$STAMP" ] && [ "$(cat "$STAMP")" = "$fingerprint" ] && dependencies_importable; then
+        say "Python dependencies are unchanged"
+        return 0
+    fi
+
     say "Installing Python dependencies (this takes a minute)"
     "$PREFIX/venv/bin/pip" install --quiet --upgrade pip >/dev/null 2>&1 || true
     "$PREFIX/venv/bin/pip" install --quiet -r "$PREFIX/requirements.txt" ||
         die "could not install the Python dependencies"
+    # Written only now. A stamp for an install that failed would tell the next
+    # run there was nothing to do, turning one bad upgrade into a stuck one.
+    printf '%s\n' "$fingerprint" >"$STAMP"
 }
 
 prepare_data_dir() {

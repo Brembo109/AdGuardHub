@@ -120,6 +120,13 @@ in the browser, and the encryption key looks after itself (see [The encryption k
 | Upgrade | re-run the installer; your data and settings are left alone |
 | Remove | `systemctl disable --now adguardhub`, then delete `/opt/adguardhub`, `/var/lib/adguardhub`, `/etc/adguardhub` and `/etc/systemd/system/adguardhub.service` |
 
+An upgrade reinstalls the Python dependencies only when `requirements.txt` has actually changed
+since the last successful run, or when the interpreter underneath it has moved. Most releases
+change neither, and that check is the difference between an upgrade that takes a minute and one
+that takes a few seconds — which matters, because the hub is being replaced for the whole of it.
+The venv is verified to still import what the hub needs before that shortcut is taken, so
+re-running the installer remains the way to repair a broken environment.
+
 A different port, or a specific version:
 
 ```bash
