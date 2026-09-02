@@ -12,14 +12,13 @@
  * release. So: the running build points at its own tag, so it answers "what is
  * in this version" rather than "what is on main"; GitHub goes to the repository;
  * reporting a problem goes straight to the new-issue form rather than to a list
- * to read. The credit is a credit, not a support channel — that is why it reads
- * "by fgrfn" and sits last.
+ * to read.
  */
 
 import { api } from '../api/client'
 import { useResource } from '../hooks/useApi'
 import { useT } from '../i18n'
-import { ISSUES_URL, OWNER, OWNER_URL, REPO_URL, releaseUrl } from '../repo'
+import { ISSUES_URL, REPO_URL, releaseUrl } from '../repo'
 import { IconGitHub } from './icons'
 
 export function Footer() {
@@ -29,21 +28,13 @@ export function Footer() {
 
   return (
     <footer className="footer">
-      {/* One phrase, not two items: the credit names what the version names, so
-          it sits against it with a space rather than in the row of
-          destinations, where equal spacing made it read as a fourth button. */}
-      <span className="footer-identity">
-        {version ? (
-          <a href={releaseUrl(version)} target="_blank" rel="noreferrer noopener">
-            {t('AdGuardHub {version}', { version })}
-          </a>
-        ) : (
-          <span>AdGuardHub</span>
-        )}{' '}
-        <a className="footer-credit" href={OWNER_URL} target="_blank" rel="noreferrer noopener">
-          {t('by {owner}', { owner: OWNER })}
+      {version ? (
+        <a href={releaseUrl(version)} target="_blank" rel="noreferrer noopener">
+          {t('AdGuardHub {version}', { version })}
         </a>
-      </span>
+      ) : (
+        <span>AdGuardHub</span>
+      )}
 
       {/* The separator is drawn by the link it precedes rather than sitting
           between them as its own element: on a narrow screen a standalone one

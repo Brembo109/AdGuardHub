@@ -12,9 +12,6 @@ export const REPO_URL = `https://github.com/${OWNER}/adguardhub`
 /** Straight to the form, not to the list — the footer link is for reporting one. */
 export const ISSUES_URL = `${REPO_URL}/issues/new`
 
-/** The person behind it, as a credit rather than a support channel. */
-export const OWNER_URL = `https://github.com/${OWNER}`
-
 /**
  * The page for a given build. Released images carry the git tag they were cut
  * from, and those tags are `vX.Y.Z`; anything else — an unreleased build says

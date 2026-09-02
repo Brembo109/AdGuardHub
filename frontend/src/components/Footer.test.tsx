@@ -8,7 +8,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { I18nProvider } from '../i18n/provider'
-import { ISSUES_URL, OWNER_URL, REPO_URL, releaseUrl } from '../repo'
+import { ISSUES_URL, REPO_URL, releaseUrl } from '../repo'
 import { Footer } from './Footer'
 
 describe('releaseUrl', () => {
@@ -44,7 +44,6 @@ describe('Footer', () => {
     const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'))
     expect(hrefs).toContain(REPO_URL)
     expect(hrefs).toContain(ISSUES_URL)
-    expect(hrefs).toContain(OWNER_URL)
   })
 
   it('sends "report an issue" to the form rather than to the list to read', () => {
