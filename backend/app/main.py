@@ -12,6 +12,8 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
+from starlette.responses import Response
+from starlette.types import Scope
 
 from .api import auth, backup, blocklists, config, control, instances, ops, querylog, rules
 from .api import settings as settings_api
@@ -136,6 +138,31 @@ async def health() -> dict[str, str]:
     return {"status": "ok", "version": VERSION}
 
 
+# How the two halves of a built frontend may be cached. Getting this wrong is
+# not a performance question, it is an outage: index.html names its scripts by
+# content hash, and an upgrade deletes the old ones. A browser holding a stale
+# index.html therefore asks for bundles that no longer exist and renders nothing
+# — the hub is up, answering, and the page is blank.
+#
+# Without a Cache-Control header a browser is free to invent one (RFC 9111
+# §4.2.2, commonly a tenth of the file's age), so it can serve that stale page
+# for a long time without ever asking. It has to be told.
+INDEX_CACHE = "no-cache"
+# Hashed names, so an old name can never refer to new content. These are the
+# files worth caching hard: without it every page load refetches the bundle.
+ASSET_CACHE = "public, max-age=31536000, immutable"
+
+
+class HashedAssets(StaticFiles):
+    """The build's own output, under /assets, named by content hash."""
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        response = await super().get_response(path, scope)
+        if response.status_code == 200:
+            response.headers["cache-control"] = ASSET_CACHE
+        return response
+
+
 def mount_frontend(application: FastAPI) -> None:
     """Serve the built React app, falling back to index.html for client-side routes."""
     static_dir = get_settings().static_dir
@@ -146,7 +173,7 @@ def mount_frontend(application: FastAPI) -> None:
 
     assets = os.path.join(static_dir, "assets")
     if os.path.isdir(assets):
-        application.mount("/assets", StaticFiles(directory=assets), name="assets")
+        application.mount("/assets", HashedAssets(directory=assets), name="assets")
 
     @application.get("/{path:path}", include_in_schema=False, response_model=None)
     async def spa(path: str) -> FileResponse | JSONResponse:
@@ -159,8 +186,11 @@ def mount_frontend(application: FastAPI) -> None:
             and os.path.commonpath([os.path.abspath(static_dir), os.path.abspath(candidate)])
             == os.path.abspath(static_dir)
         ):
-            return FileResponse(candidate)
-        return FileResponse(index)
+            # Everything reachable here — the favicon, the logo — carries no hash
+            # in its name either, so it is revalidated like index.html rather
+            # than cached under a name that outlives its contents.
+            return FileResponse(candidate, headers={"cache-control": INDEX_CACHE})
+        return FileResponse(index, headers={"cache-control": INDEX_CACHE})
 
 
 mount_frontend(app)

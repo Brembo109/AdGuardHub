@@ -222,6 +222,13 @@ and nothing else. To stop it entirely, untick *Check for new releases* — or st
 | Native (`install.sh`) | the **Update this hub** button, or re-run the installer yourself; either way it upgrades in place and never touches your data directory or `adguardhub.env` |
 | A checkout | whatever you normally do with that checkout |
 
+An upgrade replaces the frontend's script bundles, whose filenames carry a content hash, so a
+browser holding the previous page would ask for files that no longer exist and render nothing —
+a blank tab against a hub that is up and answering. `index.html` is therefore served with
+`Cache-Control: no-cache`, which costs one revalidation per load and means the tab you left open
+picks up the new build by itself. The hashed bundles under `/assets/` are the opposite case and
+are cached for a year: their names change whenever their contents do.
+
 `docker compose` reads its file from the directory it runs in. Run it somewhere else and it
 answers `no configuration file provided: not found`, which is about the directory rather than
 about the hub.
