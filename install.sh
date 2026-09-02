@@ -2,12 +2,12 @@
 #
 # AdGuardHub — native installer for Debian/Ubuntu with systemd.
 #
-#   curl -sSL https://adguardhub.fgrfn.de/install.sh | sh
+#   curl -fsSL https://adguardhub.fgrfn.de/install.sh | sh
 #
 # You are about to run a script you have not read. If you would rather look
 # first — and you would be right to — do it in two steps instead:
 #
-#   curl -sSL https://adguardhub.fgrfn.de/install.sh -o install.sh
+#   curl -fsSL https://adguardhub.fgrfn.de/install.sh -o install.sh
 #   less install.sh
 #   sudo sh install.sh
 #

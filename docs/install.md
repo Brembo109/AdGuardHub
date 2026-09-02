@@ -68,7 +68,7 @@ For an LXC container, a VM or a Raspberry Pi, `install.sh` sets up AdGuardHub as
 service. Read it before you run it — it runs as root:
 
 ```bash
-curl -sSL https://adguardhub.fgrfn.de/install.sh -o install.sh
+curl -fsSL https://adguardhub.fgrfn.de/install.sh -o install.sh
 less install.sh
 sudo sh install.sh
 ```
@@ -76,8 +76,13 @@ sudo sh install.sh
 Or in one line, if you would rather not:
 
 ```bash
-curl -sSL https://adguardhub.fgrfn.de/install.sh | sudo sh
+curl -fsSL https://adguardhub.fgrfn.de/install.sh | sudo sh
 ```
+
+The `-f` is not decoration. Without it curl hands the server's error page to the shell on the
+other side of the pipe, which then tries to run it as commands — a missing script becomes
+`sh: 1: Not: not found` in a root shell rather than an honest failure. With `-f`, curl exits
+non-zero and writes nothing, so `sh` gets an empty script and does nothing at all.
 
 The script installs the newest **release**, not the current state of this repository. It creates
 an `adguardhub` system user, installs to `/opt/adguardhub`, puts the database in

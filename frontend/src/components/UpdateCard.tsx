@@ -26,7 +26,7 @@ import { Banner, Card } from './ui'
  */
 const UPGRADE_COMMAND: Record<InstallMethod, string> = {
   docker: '',
-  native: 'curl -sSL https://adguardhub.fgrfn.de/install.sh | sudo sh',
+  native: 'curl -fsSL https://adguardhub.fgrfn.de/install.sh | sudo sh',
   source: '',
 }
 
