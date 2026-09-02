@@ -35,9 +35,16 @@ jobs:
           # release it came from — in its startup log, /api/health and the UI.
           build-args: |
             ADGUARDHUB_VERSION=${{ steps.version.outputs.version }}
+          # Written out rather than derived from ${{ github.repository }}. Two
+          # reasons, both about renaming this repository: an image name may not
+          # contain capitals, so AdGuardHub would fail the push outright — and
+          # even in lower case, deriving it means a rename silently publishes to
+          # a new package while every existing `docker compose pull` keeps
+          # pointing at the old one. The name people already depend on belongs in
+          # the file, not in a variable that follows the repository around.
           tags: |
-            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
-            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/fgrfn/adguardhub:${{ steps.version.outputs.version }}
+            ghcr.io/fgrfn/adguardhub:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
