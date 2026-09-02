@@ -68,7 +68,7 @@ For an LXC container, a VM or a Raspberry Pi, `install.sh` sets up AdGuardHub as
 service. Read it before you run it — it runs as root:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/fgrfn/adguardhub/main/install.sh -o install.sh
+curl -sSL https://adguardhub.fgrfn.de/install.sh -o install.sh
 less install.sh
 sudo sh install.sh
 ```
@@ -76,12 +76,12 @@ sudo sh install.sh
 Or in one line, if you would rather not:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/fgrfn/adguardhub/main/install.sh | sudo sh
+curl -sSL https://adguardhub.fgrfn.de/install.sh | sudo sh
 ```
 
-The script comes from `main` but installs the newest **release**, not the current state of the
-branch. It creates an `adguardhub` system user, installs to `/opt/adguardhub`, puts the database
-in `/var/lib/adguardhub`, and starts the service. It asks nothing: the admin account is created
+The script installs the newest **release**, not the current state of this repository. It creates
+an `adguardhub` system user, installs to `/opt/adguardhub`, puts the database in
+`/var/lib/adguardhub`, and starts the service. It asks nothing: the admin account is created
 in the browser, and the encryption key looks after itself (see [The encryption key](#the-encryption-key)).
 
 | | |
