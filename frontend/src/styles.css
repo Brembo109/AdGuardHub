@@ -507,6 +507,8 @@ label {
 .footer a:hover {
   color: var(--accent-ink);
   text-decoration: underline;
+}
+
 /* A banner with an action in it. The action goes to the far end rather than
    trailing the sentence, where it reads as another word of it. */
 .banner-row {
