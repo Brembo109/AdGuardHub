@@ -57,11 +57,11 @@ die() {
 
 # Named narrowly on purpose. Covering every distribution badly helps nobody;
 # saying plainly that this one is not supported lets you install by hand from
-# the README instead of debugging a script that half-worked.
+# the documentation instead of debugging a script that half-worked.
 require_supported_system() {
     [ "$(id -u)" -eq 0 ] || die "run this as root (try: sudo sh install.sh)"
     command -v apt-get >/dev/null 2>&1 ||
-        die "this installer supports Debian and Ubuntu. For anything else, the README has the manual steps and the Docker image."
+        die "this installer supports Debian and Ubuntu. For anything else, use the Docker image (see docs/install.md)."
     command -v systemctl >/dev/null 2>&1 ||
         die "systemd is required to run AdGuardHub as a service. On a system without it, use the Docker image."
     command -v curl >/dev/null 2>&1 || apt_install curl
@@ -213,7 +213,7 @@ prepare_data_dir() {
     if [ ! -e "$ENV_DIR/adguardhub.env" ]; then
         cat >"$ENV_DIR/adguardhub.env" <<'ENVFILE'
 # Settings for AdGuardHub. This file is yours — upgrades never overwrite it.
-# Every ADGUARDHUB_* variable from the README works here, one per line.
+# Every ADGUARDHUB_* variable works here, one per line; docs/configuration.md lists them.
 #
 # The encryption key is optional: with nothing set, the hub generates one on
 # first start and keeps it in its data directory. Setting it here instead keeps
