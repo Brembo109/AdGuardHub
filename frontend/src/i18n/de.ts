@@ -546,6 +546,7 @@ export const de: Record<string, string> = {
   "Up to date.": "Aktuell.",
   "Update to {version} available": "Update auf {version} verfügbar",
   "AdGuardHub {version} is available.": "AdGuardHub {version} ist verfügbar.",
+  "An update is available": "Ein Update ist verfügbar",
   "released {date}": "veröffentlicht am {date}",
   "Log": "Protokoll",
   "Application log": "Anwendungsprotokoll",

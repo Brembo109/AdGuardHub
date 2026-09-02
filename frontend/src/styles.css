@@ -432,6 +432,19 @@ label {
   font-weight: 600;
 }
 
+/* The only state a top-level entry carries: a release is waiting behind it. The
+   band is dark in both themes, so this takes the band's own accent rather than
+   a theme-dependent one. */
+.nav-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  vertical-align: 2px;
+  border-radius: 50%;
+  background: var(--band-active);
+}
+
 .band-right {
   margin-left: auto;
   display: flex;

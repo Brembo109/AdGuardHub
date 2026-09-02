@@ -8,13 +8,16 @@
  *
  * The dismissal is per browser rather than per hub: it is a preference about
  * being told, not a fact about the hub, and nothing is lost if it is forgotten.
+ *
+ * What dismissing must not do is make the release invisible, which it did until
+ * the dot next to *Settings* in the top bar existed. That dot is not dismissible
+ * and is not meant to be: this bar is the interruption, the dot is the standing
+ * fact, and the two are deliberately not the same thing.
  */
 
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api } from '../api/client'
 import type { UpdateStatus } from '../api/types'
-import { useResource } from '../hooks/useApi'
 import { useT } from '../i18n'
 import { Banner } from './ui'
 
@@ -38,11 +41,11 @@ function remember(version: string): void {
   }
 }
 
-export function UpdateNotice() {
+/** The status is fetched once by the shell and shared with the nav dot. */
+export function UpdateNotice({ status }: { status: UpdateStatus | null }) {
   const t = useT()
-  const status = useResource<UpdateStatus>(() => api.updateStatus())
   const [dismissed, setDismissed] = useState(readDismissed)
-  const data = status.data
+  const data = status
 
   if (!data?.update_available) return null
   if (dismissed === data.latest) return null
