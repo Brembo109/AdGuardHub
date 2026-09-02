@@ -91,6 +91,10 @@ services:
 docker compose up -d
 ```
 
+`./data` is the directory you will be backing up — put it where your other service data lives if
+you would rather not have it next to the compose file. [The options](./docs/install.md#where-the-data-goes),
+including the one that matches the native install.
+
 Or, on Debian/Ubuntu with systemd, without Docker — read it first, it runs as root:
 
 ```bash
