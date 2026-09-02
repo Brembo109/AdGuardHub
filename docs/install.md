@@ -101,6 +101,12 @@ other side of the pipe, which then tries to run it as commands — a missing scr
 `sh: 1: Not: not found` in a root shell rather than an honest failure. With `-f`, curl exits
 non-zero and writes nothing, so `sh` gets an empty script and does nothing at all.
 
+The archive it downloads is checked against the `SHA256SUMS` published beside it, before anything
+is unpacked into `/opt`. That catches a truncated download, a stale mirror, or a wrong
+`ADGUARDHUB_DOWNLOAD_BASE`; it is not a defence against a compromised GitHub, since the sums come
+from the same place as the archive. Releases before v0.4.4 have no `SHA256SUMS`, so installing one
+of those says the check was skipped and carries on.
+
 The script comes from `main` but installs the newest **release**, not the current state of the
 branch. It creates an `adguardhub` system user, installs to `/opt/adguardhub`, puts the database
 in `/var/lib/adguardhub`, and starts the service. It asks nothing: the admin account is created
