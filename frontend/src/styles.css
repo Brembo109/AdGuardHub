@@ -548,6 +548,23 @@ label {
   color: var(--dim);
 }
 
+/* Log levels, so a failure is findable by eye in a wall of INFO. Only the two
+   that matter are coloured — colouring every level colours nothing. */
+.log-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.log-line.warning {
+  color: var(--warn-ink);
+}
+
+.log-line.error,
+.log-line.critical {
+  color: var(--danger-ink);
+  font-weight: 600;
+}
+
 /* A command to paste into a shell. Wraps rather than scrolls: the installer
    one-liner is long, and a line you have to scroll to read is a line you copy
    half of. */

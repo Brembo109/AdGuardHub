@@ -22,6 +22,7 @@ import Rules from './pages/Rules'
 import SettingsLayout from './pages/settings/Layout'
 import SettingsBackup from './pages/settings/Backup'
 import SettingsGeneral from './pages/settings/General'
+import SettingsLog from './pages/settings/Log'
 import SettingsNotifications from './pages/settings/Notifications'
 import SettingsSecurity from './pages/settings/Security'
 import SettingsUpdates from './pages/settings/Updates'
@@ -189,6 +190,7 @@ export default function App() {
             <Route path="notifications" element={<SettingsNotifications />} />
             <Route path="updates" element={<SettingsUpdates />} />
             <Route path="security" element={<SettingsSecurity />} />
+            <Route path="log" element={<SettingsLog />} />
             <Route path="backup" element={<SettingsBackup />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

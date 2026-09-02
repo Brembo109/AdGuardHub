@@ -90,6 +90,7 @@
   "Left empty, AdGuard uses the addresses your OS is configured with.",
   "light",
   "Load balance",
+  "Log",
   "Log queries",
   "Maximum cached TTL",
   "Minimum cached TTL",

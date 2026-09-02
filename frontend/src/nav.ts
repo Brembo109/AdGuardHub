@@ -34,6 +34,7 @@ export const SETTINGS_TABS: SubTab[] = [
   { to: '/settings/notifications', label: 'Notifications' },
   { to: '/settings/updates', label: 'Updates' },
   { to: '/settings/security', label: 'Security' },
+  { to: '/settings/log', label: 'Log' },
   { to: '/settings/backup', label: 'Backup' },
 ]
 
