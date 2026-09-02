@@ -39,6 +39,7 @@ UNIT_PATH="/etc/systemd/system/adguardhub.service"
 ENV_DIR="/etc/adguardhub"
 
 WORK=""
+ARCHIVE=""
 cleanup() {
     [ -n "$WORK" ] && rm -rf "$WORK"
 }
@@ -139,17 +140,46 @@ resolve_version() {
     printf '%s' "$latest"
 }
 
+# Compare the archive against the SHA256SUMS the release publishes beside it.
+#
+# This is the one thing here that is unpacked as root, so it is worth knowing it
+# arrived intact. What that buys is honest but bounded: it catches a truncated
+# download, a stale mirror, and a wrong ADGUARDHUB_DOWNLOAD_BASE. It does not
+# defend against a compromised GitHub, because the sums come from the same place
+# as the archive — for that a signature checked against a key you already hold
+# would be needed, and this project publishes no such key.
+verify_release() {
+    archive="$1"
+    sums_url="${DOWNLOAD_BASE}/${version}/SHA256SUMS"
+    if ! curl -fsSL "$sums_url" -o "$WORK/SHA256SUMS" 2>/dev/null; then
+        # Releases before v0.4.4 shipped without one, and installing an older
+        # version has to keep working.
+        note "no SHA256SUMS published for ${version} — skipping the integrity check"
+        return 0
+    fi
+    expected=$(sed -n "s/^\([0-9a-f]\{64\}\) [ *]${archive}\$/\1/p" "$WORK/SHA256SUMS" | head -n 1)
+    [ -n "$expected" ] ||
+        die "SHA256SUMS for ${version} does not mention ${archive}. Refusing to install an archive nobody vouched for."
+    actual=$(sha256sum "$WORK/$archive" | cut -d' ' -f1)
+    [ "$expected" = "$actual" ] ||
+        die "checksum mismatch on ${archive}: expected ${expected}, got ${actual}. Nothing was installed."
+    note "checksum verified"
+}
+
 download_release() {
     version="$1"
     stripped="${version#v}"
-    url="${DOWNLOAD_BASE}/${version}/adguardhub-${stripped}.tar.gz"
+    archive="adguardhub-${stripped}.tar.gz"
+    url="${DOWNLOAD_BASE}/${version}/${archive}"
     say "Downloading AdGuardHub ${version}"
     note "$url"
-    curl -fsSL "$url" -o "$WORK/release.tar.gz" ||
+    curl -fsSL "$url" -o "$WORK/$archive" ||
         die "could not download $url — check that release exists and has a tarball attached."
+    verify_release "$archive"
     # A 404 page saved as a file is the classic way this goes wrong quietly.
-    tar -tzf "$WORK/release.tar.gz" >/dev/null 2>&1 ||
+    tar -tzf "$WORK/$archive" >/dev/null 2>&1 ||
         die "the downloaded file is not a valid archive. The release may not have one attached yet."
+    ARCHIVE="$WORK/$archive"
 }
 
 # --------------------------------------------------------------------------
@@ -167,7 +197,7 @@ create_user() {
 install_files() {
     say "Installing to $PREFIX"
     mkdir -p "$WORK/unpacked"
-    tar -xzf "$WORK/release.tar.gz" -C "$WORK/unpacked" --strip-components=1 ||
+    tar -xzf "$ARCHIVE" -C "$WORK/unpacked" --strip-components=1 ||
         die "could not unpack the release"
     for required in app static requirements.txt; do
         [ -e "$WORK/unpacked/$required" ] ||

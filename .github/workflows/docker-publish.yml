@@ -96,8 +96,15 @@ jobs:
           find "${stage}" -name '__pycache__' -type d -prune -exec rm -rf {} +
           tar -czf "adguardhub-${version}.tar.gz" "${stage}"
           tar -tzf "adguardhub-${version}.tar.gz" >/dev/null
+          # install.sh unpacks this as root, so it gets something to check the
+          # download against: a truncated transfer or a stale mirror is caught
+          # before anything is written to /opt.
+          sha256sum "adguardhub-${version}.tar.gz" > SHA256SUMS
+          cat SHA256SUMS
 
-      - name: Attach it to the release
+      - name: Attach them to the release
         uses: softprops/action-gh-release@v2
         with:
-          files: adguardhub-${{ steps.version.outputs.version }}.tar.gz
+          files: |
+            adguardhub-${{ steps.version.outputs.version }}.tar.gz
+            SHA256SUMS
