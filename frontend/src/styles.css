@@ -277,6 +277,20 @@ label {
   min-width: 0;
 }
 
+/* Top-aligning the columns is not enough on its own: a label that wraps to two
+   lines still pushes its own input a line below its neighbours'. `subgrid` lets
+   every field share the parent's rows, so label, input and help text each line up
+   across the whole group however any one of them wraps. Where it is unsupported
+   the fields simply stay top-aligned, which is where this started. */
+@supports (grid-template-rows: subgrid) {
+  .fields-grid.aligned .field {
+    display: grid;
+    grid-row: span 3;
+    grid-template-rows: subgrid;
+    row-gap: 0;
+  }
+}
+
 /* Textareas of hostnames need the room; pair lists and client tables need it all. */
 .fields-grid .field.wide {
   grid-column: span 2;
