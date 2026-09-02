@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict
 
 from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
 from ..deps import CurrentUser, SessionDep
 from ..models import (
@@ -191,3 +191,18 @@ async def list_drift(
         select(DriftEvent).order_by(DriftEvent.id.desc()).limit(limit)
     )
     return list(result.scalars().all())
+
+
+@router.delete("/drift")
+async def clear_drift(_: CurrentUser, session: SessionDep) -> dict[str, int]:
+    """Empty the drift log.
+
+    Deleting the record of a difference does not resolve it: if a node still
+    disagrees with the hub, the next reconciliation run finds it again and writes
+    a new entry. This is for the other case — a log full of findings whose cause
+    is already gone — where the history is noise rather than evidence.
+    """
+    deleted = await _count(session, select(func.count()).select_from(DriftEvent))
+    await session.execute(delete(DriftEvent))
+    await session.commit()
+    return {"deleted": deleted}

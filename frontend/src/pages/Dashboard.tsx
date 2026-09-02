@@ -111,6 +111,25 @@ export default function Dashboard() {
         : t('Nothing in the retry queue could be applied yet.')
     })
 
+  // Clearing the log resolves nothing — the next run finds a difference that is
+  // still there and writes it again. It is for the opposite case: findings whose
+  // cause is already fixed, left behind as noise.
+  const clearDrift = () => {
+    if (
+      !confirm(
+        t('Delete every entry in the drift log?') +
+          '\n\n' +
+          t('This removes the record, not the cause. Anything still out of step is found again by the next reconciliation run.'),
+      )
+    ) {
+      return
+    }
+    return run(async () => {
+      const { deleted } = await api.clearDrift()
+      return t('Drift log cleared ({count} removed).', { count: deleted })
+    })
+  }
+
   const value = stats.data
   const live = traffic.data
   const silent = live ? live.instances_total - live.instances_reporting : 0
@@ -417,6 +436,16 @@ export default function Dashboard() {
       <Card
         title={t('Drift log')}
         hint={t('Differences found by reconciliation. Corrections are applied automatically and never happen silently.')}
+        actions={
+          <button
+            className="ghost"
+            onClick={clearDrift}
+            disabled={busy || !drift.data?.length}
+            title={t('Delete the entries. A difference that still exists is found again on the next run.')}
+          >
+            {t('Clear log')}
+          </button>
+        }
       >
         {drift.data && drift.data.length ? (
           <div className="table-wrap">

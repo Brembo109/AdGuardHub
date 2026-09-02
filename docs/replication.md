@@ -98,6 +98,12 @@ that flaps for months is a different story:
 instance; dropping one would silently abandon a change that never reached a node, which is the
 exact failure the queue exists to prevent. Only jobs that already landed count as history.
 
+*Clear log* on the dashboard empties the drift log by hand, for when a cause is fixed and the
+entries it left behind are noise rather than evidence — an upgrade that reported the same
+difference for a day, or a bug in the hub itself. It deletes the record, not the cause: a node
+that still disagrees with the hub is found by the next reconciliation run and written again.
+The retry queue has no equivalent, for the reason above.
+
 ## Maintenance: holding one node back
 
 Sometimes a node is yours for an hour — you are upgrading AdGuard Home on it, moving it to

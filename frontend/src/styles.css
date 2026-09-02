@@ -770,6 +770,14 @@ label {
   font-size: 13px;
 }
 
+.card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
 .grid {
   display: grid;
   gap: 14px;

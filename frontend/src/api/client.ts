@@ -73,7 +73,7 @@ const put = <T,>(path: string, body: unknown) =>
   request<T>(path, { method: 'PUT', body: JSON.stringify(body) })
 const patch = <T,>(path: string, body: unknown) =>
   request<T>(path, { method: 'PATCH', body: JSON.stringify(body) })
-const del = (path: string) => request<void>(path, { method: 'DELETE' })
+const del = <T = void,>(path: string) => request<T>(path, { method: 'DELETE' })
 
 function query(params: Record<string, string | boolean | number | undefined>): string {
   const search = new URLSearchParams()
@@ -162,6 +162,7 @@ export const api = {
   retryJobs: () => post<{ recovered: number }>('/api/jobs/retry'),
   deleteJob: (id: number) => del(`/api/jobs/${id}`),
   drift: (limit = 100) => get<DriftEvent[]>(`/api/drift${query({ limit })}`),
+  clearDrift: () => del<{ deleted: number }>('/api/drift'),
 
   notifiers: () => get<Notifier[]>('/api/settings/notifiers'),
   notifierMeta: () => get<{ types: string[]; events: string[] }>('/api/settings/notifiers/meta'),

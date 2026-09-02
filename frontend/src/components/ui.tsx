@@ -23,16 +23,32 @@ export function PageHeader({
 export function Card({
   title,
   hint,
+  actions,
   children,
 }: {
   title?: string
   hint?: string
+  actions?: ReactNode
   children: ReactNode
 }) {
-  return (
-    <section className="card">
+  const heading = (
+    <>
       {title ? <h2>{title}</h2> : null}
       {hint ? <p className="hint">{hint}</p> : null}
+    </>
+  )
+  return (
+    <section className="card">
+      {/* Only a card that has actions gets the extra row: every other card keeps
+          the markup — and therefore the spacing — it had before. */}
+      {actions ? (
+        <div className="card-head">
+          <div>{heading}</div>
+          <div className="actions">{actions}</div>
+        </div>
+      ) : (
+        heading
+      )}
       {children}
     </section>
   )
