@@ -18,9 +18,14 @@ import { useT } from '../i18n'
 import { UpdateRunner } from './UpdateRunner'
 import { Banner, Card } from './ui'
 
-/** The command that upgrades this kind of install, or nothing for a checkout. */
+/** The command that upgrades this kind of install, or nothing for a checkout.
+ *
+ * Docker is not in here because there is no single command for it: what to run
+ * depends on whether the container came from a compose file, which cannot be
+ * seen from inside the container. See {@link DockerUpgrade}.
+ */
 const UPGRADE_COMMAND: Record<InstallMethod, string> = {
-  docker: 'docker compose pull && docker compose up -d',
+  docker: '',
   native: 'curl -sSL https://raw.githubusercontent.com/fgrfn/adguardhub/main/install.sh | sudo sh',
   source: '',
 }
@@ -32,6 +37,40 @@ const METHOD_HINT: Record<InstallMethod, string> = {
     'This hub was installed by the installer, which upgrades in place when it is run again. Your data directory and /etc/adguardhub/adguardhub.env are never touched.',
   source:
     'This hub is running from a checkout rather than a release, so upgrading it is whatever you normally do with that checkout.',
+}
+
+/**
+ * The two ways a container gets replaced, because the hub cannot tell them apart.
+ *
+ * Compose leaves no trace inside the container it started — no environment
+ * variable, no file — so a hub that shows only `docker compose pull` is telling
+ * everybody who used plain `docker run` to run a command that cannot work, and
+ * everybody else to run it in a directory they may not be standing in. The error
+ * that follows ("no configuration file provided") reads like a broken hub rather
+ * than a wrong working directory, so it is named here rather than left to search.
+ */
+function DockerUpgrade() {
+  const t = useT()
+
+  return (
+    <>
+      <p className="hint" style={{ margin: '10px 0 6px' }}>
+        {t(
+          'With Compose, in the directory that holds your docker-compose.yml — “no configuration file provided” means you are somewhere else, or there is no compose file at all:',
+        )}
+      </p>
+      <pre className="command">docker compose pull &amp;&amp; docker compose up -d</pre>
+
+      <p className="hint" style={{ margin: '10px 0 6px' }}>
+        {t(
+          'Started with docker run instead? Pull the image, drop the container, and start it again with exactly the command you used the first time — the data volume it mounts is not touched by any of this:',
+        )}
+      </p>
+      <pre className="command">
+        {'docker pull ghcr.io/fgrfn/adguardhub:latest\ndocker rm -f adguardhub'}
+      </pre>
+    </>
+  )
 }
 
 export function UpdateCard() {
@@ -134,6 +173,7 @@ export function UpdateCard() {
           {/* A native install can be told to do this itself, so the command is
               the fallback for whoever would rather run it in a terminal. */}
           {command ? <pre className="command">{command}</pre> : null}
+          {data.install_method === 'docker' ? <DockerUpgrade /> : null}
           {data.self_update ? <UpdateRunner onFinished={() => void status.reload()} /> : null}
         </div>
       ) : null}

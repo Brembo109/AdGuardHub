@@ -63,6 +63,10 @@ the hub and is pushed to **all** connected instances at once.
 
 ## Quick start
 
+With Docker Compose. Save this as **`docker-compose.yml`** in a directory of your choice — that
+directory becomes the hub's home, and every `docker compose` command, including the ones that
+upgrade it later, is run from inside it:
+
 ```yaml
 services:
   adguardhub:
