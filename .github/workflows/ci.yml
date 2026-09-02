@@ -47,7 +47,7 @@ jobs:
       - uses: actions/checkout@v4
       # People are invited to pipe this into a shell, so it gets checked like
       # anything else that runs as root. shellcheck ships on the runner.
-      - run: shellcheck --shell=sh install.sh
+      - run: shellcheck --shell=sh install.sh packaging/adguardhub-update.sh
 
   docker:
     name: Docker image builds

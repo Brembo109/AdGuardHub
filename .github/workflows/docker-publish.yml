@@ -77,7 +77,13 @@ jobs:
           cp -a backend/app "${stage}/app"
           cp -a frontend/dist "${stage}/static"
           cp backend/requirements.txt "${stage}/requirements.txt"
-          cp packaging/adguardhub.service "${stage}/packaging/adguardhub.service"
+          # The whole packaging directory: the service unit, and the two units
+          # plus the script that make the interface's "update now" button work.
+          cp packaging/adguardhub.service \
+             packaging/adguardhub-update.service \
+             packaging/adguardhub-update.path \
+             packaging/adguardhub-update.sh "${stage}/packaging/"
+          chmod +x "${stage}/packaging/adguardhub-update.sh"
           printf '%s\n' "${version}" > "${stage}/VERSION"
           # Compiled caches from the checkout would otherwise ship to users.
           find "${stage}" -name '__pycache__' -type d -prune -exec rm -rf {} +
