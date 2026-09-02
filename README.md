@@ -100,14 +100,15 @@ curl -fsSL https://raw.githubusercontent.com/fgrfn/adguardhub/main/install.sh | 
 Then open <http://localhost> and create the admin account. Add your AdGuard Home instances
 under *Instances*, import one of them as the master, and work only in the hub from then on.
 
-[Installing](./docs/install.md) covers `docker run`, the native install in full, file
-permissions on a bind mount, and the encryption key that protects the stored credentials.
+Those two are the supported ways in. [Installing](./docs/install.md) covers the native path in
+full, file permissions on a bind mount, and the encryption key that protects the stored
+credentials.
 
 ## Documentation
 
 | | |
 | --- | --- |
-| [Installing](./docs/install.md) | Docker, Compose, the native installer, first run, and how to upgrade each of them |
+| [Installing](./docs/install.md) | Compose, the native installer, first run, and how to upgrade both |
 | [Configuration](./docs/configuration.md) | Every `ADGUARDHUB_*` environment variable |
 | [The interface](./docs/interface.md) | What the pages do, and screenshots of all of them |
 | [Replication](./docs/replication.md) | How push and reconcile work, which settings areas are replicated, version history |

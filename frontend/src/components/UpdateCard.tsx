@@ -40,14 +40,17 @@ const METHOD_HINT: Record<InstallMethod, string> = {
 }
 
 /**
- * The two ways a container gets replaced, because the hub cannot tell them apart.
+ * How a container is replaced, and what to do when there is no compose file.
  *
  * Compose leaves no trace inside the container it started — no environment
- * variable, no file — so a hub that shows only `docker compose pull` is telling
- * everybody who used plain `docker run` to run a command that cannot work, and
- * everybody else to run it in a directory they may not be standing in. The error
- * that follows ("no configuration file provided") reads like a broken hub rather
- * than a wrong working directory, so it is named here rather than left to search.
+ * variable, no file — so the hub cannot tell whether the operator has one. The
+ * error it gets otherwise ("no configuration file provided") reads like a broken
+ * hub rather than a wrong working directory, so it is named here rather than
+ * left to search for.
+ *
+ * The second half is a way out, not a second supported path: a container started
+ * without compose has its whole configuration in somebody's shell history, and
+ * the answer is to write it down rather than to reconstruct it every upgrade.
  */
 function DockerUpgrade() {
   const t = useT()
@@ -56,19 +59,17 @@ function DockerUpgrade() {
     <>
       <p className="hint" style={{ margin: '10px 0 6px' }}>
         {t(
-          'With Compose, in the directory that holds your docker-compose.yml — “no configuration file provided” means you are somewhere else, or there is no compose file at all:',
+          'In the directory that holds your docker-compose.yml — “no configuration file provided” means you are somewhere else, or there is no compose file at all:',
         )}
       </p>
       <pre className="command">docker compose pull &amp;&amp; docker compose up -d</pre>
 
       <p className="hint" style={{ margin: '10px 0 6px' }}>
         {t(
-          'Started with docker run instead? Pull the image, drop the container, and start it again with exactly the command you used the first time — the data volume it mounts is not touched by any of this:',
+          'No compose file? Write one, pointing its volumes at the data directory this container already uses, then replace the container with it. The database and the encryption key live in that directory rather than in the container, so nothing is lost:',
         )}
       </p>
-      <pre className="command">
-        {'docker pull ghcr.io/fgrfn/adguardhub:latest\ndocker rm -f adguardhub'}
-      </pre>
+      <pre className="command">{'docker rm -f adguardhub\ndocker compose up -d'}</pre>
     </>
   )
 }
