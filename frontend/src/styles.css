@@ -553,6 +553,47 @@ label {
   color: var(--text);
 }
 
+/* Second-level navigation, under a page's own heading. An underline rather than
+   a pill: the top band already uses a filled shape for "you are here", and two
+   levels of the same treatment stop telling you which level you are reading. */
+.subtabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin: -6px 0 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.subtab {
+  padding: 8px 12px 9px;
+  font-size: 13.5px;
+  color: var(--dim);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  /* Holds the row still when a tab becomes active and its label turns bold. */
+  margin-bottom: -1px;
+}
+
+.subtab:hover {
+  color: var(--text);
+}
+
+.subtab.active {
+  color: var(--accent-ink);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.subtab-badge {
+  margin-left: 7px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--dim);
+  background: var(--line);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
 .page-header {
   display: flex;
   justify-content: space-between;

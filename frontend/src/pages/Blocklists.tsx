@@ -3,7 +3,10 @@ import { api } from '../api/client'
 import type { FilterList, ListKind } from '../api/types'
 import { Badge, Banner, Card, Empty, PageHeader } from '../components/ui'
 import { errorMessage, useResource } from '../hooks/useApi'
+import { SubTabs } from '../components/SubTabs'
 import { useT } from '../i18n'
+import { FILTER_TABS } from '../nav'
+
 
 export default function Blocklists() {
   const t = useT()
@@ -57,11 +60,12 @@ export default function Blocklists() {
   return (
     <>
       <PageHeader
-        title={t('Subscriptions')}
+        title={t('Filter lists')}
         description={t(
-          'Blocklist and allowlist subscription URLs. AdGuardHub tracks the URL and whether it is enabled — AdGuard Home still downloads and applies the list itself.',
+          'Blocklist and allowlist URLs. AdGuardHub tracks the URL and whether it is enabled — AdGuard Home still downloads and applies the list itself.',
         )}
       />
+      <SubTabs tabs={FILTER_TABS} />
 
       {error ? <Banner kind="error">{error}</Banner> : null}
       {message ? <Banner kind="ok">{message}</Banner> : null}
@@ -108,7 +112,7 @@ export default function Blocklists() {
         </form>
       </Card>
 
-      <Card title={t('Subscriptions')}>
+      <Card title={t('Filter lists')}>
         {lists.data && lists.data.length ? (
           <div className="table-wrap">
             <table>
