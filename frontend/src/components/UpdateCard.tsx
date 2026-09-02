@@ -95,24 +95,27 @@ export function UpdateCard() {
         {t('Check for new releases')}
       </label>
 
+      {/* The running version is in the footer under every page, so repeating it
+          here only made the one sentence that matters harder to find. */}
       <p style={{ margin: '10px 0 0' }}>
-        {t('Running {version}.', { version: data.current })}{' '}
         {data.update_available ? (
-          <strong>
-            <a href={data.release_url} target="_blank" rel="noreferrer noopener">
-              {t('{version} is available.', { version: data.latest })}
-            </a>
-          </strong>
+          <>
+            <strong>
+              <a href={data.release_url} target="_blank" rel="noreferrer noopener">
+                {t('Update to {version} available', { version: data.latest })}
+              </a>
+            </strong>
+            {data.published_at
+              ? ` — ${t('released {date}', { date: formatDate(data.published_at) })}`
+              : ''}
+          </>
         ) : data.latest ? (
-          t('That is the newest release.')
+          t('Up to date.')
         ) : data.enabled ? (
           t('No release has been found yet.')
         ) : (
           t('Update checks are off.')
         )}
-        {data.update_available && data.published_at
-          ? ` ${t('Released {date}.', { date: formatDate(data.published_at) })}`
-          : ''}
       </p>
 
       {data.error ? (

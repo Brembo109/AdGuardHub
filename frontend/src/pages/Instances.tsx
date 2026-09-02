@@ -8,7 +8,9 @@ import { IconDots } from '../components/icons'
 import { formatTime } from '../format'
 import { errorMessage, useResource } from '../hooks/useApi'
 import { NodeUpdate } from '../components/NodeUpdate'
+import { SubTabs } from '../components/SubTabs'
 import { useT } from '../i18n'
+import { INSTANCE_TABS } from '../nav'
 import { behindLabel, nodesBehind } from '../nodes'
 
 export default function Instances() {
@@ -150,6 +152,7 @@ export default function Instances() {
         title={t('Instances')}
         description={t('Add each AdGuard Home instance once. Credentials are encrypted at rest with the key from ADGUARDHUB_SECRET_KEY and are never sent back to the browser.')}
       />
+      <SubTabs tabs={INSTANCE_TABS} />
 
       {error ? <Banner kind="error">{error}</Banner> : null}
       {message ? <Banner kind="ok">{message}</Banner> : null}
