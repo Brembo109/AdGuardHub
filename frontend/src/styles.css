@@ -850,9 +850,14 @@ td.mono,
   word-break: break-all;
 }
 
+th.right,
 td.right {
   text-align: right;
   white-space: nowrap;
+}
+
+.dim {
+  color: var(--dim);
 }
 
 .empty {

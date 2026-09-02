@@ -31,6 +31,11 @@ class RemoteFilterList:
     url: str
     enabled: bool
     kind: str  # "blocklist" | "allowlist"
+    # How many rules the node parsed out of the downloaded list. Read-only: the
+    # hub never stores or pushes it — it is the node's own count of a file only
+    # the node has — and it is deliberately not part of the drift comparison,
+    # because two nodes on different refresh schedules legitimately disagree.
+    rules_count: int = 0
 
 
 @dataclass(slots=True)

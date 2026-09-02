@@ -6,6 +6,7 @@ import type {
   DashboardStats,
   DriftEvent,
   FilterList,
+  FilterSizes,
   HubSettings,
   ImportResult,
   Instance,
@@ -146,6 +147,7 @@ export const api = {
     post<Rule[]>('/api/rules/bulk', { text, origin }),
 
   filterLists: (kind?: ListKind) => get<FilterList[]>(`/api/filter-lists${query({ kind })}`),
+  filterSizes: () => get<FilterSizes>('/api/filter-lists/sizes'),
   createFilterList: (payload: { name: string; url: string; kind: ListKind }) =>
     post<FilterList>('/api/filter-lists', payload),
   updateFilterList: (id: number, payload: { name?: string; enabled?: boolean }) =>

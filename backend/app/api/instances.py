@@ -23,6 +23,7 @@ from ..schemas import (
     InstanceOut,
     InstanceUpdate,
 )
+from ..services import filtersizes
 from ..services.aggregate import invalidate_stats_cache
 from ..services.events import bus
 from ..services.importer import import_from_instance
@@ -150,6 +151,7 @@ async def create_instance(
         raise HTTPException(status.HTTP_409_CONFLICT, "An instance with that name exists") from exc
     # The dashboard's "n of m nodes reporting" is now stale by one node.
     invalidate_stats_cache()
+    filtersizes.invalidate()
     await _announce_list()
     await check_instance(session, instance)
     return to_out(instance)
@@ -187,6 +189,7 @@ async def update_instance(
         await session.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, "An instance with that name exists") from exc
     invalidate_stats_cache()
+    filtersizes.invalidate()
     await _announce_list()
     if instance.enabled and not instance.maintenance:
         await check_instance(session, instance)
@@ -209,6 +212,7 @@ async def delete_instance(instance_id: int, _: CurrentUser, session: SessionDep)
     await session.delete(instance)
     await session.commit()
     invalidate_stats_cache()
+    filtersizes.invalidate()
     await _announce_list()
 
 

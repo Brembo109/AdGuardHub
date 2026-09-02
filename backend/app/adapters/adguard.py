@@ -29,6 +29,14 @@ _SILENT_ERRORS = {
 }
 
 
+def _int(value: Any) -> int:
+    """A count from a field that older AdGuard builds may omit or send as a string."""
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def describe_transport_error(exc: Exception, timeout: float | None = None) -> str:
     """A sentence an operator can act on, even when httpx supplies nothing.
 
@@ -249,6 +257,7 @@ class AdGuardAdapter(DnsAdapter):
                         url=str(item.get("url") or ""),
                         enabled=bool(item.get("enabled")),
                         kind=kind,
+                        rules_count=_int(item.get("rules_count")),
                     )
                 )
         return result

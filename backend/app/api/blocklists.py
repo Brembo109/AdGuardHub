@@ -12,7 +12,14 @@ from sqlalchemy.exc import IntegrityError
 
 from ..deps import CurrentUser, SessionDep
 from ..models import FilterList, ListKind, PayloadKind
-from ..schemas import FilterListCreate, FilterListOut, FilterListUpdate
+from ..schemas import (
+    FilterListCreate,
+    FilterListOut,
+    FilterListUpdate,
+    FilterSizesOut,
+    ListSizeOut,
+)
+from ..services import filtersizes
 from ..services.sync import schedule_sync
 from ..services.versions import record as _record
 
@@ -32,6 +39,38 @@ async def list_filter_lists(
     return list(result.scalars().all())
 
 
+@router.get("/sizes", response_model=FilterSizesOut)
+async def list_sizes(user: CurrentUser) -> FilterSizesOut:
+    """How many rules each subscription holds, collected from the instances.
+
+    Declared before ``/{list_id}`` has no bearing here — that path takes no GET —
+    but the order is kept deliberately so a later read route cannot swallow it.
+    """
+    sizes = await filtersizes.cached()
+    return FilterSizesOut(
+        lists=[
+            ListSizeOut(
+                url=item.url,
+                kind=item.kind,
+                rules_count=item.rules_count,
+                agreed=item.agreed,
+                per_instance=[
+                    {
+                        "instance_id": entry.instance_id,
+                        "instance_name": entry.instance_name,
+                        "rules_count": entry.rules_count,
+                    }
+                    for entry in item.per_instance
+                ],
+            )
+            for item in sizes.lists
+        ],
+        total_rules=sizes.total_rules,
+        instances_reporting=sizes.instances_reporting,
+        instances_total=sizes.instances_total,
+    )
+
+
 @router.post("", response_model=FilterListOut, status_code=status.HTTP_201_CREATED)
 async def create_filter_list(
     payload: FilterListCreate, user: CurrentUser, session: SessionDep
@@ -47,6 +86,7 @@ async def create_filter_list(
         raise HTTPException(status.HTTP_409_CONFLICT, "That subscription already exists") from exc
     await record_version(session, f"subscription added: {item.url}", user)
     schedule_sync(LIST_KINDS, f"subscription added: {item.url}")
+    filtersizes.invalidate()
     return item
 
 
@@ -63,6 +103,7 @@ async def update_filter_list(
     await session.commit()
     await record_version(session, f"subscription updated: {item.url}", user)
     schedule_sync(LIST_KINDS, f"subscription updated: {item.url}")
+    filtersizes.invalidate()
     return item
 
 
@@ -76,6 +117,7 @@ async def delete_filter_list(list_id: int, user: CurrentUser, session: SessionDe
     await session.commit()
     await record_version(session, f"subscription removed: {url}", user)
     schedule_sync(LIST_KINDS, f"subscription removed: {url}")
+    filtersizes.invalidate()
 
 
 async def record_version(session: SessionDep, label: str, user: CurrentUser) -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any, ClassVar
 
 from app.adapters.base import AdapterError, DnsAdapter, QueryLogEntry, RemoteFilterList
@@ -76,7 +77,15 @@ class FakeAdapter(DnsAdapter):
 
     async def push_filter_lists(self, lists: list[RemoteFilterList]) -> None:
         self._guard()
-        self.state.filter_lists = list(lists)
+        # ``rules_count`` belongs to the node, not to the push: a real AdGuard does
+        # not forget how many rules it parsed because the hub renamed a list or
+        # toggled it. The hub always sends 0 (it never stores list contents), so
+        # replacing wholesale would wipe the counts on every sync.
+        held = {(item.kind, item.url): item.rules_count for item in self.state.filter_lists}
+        self.state.filter_lists = [
+            replace(item, rules_count=held.get((item.kind, item.url), item.rules_count))
+            for item in lists
+        ]
         self.state.push_calls += 1
 
     def supported_sections(self) -> tuple[str, ...]:

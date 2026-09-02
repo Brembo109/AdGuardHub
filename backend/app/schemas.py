@@ -236,6 +236,29 @@ class FilterListOut(ORMModel):
     created_at: datetime
 
 
+class ListSizeInstanceOut(BaseModel):
+    instance_id: int
+    instance_name: str
+    rules_count: int
+
+
+class ListSizeOut(BaseModel):
+    url: str
+    kind: str
+    rules_count: int
+    agreed: bool
+    per_instance: list[ListSizeInstanceOut]
+
+
+class FilterSizesOut(BaseModel):
+    """Subscription sizes, which only the nodes know: the hub stores URLs, not lists."""
+
+    lists: list[ListSizeOut]
+    total_rules: int
+    instances_reporting: int
+    instances_total: int
+
+
 # -- DNS settings ----------------------------------------------------------
 
 
