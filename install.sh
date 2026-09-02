@@ -73,19 +73,54 @@ apt_install() {
         die "apt-get could not install: $*"
 }
 
+# Can this python3 actually build a virtual environment?
+#
+# Not the same question as "is the venv module importable". Debian splits the
+# machinery in two: `venv` itself is in the standard library and imports fine on
+# a bare python3, while `ensurepip` — which is what populates a new environment
+# — ships separately in python3-venv. So `import venv` succeeded on a machine
+# where `python3 -m venv` could not work, this script reported every dependency
+# present, and then died several steps later with "ensurepip is not available".
+can_make_venv() {
+    python3 -c 'import ensurepip, venv' >/dev/null 2>&1
+}
+
+# Which package provides it depends on the release. `python3-venv` is the
+# meta-package and is right almost everywhere; some systems only carry the
+# versioned `python3.13-venv` that its own error message names. Try the general
+# one, then the one matching the interpreter that is actually installed, and
+# check after each rather than trusting either to be the answer.
+install_venv_support() {
+    say "Installing Python virtual environment support"
+    version=$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || true)
+    for package in python3-venv ${version:+python${version}-venv}; do
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$package" >/dev/null 2>&1 || continue
+        can_make_venv && return 0
+    done
+    die "python3 on this system cannot create virtual environments: 'import ensurepip' fails, and neither python3-venv nor python${version}-venv provided it. Install your distribution's venv package by hand and run this script again."
+}
+
 install_dependencies() {
     missing=""
     command -v python3 >/dev/null 2>&1 || missing="$missing python3"
-    python3 -c 'import venv' >/dev/null 2>&1 || missing="$missing python3-venv"
     command -v tar >/dev/null 2>&1 || missing="$missing tar"
     [ -e /etc/ssl/certs/ca-certificates.crt ] || missing="$missing ca-certificates"
-    if [ -n "$missing" ]; then
+    # Asked before python3 may have been installed, and asked again afterwards:
+    # a machine with no python3 at all obviously cannot make a venv yet, and the
+    # package that fixes that is named after the version apt is about to bring.
+    needs_venv=no
+    can_make_venv || needs_venv=yes
+
+    if [ -n "$missing" ] || [ "$needs_venv" = yes ]; then
         say "Refreshing the package list"
         DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null ||
             die "apt-get update failed"
+    fi
+    if [ -n "$missing" ]; then
         # shellcheck disable=SC2086
         apt_install $missing
     fi
+    can_make_venv || install_venv_support
 }
 
 # --------------------------------------------------------------------------
@@ -149,9 +184,18 @@ install_files() {
 }
 
 install_python_environment() {
-    if [ ! -x "$PREFIX/venv/bin/python" ]; then
+    # Both, not just the interpreter. A venv whose ensurepip step failed still
+    # has bin/python — the symlinks are made before pip is installed — so
+    # checking the interpreter alone declared a broken environment good and then
+    # died on the missing pip a line later. That is the state the previous run
+    # leaves behind, which made the obvious fix-and-retry fail differently.
+    if [ ! -x "$PREFIX/venv/bin/python" ] || [ ! -x "$PREFIX/venv/bin/pip" ]; then
         say "Creating the Python environment"
-        python3 -m venv "$PREFIX/venv" || die "could not create a virtualenv in $PREFIX/venv"
+        # Cleared rather than reused: python3 -m venv over a half-built one
+        # repairs some of it and not the rest.
+        rm -rf "$PREFIX/venv"
+        python3 -m venv "$PREFIX/venv" ||
+            die "could not create a virtualenv in $PREFIX/venv. The error above is python3's own; if it mentions ensurepip, install your distribution's python3-venv package and run this script again."
     fi
     say "Installing Python dependencies (this takes a minute)"
     "$PREFIX/venv/bin/pip" install --quiet --upgrade pip >/dev/null 2>&1 || true
