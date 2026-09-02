@@ -94,6 +94,22 @@ export interface DriftEvent {
   created_at: string
 }
 
+export interface ListSize {
+  url: string
+  kind: string
+  rules_count: number
+  /** Whether every node that answered reported the same size for this list. */
+  agreed: boolean
+  per_instance: { instance_id: number; instance_name: string; rules_count: number }[]
+}
+
+export interface FilterSizes {
+  lists: ListSize[]
+  total_rules: number
+  instances_reporting: number
+  instances_total: number
+}
+
 export interface Notifier {
   id: number
   name: string

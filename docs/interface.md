@@ -51,7 +51,11 @@ allow, or a pasted block — all writing to the same model.
 <img src="./screenshots/rules.png" width="900" alt="The filtering rules page: entry forms above, the rule table below with block and allow badges" />
 
 Filter lists. The hub tracks the URL and whether it is on; AdGuard Home still downloads and
-applies the list itself, so the 700k-domain lists never touch this database.
+applies the list itself, so the 700k-domain lists never touch this database. A *Rules* column
+says how big each list turned out to be, with the active total above the table — those numbers
+come back from the nodes, because the hub never sees the file. A node that has not fetched a
+list yet leaves a dash rather than a zero, and where two nodes report different sizes (they
+refresh on their own schedules) the row is marked and the tooltip breaks it down per node.
 
 <img src="./screenshots/subscriptions.png" width="900" alt="The filter lists page listing four blocklist URLs with their enabled state" />
 
