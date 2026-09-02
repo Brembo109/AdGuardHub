@@ -3,6 +3,7 @@ import { api } from '../api/client'
 import type { Notifier, NotifierType } from '../api/types'
 import { useAuth } from '../auth'
 import { HubSettingsForm } from '../components/HubSettingsForm'
+import { SignInActivity } from '../components/SignInActivity'
 import { Banner, Card, Empty, PageHeader } from '../components/ui'
 import { errorMessage, useResource } from '../hooks/useApi'
 import { useT } from '../i18n'
@@ -66,6 +67,7 @@ export default function Settings() {
       />
       <BackupSection busy={busy} run={run} />
       <PasswordSection busy={busy} run={run} />
+      <SignInActivity />
       <BuildLine />
     </>
   )

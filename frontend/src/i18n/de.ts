@@ -508,4 +508,14 @@ export const de: Record<string, string> = {
   "Restoring replaces the hub's rules, subscriptions and instance settings, then pushes the result to every node. Nodes already connected keep their credentials; any the backup adds need their password entered again.": "Beim Wiederherstellen werden Regeln, Abonnements und Instanz-Einstellungen des Hubs ersetzt und das Ergebnis an jeden Node übertragen. Bereits verbundene Nodes behalten ihre Zugangsdaten; alle, die die Sicherung hinzufügt, brauchen ihr Passwort erneut.",
   "The current state stays in the history, so this can be rolled back.": "Der aktuelle Stand bleibt im Verlauf erhalten, das lässt sich also zurücknehmen.",
   "{count} instance(s) came back without a password — re-enter it under Instances.": "{count} Instanz(en) kamen ohne Passwort zurück — tragen Sie es unter Instanzen erneut ein.",
+
+  // Sign-in attempts and the rate limit
+  "From": "Von",
+  "Kept in memory only, newest first, and cleared on restart — this is a diagnostic aid, not an audit trail. Neither the username nor the password attempted is ever recorded.": "Nur im Arbeitsspeicher, neueste zuerst, und bei einem Neustart weg — das ist eine Diagnosehilfe, kein Prüfprotokoll. Weder der versuchte Benutzername noch das Passwort werden jemals festgehalten.",
+  "No refused sign-ins since the hub started.": "Seit dem Start des Hubs wurde keine Anmeldung abgelehnt.",
+  "Reason": "Grund",
+  "Refused attempts on all three ways in. After {count} failures from one address within {minutes} minutes the hub stops answering it — including with the correct password.": "Abgelehnte Versuche über alle drei Zugänge. Nach {count} Fehlversuchen von einer Adresse innerhalb von {minutes} Minuten antwortet der Hub ihr nicht mehr — auch nicht auf das richtige Passwort.",
+  "Sign-in attempts": "Anmeldeversuche",
+  "Way in": "Zugang",
+  "{source} is locked out for another {seconds} seconds. The correct password is refused too, until then.": "{source} ist noch {seconds} Sekunden gesperrt. Bis dahin wird auch das richtige Passwort abgelehnt.",
 }
