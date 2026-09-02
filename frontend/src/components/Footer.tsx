@@ -29,20 +29,33 @@ export function Footer() {
 
   return (
     <footer className="footer">
-      {version ? (
-        <a href={releaseUrl(version)} target="_blank" rel="noreferrer noopener">
-          {t('AdGuardHub {version}', { version })}
+      {/* One phrase, not two items: the credit names what the version names, so
+          it sits against it with a space rather than in the row of
+          destinations, where equal spacing made it read as a fourth button. */}
+      <span className="footer-identity">
+        {version ? (
+          <a href={releaseUrl(version)} target="_blank" rel="noreferrer noopener">
+            {t('AdGuardHub {version}', { version })}
+          </a>
+        ) : (
+          <span>AdGuardHub</span>
+        )}{' '}
+        <a className="footer-credit" href={OWNER_URL} target="_blank" rel="noreferrer noopener">
+          {t('by {owner}', { owner: OWNER })}
         </a>
-      ) : null}
-      <a href={REPO_URL} target="_blank" rel="noreferrer noopener">
+      </span>
+
+      {/* The separator is drawn by the link it precedes rather than sitting
+          between them as its own element: on a narrow screen a standalone one
+          is left dangling at the end of a wrapped line. This way it travels
+          with the item it belongs to. */}
+      <a className="footer-dest" href={REPO_URL} target="_blank" rel="noreferrer noopener">
         <IconGitHub />
         GitHub
       </a>
-      <a href={ISSUES_URL} target="_blank" rel="noreferrer noopener">
+
+      <a className="footer-dest" href={ISSUES_URL} target="_blank" rel="noreferrer noopener">
         {t('Report an issue')}
-      </a>
-      <a href={OWNER_URL} target="_blank" rel="noreferrer noopener">
-        {t('by {owner}', { owner: OWNER })}
       </a>
     </footer>
   )

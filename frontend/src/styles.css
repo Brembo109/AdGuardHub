@@ -485,11 +485,15 @@ label {
 /* Sits under the page rather than pinned to the viewport: on a short page it
    follows the content, and on the query log it is somewhere past ten thousand
    rows, which is where a footer belongs. */
+/* Three kinds of thing, not four items. What this is and who made it read as
+   one phrase; the places you can go read as a list. Even spacing with no
+   separators made all four look like the same kind of thing, which is why the
+   credit came across as a button nobody asked for. */
 .footer {
   display: flex;
   justify-content: center;
-  align-items: center;
-  gap: 18px;
+  align-items: baseline;
+  gap: 9px;
   flex-wrap: wrap;
   padding: 22px 30px 30px;
   font-size: 12.5px;
@@ -507,6 +511,26 @@ label {
 .footer a:hover {
   color: var(--accent-ink);
   text-decoration: underline;
+}
+
+/* The identity phrase stays together when the row wraps on a narrow screen:
+   "AdGuardHub 0.3.1" on one line and "von fgrfn" on the next is two facts. */
+.footer-identity {
+  white-space: nowrap;
+}
+
+/* Quieter than the links around it, because it is a name rather than somewhere
+   to go — it should be readable, not inviting. */
+.footer-credit {
+  opacity: 0.75;
+}
+
+/* Drawn by the destination rather than placed between destinations, so a
+   wrapped line never ends on a separator with nothing after it. */
+.footer-dest::before {
+  content: '·';
+  margin-right: 9px;
+  opacity: 0.5;
 }
 
 /* A banner with an action in it. The action goes to the far end rather than
