@@ -21,7 +21,7 @@ import { Banner, Card } from './ui'
 /** The command that upgrades this kind of install, or nothing for a checkout. */
 const UPGRADE_COMMAND: Record<InstallMethod, string> = {
   docker: 'docker compose pull && docker compose up -d',
-  native: 'curl -sSL https://raw.githubusercontent.com/fgrfn/adguardhub/main/install.sh | sudo sh',
+  native: 'curl -sSL https://adguardhub.fgrfn.de/install.sh | sudo sh',
   source: '',
 }
 
