@@ -5,7 +5,14 @@ from __future__ import annotations
 from ..models import Instance
 from ..security import Crypto
 from .adguard import AdGuardAdapter
-from .base import AdapterError, DnsAdapter, QueryLogEntry, RemoteFilterList, RemoteState
+from .base import (
+    AdapterError,
+    DnsAdapter,
+    QueryLogEntry,
+    RemoteFilterList,
+    RemoteState,
+    RemoteUpdate,
+)
 
 ADAPTERS: dict[str, type[DnsAdapter]] = {"adguard": AdGuardAdapter}
 
@@ -44,6 +51,7 @@ __all__ = [
     "QueryLogEntry",
     "RemoteFilterList",
     "RemoteState",
+    "RemoteUpdate",
     "available_adapters",
     "build_adapter",
 ]

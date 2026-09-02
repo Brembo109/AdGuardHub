@@ -6,6 +6,7 @@ import { Badge, Banner, Card, Empty, PageHeader } from '../components/ui'
 import { BlockRateRing, RankList, SeriesChart } from '../components/charts'
 import { formatCount, formatTime } from '../format'
 import { errorMessage, useResource } from '../hooks/useApi'
+import { NodeUpdate } from '../components/NodeUpdate'
 import { useT } from '../i18n'
 
 /** How often the traffic numbers are re-read. The backend holds them for ~10s. */
@@ -337,6 +338,7 @@ export default function Dashboard() {
                     {instance.base_url}
                   </span>
                   <Badge tone={instance.status}>{t(instance.status)}</Badge>
+                  <NodeUpdate instance={instance} />
                   <span style={{ marginLeft: 'auto', color: 'var(--dim)', fontSize: 13 }}>
                     {formatTime(instance.last_synced_at)}
                   </span>

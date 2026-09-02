@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 
 from . import session
-from .base import AdapterError, DnsAdapter, QueryLogEntry, RemoteFilterList
+from .base import AdapterError, DnsAdapter, QueryLogEntry, RemoteFilterList, RemoteUpdate
 from .sections import SECTION_NAMES, SPEC_BY_NAME, SectionSpec
 from .session import SessionKey, SessionStore
 
@@ -188,6 +188,47 @@ class AdGuardAdapter(DnsAdapter):
         data = await self._get_json("/control/status")
         version = data.get("version") if isinstance(data, dict) else None
         return str(version or "unknown")
+
+    async def check_update(self) -> RemoteUpdate:
+        """Ask the node what it knows about its own updates.
+
+        `recheck_now: false` deliberately: AdGuard answers from the result of
+        its own periodic check rather than reaching out to its update server
+        because the hub asked. The hub polls every node on the reconcile timer,
+        and turning that into outbound traffic from every node on the same timer
+        would be a rude thing to build.
+
+        The node may answer that it has nothing to say — its update check can be
+        switched off in its own configuration, and older builds have no such
+        endpoint at all. That is reported as "could not find out", which is not
+        the same as "up to date" and must not be shown as if it were.
+        """
+        try:
+            response = await self._request(
+                "POST", "/control/version.json", json={"recheck_now": False}
+            )
+            data = response.json()
+        except AdapterError as caught:
+            return RemoteUpdate(error=str(caught))
+        except ValueError:
+            return RemoteUpdate(error="the node's version endpoint returned a non-JSON body")
+
+        if not isinstance(data, dict):
+            return RemoteUpdate(error="the node's version endpoint returned an unexpected body")
+        if data.get("disabled"):
+            return RemoteUpdate(error="this node has its own update check switched off")
+
+        current = str(data.get("current_version") or "").strip()
+        latest = str(data.get("new_version") or "").strip()
+        return RemoteUpdate(
+            current=current,
+            latest=latest,
+            # AdGuard only fills new_version when there is one; it does not echo
+            # the running version back. The comparison guards the case where a
+            # future build decides to.
+            available=bool(latest) and latest != current,
+            url=str(data.get("announcement_url") or ""),
+        )
 
     async def pull_rules(self) -> list[str]:
         data = await self._get_json("/control/filtering/status")
