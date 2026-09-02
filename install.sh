@@ -2,18 +2,18 @@
 #
 # AdGuardHub — native installer for Debian/Ubuntu with systemd.
 #
-#   curl -fsSL https://adguardhub.fgrfn.de/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/fgrfn/adguardhub/main/install.sh | sh
 #
 # You are about to run a script you have not read. If you would rather look
 # first — and you would be right to — do it in two steps instead:
 #
-#   curl -fsSL https://adguardhub.fgrfn.de/install.sh -o install.sh
+#   curl -fsSL https://raw.githubusercontent.com/fgrfn/adguardhub/main/install.sh -o install.sh
 #   less install.sh
 #   sudo sh install.sh
 #
-# This script installs the latest *release*, not the current state of the
-# repository. Handing someone an untested commit because they ran a one-liner
-# would be a poor trade.
+# This script comes from `main`, but it installs the latest *release*, not the
+# current state of the branch. Handing someone an untested commit because they
+# ran a one-liner would be a poor trade.
 #
 # Re-running it upgrades an existing installation in place. Your data directory
 # and /etc/adguardhub/adguardhub.env are never touched.

@@ -94,7 +94,7 @@ docker compose up -d
 Or, on Debian/Ubuntu with systemd, without Docker — read it first, it runs as root:
 
 ```bash
-curl -fsSL https://adguardhub.fgrfn.de/install.sh | sudo sh
+curl -fsSL https://raw.githubusercontent.com/fgrfn/adguardhub/main/install.sh | sudo sh
 ```
 
 Then open <http://localhost> and create the admin account. Add your AdGuard Home instances
