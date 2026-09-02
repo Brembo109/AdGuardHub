@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from './auth'
+import { Footer } from './components/Footer'
 import { SyncStatus } from './components/SyncStatus'
 import { UpdateNotice } from './components/UpdateNotice'
 import { IconMenu, IconMonitor, IconMoon, IconSun } from './components/icons'
@@ -167,6 +168,8 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+
+      <Footer />
     </div>
   )
 }
