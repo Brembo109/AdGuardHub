@@ -51,10 +51,8 @@ export function UpdateNotice() {
     <Banner kind="ok">
       <div className="banner-row">
         <span>
-          {t('AdGuardHub {version} is available. You are running {current}.', {
-            version: data.latest,
-            current: data.current,
-          })}{' '}
+          {/* Not "you are running X" — the footer says that on this very page. */}
+          {t('AdGuardHub {version} is available.', { version: data.latest })}{' '}
           <a href={data.release_url} target="_blank" rel="noreferrer noopener">
             {t('Release notes')}
           </a>
