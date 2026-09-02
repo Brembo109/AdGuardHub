@@ -14,6 +14,10 @@ up front.
 
 ## Docker Compose
 
+Save this as **`docker-compose.yml`** in a directory of your choice. That directory becomes the
+hub's home: `docker compose` reads the file from the directory it is run in, so every command
+here — including the upgrade later on — belongs inside it.
+
 ```yaml
 services:
   adguardhub:
@@ -75,8 +79,9 @@ Or in one line, if you would rather not:
 curl -sSL https://adguardhub.fgrfn.de/install.sh | sudo sh
 ```
 
-The script installs the newest **release**, not the current state of this repository. It creates an `adguardhub` system user, installs to `/opt/adguardhub`, puts the database
-in `/var/lib/adguardhub`, and starts the service. It asks nothing: the admin account is created
+The script installs the newest **release**, not the current state of this repository. It creates
+an `adguardhub` system user, installs to `/opt/adguardhub`, puts the database in
+`/var/lib/adguardhub`, and starts the service. It asks nothing: the admin account is created
 in the browser, and the encryption key looks after itself (see [The encryption key](#the-encryption-key)).
 
 | | |
@@ -171,9 +176,20 @@ and nothing else. To stop it entirely, untick *Check for new releases* — or st
 
 | Installed as | Upgrade with |
 | --- | --- |
-| Docker | `docker compose pull && docker compose up -d` — a container cannot replace its own image; your data volume is untouched |
+| Docker | `docker compose pull && docker compose up -d`, from the directory holding your `docker-compose.yml` — a container cannot replace its own image; your data volume is untouched |
 | Native (`install.sh`) | the **Update this hub** button, or re-run the installer yourself; either way it upgrades in place and never touches your data directory or `adguardhub.env` |
 | A checkout | whatever you normally do with that checkout |
+
+`docker compose` reads its file from the directory it runs in. Somewhere else, or on a hub
+started with plain `docker run`, it answers `no configuration file provided: not found` — which
+is about the directory, not about the hub. Without a compose file, pull the image and replace
+the container instead, then start it again with the `docker run` command you used the first
+time; the data volume it mounts survives all three steps:
+
+```bash
+docker pull ghcr.io/fgrfn/adguardhub:latest
+docker rm -f adguardhub
+```
 
 `docker compose up -d` on its own will **not** fetch a newer image: Docker reuses the cached one
 whenever the tag already exists locally. To run your own checkout instead of the published
