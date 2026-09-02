@@ -40,7 +40,9 @@ services:
 docker compose up -d
 ```
 
-Then open <http://localhost> and create the admin account.
+Then open the hub at `http://<host>` — the address of the machine you started it on, not the one
+you are browsing from — and create the admin account. Published on another port, it is
+`http://<host>:8080`.
 
 ### Where the data goes
 

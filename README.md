@@ -101,8 +101,10 @@ Or, on Debian/Ubuntu with systemd, without Docker — read it first, it runs as 
 curl -fsSL https://raw.githubusercontent.com/fgrfn/adguardhub/main/install.sh | sudo sh
 ```
 
-Then open <http://localhost> and create the admin account. Add your AdGuard Home instances
-under *Instances*, import one of them as the master, and work only in the hub from then on.
+Then open the hub in a browser — `http://<host>`, the machine you just started it on, whose
+address the native installer prints when it finishes — and create the admin account. Add your
+AdGuard Home instances under *Instances*, import one of them as the master, and work only in the
+hub from then on.
 
 Those two are the supported ways in. [Installing](./docs/install.md) covers the native path in
 full, file permissions on a bind mount, and the encryption key that protects the stored
