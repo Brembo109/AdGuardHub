@@ -260,3 +260,18 @@ export interface HubSettings {
   /** Accepted [min, max] per field, so the form can bound its inputs. */
   limits: Record<string, [number, number]>
 }
+
+/** One refused sign-in, as Settings shows it. */
+export interface FailedSignIn {
+  source: string
+  door: string
+  reason: string
+  at: string
+}
+
+export interface SignInActivity {
+  failures: FailedSignIn[]
+  lockouts: { source: string; seconds_left: number }[]
+  max_failures: number
+  window_seconds: number
+}
