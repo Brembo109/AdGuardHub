@@ -1,0 +1,99 @@
+# What the hub replicates
+
+```
+┌─────────────┐        push         ┌──────────────────┐
+│             │ ──────────────────► │  AdGuard Home #1  │
+│ AdGuardHub  │                     └──────────────────┘
+│  (source of │        push         ┌──────────────────┐
+│   truth)    │ ──────────────────► │  AdGuard Home #2  │
+│             │                     └──────────────────┘
+└─────────────┘
+      ▲
+      │ reconcile (drift detection)
+      └──────────────────────────────────────────────────
+```
+
+Every change is pushed to every instance immediately. An unreachable instance never delays the
+others: its update goes to a retry queue and is applied as soon as it answers again. A
+reconciliation job runs on an interval as the safety net, comparing each node against the
+central state, correcting what has drifted, and logging every correction.
+
+Instances are reached through an adapter interface (`push_rules` / `pull_rules` / …), so the
+sync core never talks to AdGuard's API directly.
+
+## Which areas
+
+Under *Instances → Settings*, each area can be replicated or left to the instance:
+
+| Section | Covers |
+| --- | --- |
+| DNS & upstreams | Upstream/bootstrap/fallback resolvers, upstream mode, DNSSEC, cache, rate limits, blocking mode |
+| Clients | Persistent clients and their per-client filtering settings |
+| Access control | Allowed/disallowed clients, blocked hostnames |
+| Encryption (TLS) | Whether encryption is on — certificates stay per node |
+| DNS rewrites | Custom domain-to-answer rewrites |
+| Blocked services | Globally blocked services and their schedule |
+| Filtering | Filtering on/off and the list refresh interval |
+| Safe browsing / Parental / Safe search | The protection modules |
+| Query log & Statistics | Retention, anonymisation, ignored domains |
+
+**DHCP is never touched.** Leases and interface bindings belong to the individual host;
+copying them between nodes would be actively wrong.
+
+Importing an instance as the master adopts every area it exposes and switches replication on.
+An area a given AdGuard version does not implement is skipped rather than failing the sync.
+
+> **On TLS — read before switching it on.** Install and verify a working certificate on **every**
+> node first. AdGuard Home does not check that a node can actually serve HTTPS: if one has no
+> valid certificate, enabling encryption can make it unreachable — including its own web
+> interface, because it redirects to HTTPS. Recovering then needs shell access to that host to
+> turn TLS off in `AdGuardHome.yaml` and restart it.
+>
+> Because of that, encryption is the one area an import adopts but leaves **switched off**; you
+> enable it deliberately, and the UI confirms first. Only the on/off state is replicated: each
+> node keeps its own certificate and hostname, and the push reads the target's current TLS
+> settings and overlays just `enabled` — `/control/tls/configure` replaces the whole object, so a
+> partial write would erase the node's certificate.
+
+## Comments in the rule set
+
+`!` and `#` lines are stored and replicated like any other line, in place. That matters more
+than it sounds: a comment is usually the note saying *why* a rule exists — "allowed after the
+doorbell app broke" — and since the hub owns the whole rule set, anything it does not store is
+something reconciliation later removes from your nodes.
+
+They appear under *Filtering → Rules* in the *Notes* filter, carry a neutral badge because they
+filter nothing, and are edited and deleted like any other entry. Two limits worth knowing:
+
+- **Identical comment lines collapse.** Rule text is unique in the hub, so using `!` twice as a
+  bare separator keeps one of them. Notes with different wording are all kept.
+- **Already-lost comments do not come back.** If an earlier version imported your rules and
+  reconciliation stripped the comments from your nodes, that text is gone; re-import from a node
+  that still has them, or add them again.
+
+## Version history
+
+Every change to the hub — a rule, a subscription, a settings section, an import — records a
+snapshot. Under *History* you can:
+
+- see what each change actually carried, summarised per entry
+- compare any version against the current state or against another version, down to the
+  individual settings key
+- roll back to any version: the central state is replaced and pushed to every instance, and the
+  rollback itself is recorded so it can be undone in turn
+
+## What is capped
+
+Three tables would otherwise grow for as long as the hub runs. None of them grows quickly —
+rows appear when something goes wrong, so a healthy hub barely accumulates any — but a node
+that flaps for months is a different story:
+
+| Table | Kept | Why that number |
+| --- | --- | --- |
+| Version history | 200 | Enough to roll back through a bad week |
+| Drift log | 500 | What `/api/drift` will serve in one request at most |
+| Applied push jobs | 500 | Same, for `/api/jobs` |
+
+**The retry queue is never trimmed.** A pending or failed job is work still owed to an
+instance; dropping one would silently abandon a change that never reached a node, which is the
+exact failure the queue exists to prevent. Only jobs that already landed count as history.
