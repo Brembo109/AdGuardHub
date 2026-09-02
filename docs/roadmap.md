@@ -92,7 +92,7 @@ schedules) is marked and broken down per node rather than averaged into one numb
 reaches reconciliation: a rule count is an observation about a file, not configuration the hub
 owns, so a difference in one is never drift.
 
-**v0.5.1** fixes the update button on any hub that had already updated once. Pressing it
+**v0.6.0** fixes the update button on any hub that had already updated once. Pressing it
 appeared to do nothing: the confirmation closed and an ordinary idle button came back, with no
 progress and no log. The upgrade was running the whole time — a browser reload a few minutes
 later showed the new version — but nothing said so, and pressing again hit a hub that was
@@ -104,6 +104,14 @@ hub read that marker as this run's outcome, reported the request as neither runn
 finished, and the interface never began watching. A fresh install has no such log, which is why
 the fault only ever appeared from the second upgrade onward. A log is now attributed to the
 previous run when it is older than the request, not only when it is older than fifteen minutes.
+
+Alongside it, the release notice grew the counterpart it was missing. The banner announcing a
+new version is dismissible on purpose — a bar you cannot get rid of teaches you to stop reading
+bars — but dismissing it used to make the release invisible, leaving only a settings page you
+had to already suspect. A dot now sits beside *Settings* in the top bar for as long as a newer
+release exists: not dismissible, never in the way, gone when the hub is current. The
+interruption and the standing fact are two different things rather than one thing asked to be
+both.
 
 ## Next
 
