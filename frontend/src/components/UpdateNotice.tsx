@@ -57,7 +57,7 @@ export function UpdateNotice() {
             {t('Release notes')}
           </a>
           {' · '}
-          <Link to="/settings">{t('How to update')}</Link>
+          <Link to="/settings/updates">{t('How to update')}</Link>
         </span>
         <button
           className="ghost small"

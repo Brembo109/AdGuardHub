@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
+import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useAuth } from './auth'
 import { Footer } from './components/Footer'
 import { SyncStatus } from './components/SyncStatus'
@@ -9,6 +9,7 @@ import { Banner } from './components/ui'
 import { useEventStream } from './hooks/useEventStream'
 import { useTheme } from './hooks/useTheme'
 import { LANGUAGES, useI18n } from './i18n'
+import { covers } from './nav'
 import Blocklists from './pages/Blocklists'
 import Config from './pages/Config'
 import Dashboard from './pages/Dashboard'
@@ -18,17 +19,32 @@ import Login from './pages/Login'
 import Onboarding from './pages/Onboarding'
 import QueryLog from './pages/QueryLog'
 import Rules from './pages/Rules'
-import Settings from './pages/Settings'
+import SettingsLayout from './pages/settings/Layout'
+import SettingsBackup from './pages/settings/Backup'
+import SettingsGeneral from './pages/settings/General'
+import SettingsNotifications from './pages/settings/Notifications'
+import SettingsSecurity from './pages/settings/Security'
+import SettingsUpdates from './pages/settings/Updates'
 import Versions from './pages/Versions'
 
-const NAV = [
+/**
+ * The top level, and only the top level.
+ *
+ * Nine entries was more than a bar can carry legibly, and the pairs that
+ * belonged together were sitting apart: rules beside subscriptions, instances
+ * beside their settings. Each pair is now one entry whose page carries tabs, so
+ * the bar names seven places rather than nine destinations.
+ *
+ * `covers` is what keeps the top-level entry lit while you are on its second
+ * tab — a NavLink only knows about its own path, and "Filter" going dark
+ * because you clicked "Filterlisten" would say you had left it.
+ */
+const NAV: { to: string; label: string; covers?: string[] }[] = [
   { to: '/', label: 'Dashboard' },
   { to: '/querylog', label: 'Query log' },
-  { to: '/rules', label: 'Rules' },
-  { to: '/subscriptions', label: 'Subscriptions' },
+  { to: '/rules', label: 'Filtering', covers: ['/rules', '/subscriptions'] },
   { to: '/dns', label: 'DNS & upstreams' },
-  { to: '/instances', label: 'Instances' },
-  { to: '/config', label: 'Instance settings' },
+  { to: '/instances', label: 'Instances', covers: ['/instances', '/config'] },
   { to: '/history', label: 'History' },
   { to: '/settings', label: 'Settings' },
 ]
@@ -44,6 +60,7 @@ export default function App() {
   const { t, language, setLanguage } = useI18n()
   const [tick, setTick] = useState(0)
   const [menuOpen, setMenuOpen] = useState(false)
+  const { pathname } = useLocation()
 
   // One stream for the whole shell; pages that need their own open theirs.
   const connected = useEventStream((event) => {
@@ -86,7 +103,9 @@ export default function App() {
               to={item.to}
               end={item.to === '/'}
               onClick={() => setMenuOpen(false)}
-              className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+              className={({ isActive }) =>
+                `nav-link${isActive || covers(item, pathname) ? ' active' : ''}`
+              }
             >
               {t(item.label)}
             </NavLink>
@@ -164,7 +183,14 @@ export default function App() {
           <Route path="/instances" element={<Instances />} />
           <Route path="/config" element={<Config />} />
           <Route path="/history" element={<Versions />} />
-          <Route path="/settings" element={<Settings />} />
+          {/* Real routes rather than tab state, so every one can be linked to. */}
+          <Route path="/settings" element={<SettingsLayout />}>
+            <Route index element={<SettingsGeneral />} />
+            <Route path="notifications" element={<SettingsNotifications />} />
+            <Route path="updates" element={<SettingsUpdates />} />
+            <Route path="security" element={<SettingsSecurity />} />
+            <Route path="backup" element={<SettingsBackup />} />
+          </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

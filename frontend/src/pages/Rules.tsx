@@ -4,7 +4,10 @@ import type { Rule, RuleKind, RuleOrigin } from '../api/types'
 import { Badge, Banner, Card, Empty, PageHeader } from '../components/ui'
 import { formatTime } from '../format'
 import { errorMessage, useResource } from '../hooks/useApi'
+import { SubTabs } from '../components/SubTabs'
 import { useT } from '../i18n'
+import { FILTER_TABS } from '../nav'
+
 
 type Tab = 'all' | 'block' | 'allow' | 'comment'
 
@@ -92,6 +95,7 @@ export default function Rules() {
           'The central rule set, in native AdGuard syntax. Every change is pushed to all instances straight away.',
         )}
       />
+      <SubTabs tabs={FILTER_TABS} />
 
       {error ? <Banner kind="error">{error}</Banner> : null}
       {message ? <Banner kind="ok">{message}</Banner> : null}
