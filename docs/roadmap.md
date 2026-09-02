@@ -92,6 +92,19 @@ schedules) is marked and broken down per node rather than averaged into one numb
 reaches reconciliation: a rule count is an observation about a file, not configuration the hub
 owns, so a difference in one is never drift.
 
+**v0.5.1** fixes the update button on any hub that had already updated once. Pressing it
+appeared to do nothing: the confirmation closed and an ordinary idle button came back, with no
+progress and no log. The upgrade was running the whole time — a browser reload a few minutes
+later showed the new version — but nothing said so, and pressing again hit a hub that was
+already restarting, which is where the `failed to fetch` came from.
+
+The updater truncates its log when it starts, so between the press and the systemd path unit
+firing, the only log on disk is the previous upgrade's, still ending in its own `[exit 0]`. The
+hub read that marker as this run's outcome, reported the request as neither running nor
+finished, and the interface never began watching. A fresh install has no such log, which is why
+the fault only ever appeared from the second upgrade onward. A log is now attributed to the
+previous run when it is older than the request, not only when it is older than fifteen minutes.
+
 ## Next
 
 Translating the drift log's summaries: they are generated in the backend and stored as English
