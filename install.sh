@@ -185,15 +185,39 @@ ENVFILE
     fi
 }
 
-install_service() {
-    version="$1"
-    say "Installing the systemd service"
+fill_template() {
     sed -e "s|@PREFIX@|$PREFIX|g" \
         -e "s|@DATA@|$DATA_DIR|g" \
         -e "s|@USER@|$SERVICE_USER|g" \
         -e "s|@PORT@|$PORT|g" \
-        -e "s|@VERSION@|${version#v}|g" \
-        "$PREFIX/adguardhub.service.in" >"$UNIT_PATH" ||
+        -e "s|@VERSION@|$2|g" \
+        "$1"
+}
+
+# The hub asks to be upgraded by creating one empty file; these two units are
+# what turns that into an upgrade. Installing them is what makes the interface's
+# "update now" button work — without them the button is simply not offered, and
+# an upgrade is this script, run again by hand.
+install_update_units() {
+    [ -e "$PREFIX/adguardhub-update.service.in" ] || return 0
+    say "Installing the self-update units"
+    fill_template "$PREFIX/adguardhub-update.service.in" "" \
+        >/etc/systemd/system/adguardhub-update.service ||
+        die "could not write /etc/systemd/system/adguardhub-update.service"
+    fill_template "$PREFIX/adguardhub-update.path.in" "" \
+        >/etc/systemd/system/adguardhub-update.path ||
+        die "could not write /etc/systemd/system/adguardhub-update.path"
+    rm -f "$PREFIX/adguardhub-update.service.in" "$PREFIX/adguardhub-update.path.in"
+    chmod 750 "$PREFIX/adguardhub-update.sh"
+    systemctl daemon-reload
+    systemctl enable --quiet --now adguardhub-update.path 2>/dev/null ||
+        note "the update watcher could not be enabled; upgrades stay a manual re-run of this script."
+}
+
+install_service() {
+    version="$1"
+    say "Installing the systemd service"
+    fill_template "$PREFIX/adguardhub.service.in" "${version#v}" >"$UNIT_PATH" ||
         die "could not write $UNIT_PATH"
     rm -f "$PREFIX/adguardhub.service.in"
     systemctl daemon-reload
@@ -216,7 +240,7 @@ report() {
     note "Data:     $DATA_DIR   (back this up — it holds the database and the encryption key)"
     note "Settings: $ENV_DIR/adguardhub.env"
     note "Logs:     journalctl -u adguardhub -f"
-    note "Upgrade:  re-run this installer"
+    note "Upgrade:  the 'Update this hub' button under Settings, or re-run this installer"
 }
 
 main() {
@@ -233,9 +257,17 @@ main() {
         cp "$WORK/unpacked/packaging/adguardhub.service" "$PREFIX/adguardhub.service.in"
     [ -e "$PREFIX/adguardhub.service.in" ] ||
         die "the release archive is missing its systemd unit template."
+    # Older releases have no self-update units; they simply do not get the button.
+    for extra in adguardhub-update.service adguardhub-update.path; do
+        [ -e "$WORK/unpacked/packaging/$extra" ] &&
+            cp "$WORK/unpacked/packaging/$extra" "$PREFIX/$extra.in"
+    done
+    [ -e "$WORK/unpacked/packaging/adguardhub-update.sh" ] &&
+        cp "$WORK/unpacked/packaging/adguardhub-update.sh" "$PREFIX/adguardhub-update.sh"
     install_python_environment
     prepare_data_dir
     install_service "$version"
+    install_update_units
     report "$version"
 }
 

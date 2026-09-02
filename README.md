@@ -344,8 +344,36 @@ you installed, so the card shows the one that matches:
 | Installed as | Upgrade with |
 | --- | --- |
 | Docker | `docker compose pull && docker compose up -d` — a container cannot replace its own image; your data volume is untouched |
-| Native (`install.sh`) | re-run the installer; it upgrades in place and never touches your data directory or `adguardhub.env` |
+| Native (`install.sh`) | the **Update this hub** button, or re-run the installer yourself; either way it upgrades in place and never touches your data directory or `adguardhub.env` |
 | A checkout | whatever you normally do with that checkout |
+
+### The update button, and why it is safe
+
+A native install can be told to upgrade itself from the interface. The hub does not do the
+upgrading — it holds none of the privilege that would take, and is not given any.
+
+It runs as its own unprivileged user under `ProtectSystem=strict`: it cannot write to `/opt`,
+cannot restart itself, and has no sudo rule. An update button is not a good enough reason to
+change that, so instead the hub creates **one empty file** in its own data directory. A systemd
+path unit (`adguardhub-update.path`) watches for that file, and a root oneshot unit
+(`adguardhub-update.service`) does the privileged half: it fetches `install.sh` over https from
+this repository and runs it, exactly as you would by hand.
+
+The trigger file is empty on purpose. It carries no version, no URL and no arguments, so the
+worst anyone with your admin password can cause through it is *the newest official release,
+from GitHub, over TLS* — the same thing that got installed in the first place. The file is
+removed before the upgrade starts, so a failure waits for a person rather than looping.
+
+The updater writes its output to `update.log` in the data directory, which is what the progress
+view in the interface is reading; the hub is stopped and restarted partway through, so that log
+is the only place the state can survive. If the upgrade fails, nothing is rolled back and the
+hub keeps running the version it had.
+
+Your nodes keep answering DNS throughout — they do not depend on the hub to resolve.
+
+Hubs installed before this existed write a file nothing is watching. The interface says so
+rather than spinning forever: re-run the installer once by hand, and the button works from then
+on.
 
 ## Logs
 

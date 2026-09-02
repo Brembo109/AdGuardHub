@@ -20,6 +20,7 @@ import type {
   SignInActivity,
   SyncResult,
   Traffic,
+  UpdateRun,
   UpdateStatus,
   Version,
   VersionDiff,
@@ -179,6 +180,8 @@ export const api = {
 
   updateStatus: (force = false) =>
     get<UpdateStatus>(`/api/settings/update${query({ force })}`),
+  updateRun: () => get<UpdateRun>('/api/settings/update/run'),
+  startUpdate: () => post<UpdateRun>('/api/settings/update/run'),
 
   hubSettings: () => get<HubSettings>('/api/settings/hub'),
   finishOnboarding: () => post<void>('/api/settings/onboarding-complete'),

@@ -15,6 +15,7 @@ import type { HubSettings, InstallMethod, UpdateStatus } from '../api/types'
 import { formatDate } from '../format'
 import { errorMessage, useResource } from '../hooks/useApi'
 import { useT } from '../i18n'
+import { UpdateRunner } from './UpdateRunner'
 import { Banner, Card } from './ui'
 
 /** The command that upgrades this kind of install, or nothing for a checkout. */
@@ -127,7 +128,10 @@ export function UpdateCard() {
           <p className="hint" style={{ margin: '0 0 6px' }}>
             {t(METHOD_HINT[data.install_method])}
           </p>
+          {/* A native install can be told to do this itself, so the command is
+              the fallback for whoever would rather run it in a terminal. */}
           {command ? <pre className="command">{command}</pre> : null}
+          {data.self_update ? <UpdateRunner onFinished={() => void status.reload()} /> : null}
         </div>
       ) : null}
 
