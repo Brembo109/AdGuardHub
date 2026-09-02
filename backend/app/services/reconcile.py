@@ -252,7 +252,10 @@ async def reconcile_instance(
     # talks to every node on a timer. The node answers from its own cached check
     # rather than reaching out, so this costs one local request.
     with contextlib.suppress(AdapterError, ValueError):
-        update = await adapter.check_update()
+        # The version read a moment ago is what "is there a newer one" is asked
+        # against: AdGuard's version endpoint says what exists, never what is
+        # installed.
+        update = await adapter.check_update(instance.version or "")
         instance.update_version = update.latest if update.available else ""
         instance.update_url = update.url if update.available else ""
         instance.update_error = update.error

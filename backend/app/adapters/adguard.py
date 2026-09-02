@@ -29,6 +29,16 @@ _SILENT_ERRORS = {
 }
 
 
+def _version_key(text: str) -> str:
+    """Compare AdGuard versions without tripping over the leading v.
+
+    ``/control/status`` answers ``v0.107.79`` and other places in the same API
+    answer ``0.107.79``. Comparing those as strings would report an update to the
+    version already running, which is the fault this exists to prevent.
+    """
+    return text.strip().lstrip("vV")
+
+
 def _int(value: Any) -> int:
     """A count from a field that older AdGuard builds may omit or send as a string."""
     try:
@@ -197,7 +207,7 @@ class AdGuardAdapter(DnsAdapter):
         version = data.get("version") if isinstance(data, dict) else None
         return str(version or "unknown")
 
-    async def check_update(self) -> RemoteUpdate:
+    async def check_update(self, current: str = "") -> RemoteUpdate:
         """Ask the node what it knows about its own updates.
 
         `recheck_now: false` deliberately: AdGuard answers from the result of
@@ -226,16 +236,35 @@ class AdGuardAdapter(DnsAdapter):
         if data.get("disabled"):
             return RemoteUpdate(error="this node has its own update check switched off")
 
-        current = str(data.get("current_version") or "").strip()
+        # AdGuard's version.json carries no current_version — the field this used
+        # to compare against does not exist in its response. So `current` was
+        # always empty, `new_version != ""` was always true, and every node whose
+        # answer named a version was reported as having an update to the version
+        # it was already running. It reads as absurd in the interface precisely
+        # because it is: "v0.107.79 — update to v0.107.79".
+        #
+        # The version the hub asked the node for moments ago is the honest
+        # comparison, and the caller passes it in. A build that does send
+        # current_version is believed over it.
+        running = str(data.get("current_version") or "").strip() or current.strip()
         latest = str(data.get("new_version") or "").strip()
+        url = str(data.get("announcement_url") or "")
+
+        if latest and not running:
+            # Nothing to compare against. "Could not find out" is the truth here,
+            # and it is not the same as "there is an update" — which is the whole
+            # mistake this replaced.
+            return RemoteUpdate(
+                latest=latest,
+                url=url,
+                error="the node did not say which version it is running",
+            )
+
         return RemoteUpdate(
-            current=current,
+            current=running,
             latest=latest,
-            # AdGuard only fills new_version when there is one; it does not echo
-            # the running version back. The comparison guards the case where a
-            # future build decides to.
-            available=bool(latest) and latest != current,
-            url=str(data.get("announcement_url") or ""),
+            available=bool(latest) and _version_key(latest) != _version_key(running),
+            url=url,
         )
 
     async def pull_rules(self) -> list[str]:

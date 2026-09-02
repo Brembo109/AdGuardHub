@@ -123,8 +123,14 @@ class DnsAdapter(ABC):
     async def push_section(self, name: str, data: dict[str, Any]) -> None:
         """Apply one configuration section."""
 
-    async def check_update(self) -> RemoteUpdate:
+    async def check_update(self, current: str = "") -> RemoteUpdate:
         """Whether the backend has a newer version of itself available.
+
+        ``current`` is the version the hub already believes this node is
+        running, for backends whose update endpoint reports what is available
+        without saying what is installed. Deciding that from the two together is
+        the caller's contribution: the hub asked the node its version moments
+        earlier and would otherwise throw that away.
 
         Not abstract: a backend that cannot answer is a backend with nothing to
         report, not one that fails to load. The default says exactly that.

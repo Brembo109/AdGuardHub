@@ -74,6 +74,46 @@ async def test_a_node_that_echoes_its_own_version_is_not_an_update() -> None:
     assert (await adapter.check_update()).available is False
 
 
+async def test_the_running_version_comes_from_the_caller_when_adguard_omits_it() -> None:
+    """Reported from a real fleet: "v0.107.79 — update to v0.107.79".
+
+    AdGuard's version.json carries no current_version at all. Comparing against
+    that absent field meant every node whose answer named a version was reported
+    as having an update to the version it was already running. The hub asks each
+    node its version moments earlier, and that is what the question is now put
+    against.
+    """
+    adapter = adapter_answering(json_route({"new_version": "v0.107.79"}))
+    assert (await adapter.check_update("v0.107.79")).available is False
+    # And a genuinely older node still hears about it.
+    assert (await adapter.check_update("v0.107.60")).available is True
+
+
+async def test_the_leading_v_is_not_a_version_difference() -> None:
+    """/control/status answers v0.107.79; elsewhere the same API drops the v."""
+    adapter = adapter_answering(json_route({"new_version": "v0.107.79"}))
+    assert (await adapter.check_update("0.107.79")).available is False
+
+    bare = adapter_answering(json_route({"new_version": "0.107.79"}))
+    assert (await bare.check_update("v0.107.79")).available is False
+
+
+async def test_a_version_nobody_can_name_is_unknown_rather_than_available() -> None:
+    """With no version to compare against, "there is an update" is a guess."""
+    adapter = adapter_answering(json_route({"new_version": "v0.107.79"}))
+    update = await adapter.check_update()
+    assert update.available is False
+    assert update.error != ""
+
+
+async def test_what_the_node_says_about_itself_wins() -> None:
+    """A build that does send current_version is believed over the hub's copy."""
+    adapter = adapter_answering(
+        json_route({"current_version": "v0.107.79", "new_version": "v0.107.79"})
+    )
+    assert (await adapter.check_update("v0.100.0")).available is False
+
+
 async def test_a_node_with_its_check_switched_off_says_so(fresh_db) -> None:
     """Not "up to date" — nobody asked. The distinction is the whole point."""
     adapter = adapter_answering(json_route({"disabled": True}))
