@@ -15,7 +15,7 @@ that used to grow without end.
 **v0.3.0** made the hub say what it knows about itself: update checks against this repository,
 a one-click self-update for native installs, and a native installer for Debian and Ubuntu.
 
-**v0.4.1** is mostly about finding things. The top bar dropped from nine entries to seven and
+**v0.4.0** is mostly about finding things. The top bar dropped from nine entries to seven and
 the pages that cover more than one thing grew tabs, so Settings is five linkable pages rather
 than six cards stacked down one. Each node now says whether a newer AdGuard Home is waiting for
 it — and says so distinctly when it could not be asked, which is not the same as being current.
@@ -23,14 +23,18 @@ The hub's own log is readable in the interface, so diagnosing it no longer start
 a shell. The README became a page again, with everything past the quick start moved into these
 documentation pages.
 
-There is no v0.4.0. That tag was never pushed, and what would have gone out under it did not
-survive contact with a fresh Debian 13 machine: SQLAlchemy declares greenlet only for Python
-below 3.13, so a native install came up with an async database engine and nothing to drive it,
-then died on its first query — while the installer printed that the hub was running. Both halves
-are fixed, the dependency explicitly and the installer by waiting for the hub to answer before
-it claims anything. The rest of this release is the same lesson applied to the pipeline: CI now
-tests both Python versions and starts the container rather than only building it, and the
-Updates card no longer offers one Docker command to people who never had a compose file.
+> **Do not install v0.4.0 natively.** On Python 3.13 — the default on Debian 13 — it comes up
+> with an async database engine and no greenlet to drive it, dies on its first query, and is
+> restarted by systemd every five seconds while the installer prints that the hub is running.
+> The Docker image is unaffected: it is built on Python 3.12, where the dependency is installed.
+> v0.4.1 fixes it.
+
+**v0.4.1** is that fix, and the pipeline changes that should have caught it. greenlet is now a
+dependency this project states itself rather than one it hoped to inherit — SQLAlchemy declares
+it only for Python below 3.13 — and the installer waits for the hub to answer `/api/health`
+before it claims anything, so a crash loop can no longer look like a successful install. CI
+tests both Python versions and starts the container rather than only building it. The Updates
+card also stopped offering one Docker command to people who never had a compose file.
 
 ## Next
 
