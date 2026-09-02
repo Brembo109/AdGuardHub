@@ -1,7 +1,9 @@
 """Adapter interface every DNS filtering backend must implement.
 
-v1 ships only the AdGuard Home adapter (spec §3), but all core logic talks to this
-interface so a Pi-hole adapter can be dropped in without touching sync/reconcile.
+AdGuard Home is the only backend and no other is planned (spec §3). The interface
+is not a promise of one: it is what keeps sync, reconcile and import free of
+AdGuard's HTTP API, so they can be reasoned about — and tested against a fake —
+without a node in the loop.
 """
 
 from __future__ import annotations
