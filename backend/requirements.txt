@@ -1,6 +1,13 @@
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
-sqlalchemy==2.0.36
+# The asyncio extra, not bare sqlalchemy: SQLAlchemy declares greenlet — which
+# its async engine cannot run without — only for python_version < "3.13", so on
+# a Debian 13 host the native install got an async ORM with no greenlet and died
+# on the first query. The extra asks for it unconditionally; the pin keeps this
+# file reproducible like every other line, and 3.1.1 is the first release with
+# 3.13 wheels.
+sqlalchemy[asyncio]==2.0.36
+greenlet==3.1.1
 aiosqlite==0.20.0
 httpx==0.28.1
 pydantic==2.10.4

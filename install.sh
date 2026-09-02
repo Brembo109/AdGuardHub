@@ -269,6 +269,29 @@ install_service() {
     systemctl restart adguardhub || die "the service did not start. Look at: journalctl -u adguardhub -n 50"
 }
 
+# systemctl restart returns as soon as the process is up, which is well before
+# the application has opened its database. A hub that dies in startup and is
+# restarted every five seconds by systemd therefore looked like a clean install
+# — the script printed "AdGuardHub is running" over a crash loop. It is not
+# entitled to say that until something answers.
+wait_for_service() {
+    say "Waiting for the hub to answer"
+    attempt=0
+    while [ "$attempt" -lt 30 ]; do
+        if curl -fsS -o /dev/null "http://127.0.0.1:${PORT}/api/health" 2>/dev/null; then
+            return 0
+        fi
+        sleep 1
+        attempt=$((attempt + 1))
+    done
+    printf '\n' >&2
+    # The reason is almost always in the last few lines, and asking someone to
+    # go and find them is asking them to guess what they are looking for.
+    journalctl -u adguardhub -n 25 --no-pager >&2 2>/dev/null || true
+    printf '\n' >&2
+    die "the hub was installed but never answered on port ${PORT}. Its own log is above; the full one is: journalctl -u adguardhub -n 100"
+}
+
 report() {
     version="$1"
     address=$(hostname -I 2>/dev/null | awk '{print $1}')
@@ -312,6 +335,7 @@ main() {
     prepare_data_dir
     install_service "$version"
     install_update_units
+    wait_for_service
     report "$version"
 }
 
