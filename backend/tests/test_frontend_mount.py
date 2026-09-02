@@ -57,3 +57,43 @@ async def test_no_static_dir_leaves_the_api_alone(tmp_path, monkeypatch) -> None
     mount_frontend(app)
     assert not any(getattr(route, "path", "") == "/{path:path}" for route in app.routes)
     get_settings.cache_clear()
+
+
+async def test_index_is_revalidated_but_hashed_assets_are_not(tmp_path, monkeypatch) -> None:
+    """The caching rule that decides whether an upgrade lands or blanks the page.
+
+    index.html names its scripts by content hash and an upgrade deletes the old
+    ones, so a browser allowed to reuse a stale index.html asks for bundles that
+    are gone and renders nothing — while the hub is up and answering. Without a
+    Cache-Control header a browser may invent its own freshness (RFC 9111
+    §4.2.2), which is exactly how that happened.
+    """
+    app = build_app(tmp_path, monkeypatch)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        for path in ("/", "/rules"):
+            assert (await client.get(path)).headers["cache-control"] == "no-cache"
+
+        # Unhashed files are named the same across builds, so they revalidate too.
+        assert (await client.get("/logo.svg")).headers["cache-control"] == "no-cache"
+
+        # The hashed bundles are the opposite case: a name never outlives its
+        # contents, so refetching them on every load would be pure waste.
+        assets = (await client.get("/assets/app.js")).headers["cache-control"]
+        assert "immutable" in assets
+        assert "max-age=31536000" in assets
+
+    get_settings.cache_clear()
+
+
+async def test_a_missing_asset_is_a_plain_404(tmp_path, monkeypatch) -> None:
+    """It must not fall back to index.html: a bundle request answered with HTML
+    is a syntax error in the console rather than a legible failure."""
+    app = build_app(tmp_path, monkeypatch)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get("/assets/index-OLDHASH.js")
+        assert response.status_code == 404
+        assert "cache-control" not in response.headers
+
+    get_settings.cache_clear()
