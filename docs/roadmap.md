@@ -36,6 +36,25 @@ before it claims anything, so a crash loop can no longer look like a successful 
 tests both Python versions and starts the container rather than only building it. The Updates
 card also stopped offering one Docker command to people who never had a compose file.
 
+**v0.4.2** hardens the command this project invites people to pipe into a root shell. `curl`
+without `-f` prints the server's error body and exits zero, so a URL that answers "Not Found"
+sends those words to `sh`, which tries to run them. Every documented form now passes `-f`, and
+the install one-liner points back at `raw.githubusercontent.com` — the shorter domain in front
+of it turned out to serve nothing, which is how the missing flag was noticed.
+
+**v0.4.3** ends a loop that had been running since the first two-node install. Reconciliation
+compared the hub's `time_zone: "Local"` against a node's `Europe/Berlin` and called it drift,
+corrected it by sending `Local` again, and found the same difference on the next run — every few
+minutes, forever, writing a drift event and firing a notification each time. `Local` is not a
+zone but an instruction to use the node's own, so the comparison was holding a request next to
+its answer. Only nodes whose clock knows where they are were affected, which is why it showed on
+one node of two.
+
+Alongside that: `docker run` is no longer a supported way in — everything the compose file
+carries lives in shell history when you start a container that way — and the installation docs
+now say which side of the volume mount is yours to choose, and to open the hub at the host's
+address rather than at localhost.
+
 ## Next
 
 In no fixed order: a maintenance mode for pausing reconciliation on one instance while you work
