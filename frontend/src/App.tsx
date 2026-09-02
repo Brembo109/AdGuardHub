@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from './auth'
 import { SyncStatus } from './components/SyncStatus'
+import { UpdateNotice } from './components/UpdateNotice'
 import { IconMenu, IconMonitor, IconMoon, IconSun } from './components/icons'
 import { Banner } from './components/ui'
 import { useEventStream } from './hooks/useEventStream'
@@ -144,6 +145,8 @@ export default function App() {
             )}
           </Banner>
         ) : null}
+
+        <UpdateNotice />
 
         <Routes>
           <Route path="/onboarding" element={<Onboarding />} />

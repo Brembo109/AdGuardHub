@@ -18,6 +18,9 @@ WorkingDirectory=@PREFIX@
 Environment=ADGUARDHUB_DATA_DIR=@DATA@
 Environment=ADGUARDHUB_STATIC_DIR=@PREFIX@/static
 Environment=ADGUARDHUB_VERSION=@VERSION@
+# So the hub knows an upgrade here means re-running install.sh, rather than
+# telling you to pull an image you are not using.
+Environment=ADGUARDHUB_INSTALL_METHOD=native
 # The dash means "carry on if it does not exist". This is where your own
 # settings go — ADGUARDHUB_SECRET_KEY, log level, timers.
 EnvironmentFile=-/etc/adguardhub/adguardhub.env

@@ -26,6 +26,7 @@ from .services import hubsettings
 from .services.querylog import querylog_worker
 from .services.reconcile import reconcile_worker
 from .services.sync import retry_worker
+from .version import VERSION
 
 _settings = get_settings()
 configure_logging(
@@ -35,20 +36,6 @@ configure_logging(
     backups=_settings.log_file_backups,
 )
 logger = logging.getLogger("adguardhub")
-
-def build_version() -> str:
-    """The release this build was cut from.
-
-    The Release workflow passes the git tag into the image build, which bakes it
-    in as ADGUARDHUB_VERSION. Nothing in the source tree carries a number, so a
-    version here can never drift out of step with the tags the way a hand-edited
-    constant does — and a build that came from no tag says so rather than
-    claiming to be the last release someone happened to write down.
-    """
-    return os.environ.get("ADGUARDHUB_VERSION", "").strip() or "dev"
-
-
-VERSION = build_version()
 
 
 async def bootstrap_admin() -> None:

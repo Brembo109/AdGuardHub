@@ -36,6 +36,17 @@ export function formatTime(value: string | null | undefined): string {
   return date.toLocaleString(locale)
 }
 
+/**
+ * Date only, for something that happened on a day rather than at a moment — a
+ * release date, where the time it was tagged is noise.
+ */
+export function formatDate(value: string | null | undefined): string {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' })
+}
+
 /** Thousands separators for counts in tiles and lists. */
 export function formatCount(value: number): string {
   return value.toLocaleString(locale)

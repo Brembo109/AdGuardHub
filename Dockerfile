@@ -48,6 +48,10 @@ ENV PUID=1000 \
 ARG ADGUARDHUB_VERSION=""
 ENV ADGUARDHUB_VERSION=${ADGUARDHUB_VERSION}
 
+# So the hub can say how an upgrade is done here: a container cannot replace its
+# own image, so it offers the pull command rather than a button that cannot work.
+ENV ADGUARDHUB_INSTALL_METHOD=docker
+
 VOLUME ["/data"]
 
 # The container listens on 80; publish it wherever you like (-p 8080:80). Docker

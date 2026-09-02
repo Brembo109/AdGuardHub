@@ -309,6 +309,7 @@ class HubSettingsOut(BaseModel):
     querylog_buffer_size: int
     http_timeout: int
     external_api_enabled: bool
+    update_check_enabled: bool
     # Accepted ranges, so the form can bound its inputs rather than guess.
     limits: dict[str, list[int]]
 
@@ -322,6 +323,7 @@ class HubSettingsUpdate(BaseModel):
     querylog_buffer_size: int | None = None
     http_timeout: int | None = None
     external_api_enabled: bool | None = None
+    update_check_enabled: bool | None = None
 
 
 # -- notifiers -------------------------------------------------------------

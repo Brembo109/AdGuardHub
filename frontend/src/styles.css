@@ -468,6 +468,32 @@ label {
   margin: 0 auto;
 }
 
+/* A banner with an action in it. The action goes to the far end rather than
+   trailing the sentence, where it reads as another word of it. */
+.banner-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* A command to paste into a shell. Wraps rather than scrolls: the installer
+   one-liner is long, and a line you have to scroll to read is a line you copy
+   half of. */
+.command {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  background: var(--input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 9px 11px;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text);
+}
+
 .page-header {
   display: flex;
   justify-content: space-between;

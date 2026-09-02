@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
 from ..deps import CurrentUser, SessionDep
 from ..models import NotifierTarget
+from ..runtime import get_update_checker
 from ..schemas import (
     HubSettingsOut,
     HubSettingsUpdate,
@@ -14,7 +17,7 @@ from ..schemas import (
     NotifierOut,
     NotifierUpdate,
 )
-from ..services import hubsettings
+from ..services import hubsettings, updates
 from ..services.notify import KNOWN_EVENTS, NOTIFIER_TYPES, test_target
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -46,6 +49,22 @@ def _validate_events(events: list[str]) -> str:
 async def onboarding_complete(_: CurrentUser, session: SessionDep) -> None:
     """The first-run walkthrough is done, or the operator chose to skip it."""
     await hubsettings.finish_onboarding(session)
+
+
+@router.get("/update")
+async def update_status(_: CurrentUser, session: SessionDep, force: bool = False) -> dict[str, Any]:
+    """Whether a newer release exists, and whether this install could take it.
+
+    The answer is cached for hours, so the interface can ask on every page load
+    without that meaning a request to GitHub on every page load. ``force`` is the
+    "check now" button, and is the only way to get past the cache.
+
+    A hub with no internet reports the failure in `error` and nothing else: it is
+    a convenience that could not be provided, not a fault in the hub.
+    """
+    values = await hubsettings.load(session)
+    status = await get_update_checker().get(enabled=values.update_check_enabled, force=force)
+    return {**updates.as_dict(status), "enabled": values.update_check_enabled}
 
 
 @router.get("/notifiers/meta")

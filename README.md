@@ -313,6 +313,7 @@ All settings are environment variables prefixed with `ADGUARDHUB_`.
 | `ADGUARDHUB_QUERYLOG_BUFFER_SIZE` | `2000` | Entries kept in the in-memory log buffer. |
 | `ADGUARDHUB_SESSION_MAX_AGE` | `1209600` | Session lifetime in seconds. |
 | `ADGUARDHUB_HTTP_TIMEOUT` | `10` | Per-request timeout when talking to instances. |
+| `ADGUARDHUB_UPDATE_CHECK` | `true` | Seeds whether the hub looks for new releases — see [Update checks](#update-checks). |
 | `ADGUARDHUB_LOG_LEVEL` | `INFO` | `DEBUG` adds the per-instance diagnostics — see [Logs](#logs). |
 | `ADGUARDHUB_LOG_FILE` | — | Also write a rotating log file at this path. Empty means stderr only. |
 | `ADGUARDHUB_LOG_FILE_MAX_BYTES` | `5242880` | Rotate the log file once it reaches this size. |
@@ -323,6 +324,28 @@ image from the release tag by the Release workflow, not something to set at runt
 
 The four interval/buffer timers only seed the initial values. Once the hub has started they are
 edited under *Settings → Sync & timers* and take effect on the next worker cycle — no restart.
+
+## Update checks
+
+The hub asks GitHub what the newest release is, at most once every few hours, and says so in a
+banner and under *Settings → Updates* when it is behind. That request goes to `api.github.com`
+and carries nothing about your hub — no version, no identifier, no telemetry of any kind. It is
+one plain `GET` of the public releases endpoint, and the answer is cached so that opening the
+interface does not mean asking again.
+
+A hub on a network with no route out is not broken by this: the failed check is reported in the
+Updates card as a check that got no answer, retried in a few minutes rather than a few hours,
+and nothing else. To stop it entirely, untick *Check for new releases* — or start with
+`ADGUARDHUB_UPDATE_CHECK=false`, which seeds the setting on a fresh database.
+
+**Applying the update is not something the hub does for you.** How you upgrade depends on how
+you installed, so the card shows the one that matches:
+
+| Installed as | Upgrade with |
+| --- | --- |
+| Docker | `docker compose pull && docker compose up -d` — a container cannot replace its own image; your data volume is untouched |
+| Native (`install.sh`) | re-run the installer; it upgrades in place and never touches your data directory or `adguardhub.env` |
+| A checkout | whatever you normally do with that checkout |
 
 ## Logs
 

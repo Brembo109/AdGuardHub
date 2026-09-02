@@ -12,6 +12,7 @@ from ..deps import CurrentUser, SessionDep
 from ..services import backup as backup_service
 from ..services import versions as version_service
 from ..services.sync import ALL_KINDS, schedule_sync
+from ..version import VERSION
 
 router = APIRouter(prefix="/api/backup", tags=["backup"])
 
@@ -24,8 +25,6 @@ MAX_UPLOAD_BYTES = 32 * 1024 * 1024
 @router.get("")
 async def download(_: CurrentUser, session: SessionDep) -> JSONResponse:
     """The whole central configuration, as one JSON file."""
-    from ..main import VERSION
-
     document = await backup_service.export_document(session, hub_version=VERSION)
     stamp = str(document["created_at"])[:10]
     return JSONResponse(
