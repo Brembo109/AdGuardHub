@@ -8,7 +8,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { I18nProvider } from '../i18n/provider'
-import { REPO_URL, releaseUrl } from '../repo'
+import { ISSUES_URL, REPO_URL, releaseUrl } from '../repo'
 import { Footer } from './Footer'
 
 describe('releaseUrl', () => {
@@ -32,14 +32,21 @@ describe('releaseUrl', () => {
 })
 
 describe('Footer', () => {
-  it('links to the project even before the version has loaded', () => {
-    // `/api/health` is not stubbed here, so this is the first paint: the source
-    // link must not be waiting on a request that may never answer.
+  it('links to the project and the issue form before the version has loaded', () => {
+    // `/api/health` is not stubbed here, so this is the first paint. The links
+    // that help someone whose hub is misbehaving must not be waiting on a
+    // request that may never answer — which is exactly when they are wanted.
     render(
       <I18nProvider>
         <Footer />
       </I18nProvider>,
     )
-    expect(screen.getByRole('link').getAttribute('href')).toBe(REPO_URL)
+    const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'))
+    expect(hrefs).toContain(REPO_URL)
+    expect(hrefs).toContain(ISSUES_URL)
+  })
+
+  it('sends "report an issue" to the form rather than to the list to read', () => {
+    expect(ISSUES_URL).toBe(`${REPO_URL}/issues/new`)
   })
 })

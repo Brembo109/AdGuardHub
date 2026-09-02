@@ -5,17 +5,20 @@
  * you are not on when you ask "did my update actually land?". It belongs under
  * every page instead.
  *
- * The project link is here for the same reason it is on any self-hosted tool: an
- * operator who hits something strange wants the issue tracker, and hunting for
- * the repository by name is a worse experience than a link that was always
- * there. A released build points at its own tag, so the link answers "what is in
- * this version" rather than "what is on main".
+ * The destinations follow what a self-hosted tool's footer is actually used for,
+ * which "Source & issues" ran together into one link that was neither. AdGuard
+ * Home's own footer — the one sitting next to this in most people's tabs — is
+ * version, homepage, report an issue; Pi-hole links each version number at its
+ * release. So: the running build points at its own tag, so it answers "what is
+ * in this version" rather than "what is on main"; GitHub goes to the repository;
+ * reporting a problem goes straight to the new-issue form rather than to a list
+ * to read.
  */
 
 import { api } from '../api/client'
 import { useResource } from '../hooks/useApi'
 import { useT } from '../i18n'
-import { REPO_URL, releaseUrl } from '../repo'
+import { ISSUES_URL, REPO_URL, releaseUrl } from '../repo'
 import { IconGitHub } from './icons'
 
 export function Footer() {
@@ -29,10 +32,21 @@ export function Footer() {
         <a href={releaseUrl(version)} target="_blank" rel="noreferrer noopener">
           {t('AdGuardHub {version}', { version })}
         </a>
-      ) : null}
-      <a href={REPO_URL} target="_blank" rel="noreferrer noopener">
+      ) : (
+        <span>AdGuardHub</span>
+      )}
+
+      {/* The separator is drawn by the link it precedes rather than sitting
+          between them as its own element: on a narrow screen a standalone one
+          is left dangling at the end of a wrapped line. This way it travels
+          with the item it belongs to. */}
+      <a className="footer-dest" href={REPO_URL} target="_blank" rel="noreferrer noopener">
         <IconGitHub />
-        {t('Source & issues')}
+        GitHub
+      </a>
+
+      <a className="footer-dest" href={ISSUES_URL} target="_blank" rel="noreferrer noopener">
+        {t('Report an issue')}
       </a>
     </footer>
   )

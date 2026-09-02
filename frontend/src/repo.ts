@@ -6,7 +6,11 @@
  * thing worth testing without rendering anything.
  */
 
-export const REPO_URL = 'https://github.com/fgrfn/adguardhub'
+export const OWNER = 'fgrfn'
+export const REPO_URL = `https://github.com/${OWNER}/adguardhub`
+
+/** Straight to the form, not to the list — the footer link is for reporting one. */
+export const ISSUES_URL = `${REPO_URL}/issues/new`
 
 /**
  * The page for a given build. Released images carry the git tag they were cut
