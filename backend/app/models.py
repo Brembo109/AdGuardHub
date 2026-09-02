@@ -52,6 +52,9 @@ class InstanceStatus(StrEnum):
     online = "online"
     unreachable = "unreachable"
     disabled = "disabled"
+    # Deliberately paused while somebody works on the node. Not a fault, and not
+    # the same as disabled: the hub keeps collecting what it owes this instance.
+    maintenance = "maintenance"
 
 
 class JobStatus(StrEnum):
@@ -89,6 +92,10 @@ class Instance(Base):
     password_encrypted: Mapped[str] = mapped_column(Text, default="")
     verify_tls: Mapped[bool] = mapped_column(Boolean, default=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Hands off this node for a while: no pushes, no reconciliation, no outage
+    # alerts. What the hub would have sent is queued instead of dropped, so
+    # switching it back off replays the work rather than losing it.
+    maintenance: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     status: Mapped[str] = mapped_column(String(20), default=InstanceStatus.unknown.value)
     # The AdGuard Home version reported by /control/status, refreshed on every probe.
     version: Mapped[str] = mapped_column(String(40), default="")

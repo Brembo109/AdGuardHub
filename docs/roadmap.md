@@ -57,9 +57,8 @@ address rather than at localhost.
 
 ## Next
 
-In no fixed order: a maintenance mode for pausing reconciliation on one instance while you work
-on it, and translating the drift log's summaries (they are generated in the backend and stored
-as English text, so they stay English in the German interface).
+Translating the drift log's summaries: they are generated in the backend and stored as English
+text, so they stay English in the German interface.
 
 Deliberately **not** planned before v1.0: per-client rule scoping and multi-user accounts.
 v1.0 is when the feature set has settled for daily use, not a particular feature landing.

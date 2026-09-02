@@ -25,8 +25,7 @@ rather than trying to resolve conflicts after the fact.
 - Managed centrally: filtering rules (allow/block, all three AdGuard entry points — see §5),
   blocklist subscription URLs (enable/disable only, not individual domains), and instance-level
   settings (upstream DNS, DoH/DNSSEC, client settings).
-- **Not in v1:** per-client rule scoping (all rules are global), a maintenance/emergency mode
-  for pausing reconciliation on one instance, multi-user accounts/roles.
+- **Not in v1:** per-client rule scoping (all rules are global), multi-user accounts/roles.
 
 ## 4. Topology assumptions
 
@@ -60,8 +59,11 @@ targets AdGuard Home, so there is nothing to abstract the syntax for.
   central DB, and auto-corrects drift (e.g. after downtime, or a rule changed directly in the
   native UI despite §2). Every correction is logged and surfaced in the dashboard — never
   silent.
-- **No emergency/maintenance mode** in v1: if an instance is manually touched out-of-band, the
-  next reconciliation run detects and fixes/logs the drift. This is considered sufficient.
+- **Maintenance mode** (added in v0.4.x, having been a non-goal at first): one instance can be
+  held back deliberately, which stops pushes *and* reconciliation for it. What the hub would
+  have sent is queued rather than dropped, and replayed when maintenance ends — the difference
+  from disabling an instance. Everywhere else the original rule stands: an instance touched
+  out-of-band is detected and corrected by the next reconciliation run.
 
 ## 7. Initial import
 

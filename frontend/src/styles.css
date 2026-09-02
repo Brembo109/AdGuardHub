@@ -884,7 +884,10 @@ td.right {
 }
 
 .badge.pending,
-.badge.block {
+.badge.block,
+/* Maintenance is a state somebody chose, not a fault — amber like pending, which
+   is what it amounts to: work waiting rather than work gone wrong. */
+.badge.maintenance {
   color: var(--warn-ink);
   border-color: var(--warn-line);
   background: var(--warn-soft);
