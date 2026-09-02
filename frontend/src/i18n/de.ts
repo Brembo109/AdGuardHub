@@ -494,7 +494,8 @@ export const de: Record<string, string> = {
   "import": "Import",
   "restore": "Wiederherstellung",
   "AdGuardHub {version}": "AdGuardHub {version}",
-  "Source & issues": "Quellcode & Fehlermeldungen",
+  "Report an issue": "Fehler melden",
+  "by {owner}": "von {owner}",
   "Empty — fill in only what the hub should own, or import a master.": "Leer — tragen Sie nur ein, was der Hub besitzen soll, oder importieren Sie einen Master.",
   "No settings are being replicated yet. Either import an instance as the master on the Instances page, or fill in an area below and switch on Replicate.": "Es werden noch keine Einstellungen repliziert. Importieren Sie entweder auf der Seite Instanzen eine Instanz als Master, oder füllen Sie unten einen Bereich aus und schalten Sie Replizieren ein.",
 
