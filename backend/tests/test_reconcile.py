@@ -46,6 +46,39 @@ def test_diff_settings_reports_the_changed_keys_per_section() -> None:
     assert "dnssec_enabled" not in difference.details["dns"]
 
 
+def test_a_node_resolving_its_own_time_zone_is_not_drift() -> None:
+    """``Local`` asks for the node's own zone, so the zone it names is the answer.
+
+    Reported from a running hub: every reconciliation run found blocked_services
+    differing, corrected it, and found it again five minutes later — because the
+    hub sent "Local" and the node read back "Europe/Berlin".
+    """
+    difference = diff_settings(
+        {"blocked_services": {"ids": ["tiktok"], "schedule": {"time_zone": "Local"}}},
+        {"blocked_services": {"ids": ["tiktok"], "schedule": {"time_zone": "Europe/Berlin"}}},
+    )
+    assert difference is None
+
+
+def test_a_real_time_zone_mismatch_is_still_drift() -> None:
+    """Only the placeholder is forgiven — a named zone still has to match."""
+    difference = diff_settings(
+        {"blocked_services": {"schedule": {"time_zone": "Europe/Berlin"}}},
+        {"blocked_services": {"schedule": {"time_zone": "UTC"}}},
+    )
+    assert difference is not None
+    assert difference.details["blocked_services"]["schedule"]["actual"] == {"time_zone": "UTC"}
+
+
+def test_the_time_zone_allowance_does_not_leak_into_other_sections() -> None:
+    """The allowance is bound to one path, not to the key name."""
+    difference = diff_settings(
+        {"querylog": {"time_zone": "Local"}},
+        {"querylog": {"time_zone": "Europe/Berlin"}},
+    )
+    assert difference is not None
+
+
 def test_diff_settings_flags_an_unsupported_section_without_calling_it_drift() -> None:
     """An instance that lacks an area is a capability gap, not a config difference."""
     difference = diff_settings({"tls": {"enabled": True}}, {"tls": None})
