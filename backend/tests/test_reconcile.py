@@ -225,3 +225,44 @@ async def test_each_difference_records_its_own_outcome(
         for event in (await auth_client.get("/api/drift")).json()
     }
     assert outcomes == {"rules": True, "settings": False}
+
+
+async def test_the_drift_log_can_be_cleared(auth_client: httpx.AsyncClient) -> None:
+    """A log full of findings whose cause is already gone is noise, not evidence."""
+    await add_instance(auth_client, "a", A)
+    await auth_client.post("/api/rules", json={"text": "||ads.example.com^"})
+    await drain_background()
+    FakeAdapter.state_for(A).rules = []
+    await auth_client.post("/api/reconcile")
+    assert (await auth_client.get("/api/drift")).json()
+
+    response = await auth_client.delete("/api/drift")
+    assert response.status_code == 200
+    assert response.json() == {"deleted": 1}
+    assert (await auth_client.get("/api/drift")).json() == []
+
+
+async def test_clearing_the_log_does_not_resolve_the_difference(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """The button empties a record, not the fleet. Anything still out of step returns."""
+    await add_instance(auth_client, "a", A)
+    await auth_client.post("/api/rules", json={"text": "||ads.example.com^"})
+    await drain_background()
+
+    FakeAdapter.state_for(A).rules = []
+    await auth_client.post("/api/reconcile?apply_fixes=false")
+    await auth_client.delete("/api/drift")
+
+    await auth_client.post("/api/reconcile?apply_fixes=false")
+    assert len((await auth_client.get("/api/drift")).json()) == 1
+
+
+async def test_clearing_an_empty_log_is_not_an_error(auth_client: httpx.AsyncClient) -> None:
+    response = await auth_client.delete("/api/drift")
+    assert response.status_code == 200
+    assert response.json() == {"deleted": 0}
+
+
+async def test_clearing_the_drift_log_needs_a_session(client: httpx.AsyncClient) -> None:
+    assert (await client.delete("/api/drift")).status_code == 401
