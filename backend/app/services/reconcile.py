@@ -109,6 +109,41 @@ def _normalise(value: Any) -> Any:
     return value
 
 
+# Settings each node is entitled to answer for itself, by the path they sit at.
+#
+# "Local" is not a time zone; it is an instruction to use whichever zone the node
+# is in. A node reading back "Europe/Berlin" has obeyed that instruction rather
+# than drifted from it — but comparing the request against the answer made every
+# reconciliation run report a difference, correct it by pushing "Local" again, and
+# find the same difference on the next run. Forever, on any node whose clock knows
+# where it is, filling the drift log and firing a notification each time.
+#
+# Only the placeholder is forgiven. A hub that says Europe/Berlin and a node that
+# says something else is still drift, and is still corrected.
+SELF_RESOLVED: dict[tuple[str, ...], frozenset[str]] = {
+    ("blocked_services", "schedule", "time_zone"): frozenset({"Local", ""}),
+}
+
+
+def _equivalent(expected: Any, actual: Any, path: tuple[str, ...]) -> bool:
+    """Whether the node's answer satisfies what the hub asked for, at this path."""
+    allowed = SELF_RESOLVED.get(path)
+    if allowed is not None and expected in allowed:
+        return True
+    if isinstance(expected, dict) and isinstance(actual, dict):
+        if expected.keys() != actual.keys():
+            return False
+        return all(_equivalent(expected[key], actual[key], path + (key,)) for key in expected)
+    if isinstance(expected, list) and isinstance(actual, list):
+        if len(expected) != len(actual):
+            return False
+        return all(
+            _equivalent(item, other, path)
+            for item, other in zip(expected, actual, strict=True)
+        )
+    return _normalise(expected) == _normalise(actual)
+
+
 def diff_section(
     name: str, expected: dict[str, Any], actual: dict[str, Any] | None
 ) -> dict[str, Any] | None:
@@ -122,7 +157,7 @@ def diff_section(
     changed = {
         key: {"expected": _normalise(value), "actual": _normalise(actual.get(key))}
         for key, value in expected.items()
-        if _normalise(actual.get(key)) != _normalise(value)
+        if not _equivalent(value, actual.get(key), (name, key))
     }
     return changed or None
 
