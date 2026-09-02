@@ -55,6 +55,43 @@ carries lives in shell history when you start a container that way — and the i
 now say which side of the volume mount is yours to choose, and to open the hub at the host's
 address rather than at localhost.
 
+**v0.4.4** is about the release pipeline rather than the hub. The published image name is
+written down instead of derived from the repository — renaming this repository would otherwise
+have started publishing to a different GHCR package while every existing `docker compose pull`
+kept pointing at the old one, which stops receiving updates without ever failing. And the
+release now carries a `SHA256SUMS` that the installer checks before unpacking a tarball into
+`/opt` as root. That check catches a truncated download or the wrong mirror, not a compromised
+GitHub — the sums travel from the same place as the archive, and defending against that needs a
+signature checked against a key held in advance, which this project does not publish.
+
+**v0.4.5** brought maintenance mode, which had been written down as a v1 non-goal twice.
+Working on a node used to mean fighting the hub: a push overwrote what you had just done, and
+reconciliation put it back within five minutes. The only lever was disabling the instance, which
+also makes the hub forget what it still owes that node. Maintenance stops pushes and
+reconciliation for one instance while queueing what it misses, so releasing it replays the queue
+at once rather than waiting for the retry timer. A feature in a patch release is not what
+SemVer intends; it went out that way because it was the fix to a problem in front of us, and the
+number is left as it was rather than rewritten after the fact.
+
+**v0.5.0** is the first minor since the 0.4 line settled, and both halves are about a number the
+interface was not showing.
+
+The drift log can now be cleared. A drift entry had no way out — once written it stayed until
+the 500-row cap pushed it off the end — which is right while a finding is live and wrong once
+its cause is gone, as with the time-zone loop above that filled the log with a fault that never
+existed. The confirmation says what the button does not do: deleting the record does not resolve
+anything, and a node that still disagrees is found again on the next run. The retry queue
+deliberately gets no such button, because a pending job is work still owed to an instance.
+
+Filter lists now show how many rules each subscription holds, and the active total. The hub
+never stores the contents of a list, so it cannot answer that from its own database — the
+numbers come back from the nodes, and the interface says so where that matters: a list no node
+has fetched yet shows a dash rather than a zero, an unreachable fleet means the sizes are
+unknown rather than empty, and two nodes reporting different sizes (they refresh on their own
+schedules) is marked and broken down per node rather than averaged into one number. None of it
+reaches reconciliation: a rule count is an observation about a file, not configuration the hub
+owns, so a difference in one is never drift.
+
 ## Next
 
 Translating the drift log's summaries: they are generated in the backend and stored as English
