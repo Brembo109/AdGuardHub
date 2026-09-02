@@ -385,6 +385,11 @@ Two different things are called a log here, and they are not the same:
   failed, a wrong password. It goes to stderr, so `docker logs adguardhub` (or
   `docker compose logs -f`) reads it back.
 
+The last 500 lines are also readable in the interface under *Settings → Protokoll*, which
+follows along live. That is a window, not a replacement: it lives in memory, is cleared on
+restart, and your container or systemd log remains the record. Its own polling is deliberately
+left out of it, so watching the log does not push what you came to read out of the buffer.
+
 At the default `INFO` you get startup, schema migrations, notification failures, and
 sign-ins. `ADGUARDHUB_LOG_LEVEL=DEBUG` adds the per-instance diagnostics — why a node's stats
 came back empty, why a query log poll returned nothing — which is what you want while something

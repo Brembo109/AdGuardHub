@@ -18,7 +18,8 @@ from ..schemas import (
     NotifierOut,
     NotifierUpdate,
 )
-from ..services import hubsettings, selfupdate, updates
+from ..services import hubsettings, logbuffer, selfupdate, updates
+from ..services.logbuffer import get_buffer
 from ..services.notify import KNOWN_EVENTS, NOTIFIER_TYPES, test_target
 from ..services.updates import install_method
 
@@ -154,6 +155,35 @@ async def start_update(_: CurrentUser) -> dict[str, Any]:
             status.HTTP_409_CONFLICT, f"Could not ask to be upgraded: {caught}"
         ) from caught
     return _run_out(selfupdate.read_run(data_dir))
+
+
+@router.get("/log")
+async def application_log(
+    _: CurrentUser, cursor: int = 0, limit: int = 200
+) -> dict[str, Any]:
+    """The hub's own recent log lines, for reading without a shell.
+
+    Not the query log — that is DNS traffic and lives on its own page. This is
+    the hub talking about itself: what it did on start, a push that failed, a
+    refused sign-in.
+
+    `cursor` is the last sequence number the caller already has, so following
+    along costs one small response per poll rather than the whole buffer. A
+    cursor from before the buffer wrapped gets what is left, which is the honest
+    answer — those lines are gone.
+    """
+    buffer = get_buffer()
+    lines = buffer.since(cursor, limit=max(1, min(limit, logbuffer.MAX_LINES)))
+    return {
+        "lines": [
+            {"seq": line.seq, "level": line.level, "logger": line.logger,
+             "message": line.message, "at": line.at}
+            for line in lines
+        ],
+        "cursor": lines[-1].seq if lines else cursor,
+        "latest": buffer.latest_seq(),
+        "capacity": logbuffer.MAX_LINES,
+    }
 
 
 @router.get("/notifiers/meta")

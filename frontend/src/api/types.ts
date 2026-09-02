@@ -306,3 +306,20 @@ export interface UpdateRun {
   exit_status: number | null
   log: string
 }
+
+/** One line of the hub's own application log. */
+export interface LogLine {
+  /** Monotonic within a run of the hub — the cursor for "what is new". */
+  seq: number
+  level: string
+  logger: string
+  message: string
+  at: string
+}
+
+export interface LogPage {
+  lines: LogLine[]
+  cursor: number
+  latest: number
+  capacity: number
+}

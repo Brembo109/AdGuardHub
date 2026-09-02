@@ -523,6 +523,13 @@ export const de: Record<string, string> = {
   "{source} is locked out for another {seconds} seconds. The correct password is refused too, until then.": "{source} ist noch {seconds} Sekunden gesperrt. Bis dahin wird auch das richtige Passwort abgelehnt.",
   // Update checks
   "Updates": "Aktualisierungen",
+  "Log": "Protokoll",
+  "Application log": "Anwendungsprotokoll",
+  "Follow": "Mitlaufen",
+  "Clear view": "Ansicht leeren",
+  "Nothing logged yet.": "Noch nichts protokolliert.",
+  "Waiting for the hub…": "Warten auf den Hub …",
+  "What the hub itself is doing. Kept in memory only — the last {count} lines, cleared on restart. Your container or systemd log remains the record.": "Was der Hub selbst tut. Nur im Arbeitsspeicher — die letzten {count} Zeilen, bei einem Neustart weg. Maßgeblich bleibt das Protokoll Ihres Containers bzw. von systemd.",
   "Check for new releases": "Nach neuen Versionen suchen",
   "Check now": "Jetzt prüfen",
   "Dismiss": "Ausblenden",

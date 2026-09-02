@@ -13,6 +13,11 @@ Everything ends up in one stream: uvicorn's own loggers are handed to the root
 so the access log shares the hub's format and reaches the file too. The one
 thing deliberately left out at every level is the database layer's statement
 narration — see ALWAYS_QUIET.
+
+A third handler keeps the last few hundred lines in memory so the interface can
+show them without an operator having to reach a shell. It reads the same records
+as the other two, so every decision here about what is logged and what is held
+quiet applies to it unchanged — see services/logbuffer.py.
 """
 
 from __future__ import annotations
@@ -20,6 +25,8 @@ from __future__ import annotations
 import logging
 import logging.handlers
 import os
+
+from .services.logbuffer import get_buffer
 
 FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 
@@ -66,6 +73,13 @@ def configure(
     stream = logging.StreamHandler()
     stream.setFormatter(formatter)
     root.addHandler(stream)
+
+    # Attached to the root like the others, so it sees whatever they see and
+    # nothing they do not.
+    buffer = get_buffer()
+    buffer.setFormatter(formatter)
+    root.addHandler(buffer)
+
     root.setLevel(resolved)
 
     file_error = ""
