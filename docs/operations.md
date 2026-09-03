@@ -27,8 +27,17 @@ something went wrong at a time you can name), and a source — the part of the h
 filters stack, the count on the right always says how many lines are being held back, and
 *Show all* clears them. A level the hub does not recognise is never hidden by the level filter.
 
-At the default `INFO` you get startup, schema migrations, notification failures, and
-sign-ins. `ADGUARDHUB_LOG_LEVEL=DEBUG` adds the per-instance diagnostics — why a node's stats
+At the default `INFO` you get startup, schema migrations, notification failures, sign-ins, and
+what the sync engine did: each push and where it went, a push that failed and was queued, a
+push a node accepted and did not keep, a node going unreachable and coming back, and every
+reconciliation pass that found something.
+
+What is **not** at INFO matters as much. A reconciliation pass that found nothing says nothing,
+and a node that has been down for an hour is reported once rather than on every pass — two
+nodes on a five-minute timer would otherwise write several hundred lines a day to report that
+nothing happened, which is how a log stops being read.
+
+`ADGUARDHUB_LOG_LEVEL=DEBUG` adds both of those, and the per-instance diagnostics — why a node's stats
 came back empty, why a query log poll returned nothing — which is what you want while something
 is misbehaving and nothing but noise the rest of the time. It also turns on the HTTP client's
 own narration, which is verbose: on a hub polling two nodes it accounts for the large majority

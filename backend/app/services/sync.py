@@ -182,6 +182,12 @@ async def push_to_instance(
     except (AdapterError, ValueError) as exc:
         error = str(exc)
         was_online = previous == InstanceStatus.online.value
+        logger.warning(
+            "Push to %s failed (%s): %s — queued for retry",
+            instance.name,
+            reason or "sync",
+            error,
+        )
         instance.status = InstanceStatus.unreachable.value
         instance.last_error = error
         for kind in kinds:
@@ -215,6 +221,13 @@ async def push_to_instance(
     kept = describe_refused(refused)
     if kept:
         logger.warning("%s: %s", instance.name, kept)
+    else:
+        logger.info(
+            "Pushed %s to %s (%s)",
+            ", ".join(kind.value for kind in kinds),
+            instance.name,
+            reason or "sync",
+        )
 
     instance.status = InstanceStatus.online.value
     instance.last_error = kept
@@ -377,7 +390,10 @@ async def process_retry_queue(session: AsyncSession) -> int:
         if not error:
             recovered += 1
     if recovered:
+        logger.info("Retry queue: %d of %d open job(s) applied", recovered, len(seen))
         await bus.publish("retry", {"recovered": recovered})
+    elif seen:
+        logger.debug("Retry queue: %d open job(s), none applied yet", len(seen))
     return recovered
 
 
@@ -409,6 +425,12 @@ async def check_instance(session: AsyncSession, instance: Instance) -> str:
             update = await adapter.check_update(version)
     except (AdapterError, ValueError) as exc:
         was_online = instance.status == InstanceStatus.online.value
+        # Only the transition. A node that has been down for an hour would
+        # otherwise write the same line every reconcile pass.
+        if was_online:
+            logger.warning("%s is unreachable: %s", instance.name, exc)
+        else:
+            logger.debug("%s still unreachable: %s", instance.name, exc)
         instance.status = InstanceStatus.unreachable.value
         instance.last_error = str(exc)
         await session.commit()
@@ -423,6 +445,8 @@ async def check_instance(session: AsyncSession, instance: Instance) -> str:
     finally:
         await adapter.aclose()
 
+    if was != InstanceStatus.online.value:
+        logger.info("%s answered again (%s)", instance.name, version)
     instance.status = InstanceStatus.online.value
     # check() already asked /control/status for it; throwing it away meant the UI
     # could never say which AdGuard version a node is running.

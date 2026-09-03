@@ -345,6 +345,22 @@ async def reconcile_instance(
 
     await adapter.aclose()
 
+    if correctable:
+        logger.info(
+            "Reconcile %s: %s%s",
+            instance.name,
+            "; ".join(item.summary for item in correctable),
+            (
+                " — not kept by the node"
+                if refused
+                else " — corrected"
+                if fixed
+                else " — not corrected"
+            ),
+        )
+    else:
+        logger.debug("Reconcile %s: no differences", instance.name)
+
     logged: list[Difference] = []
     for difference in report.differences:
         if not is_correctable(difference):
@@ -405,6 +421,14 @@ async def reconcile_all(session: AsyncSession, *, apply_fixes: bool = True) -> l
     reports = []
     for instance in result.scalars().all():
         reports.append(await reconcile_instance(session, instance, apply_fixes=apply_fixes))
+    # At DEBUG because it runs on a timer: the answer to "did it run at all" has
+    # to exist somewhere, and it must not be in everyone's log every five minutes.
+    logger.debug(
+        "Reconcile pass over %d instance(s), %d unreachable, %d with differences",
+        len(reports),
+        sum(1 for item in reports if not item.checked),
+        sum(1 for item in reports if item.differences),
+    )
     return reports
 
 
