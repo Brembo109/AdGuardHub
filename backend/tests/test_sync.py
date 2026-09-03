@@ -256,3 +256,84 @@ async def test_a_section_can_be_built_without_importing_a_master(
     # And it is a normal hub version, so it can be diffed and rolled back.
     versions = (await auth_client.get("/api/versions")).json()
     assert any("access" in item["label"] for item in versions)
+
+
+# --------------------------------------------------------------------------
+# A push the node accepts and does not keep
+# --------------------------------------------------------------------------
+
+
+async def test_a_refused_rule_is_reported_by_the_push_itself(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """Told while the operator is still looking at the button they pressed.
+
+    Reconciliation catches this too, but five minutes later and under the name
+    "drift" — which is the wrong word for a write that never landed.
+    """
+    instance_id = await add_instance(auth_client, "a", A)
+    FakeAdapter.state_for(A).refuses = {"@@||hitmyl.ink^"}
+    await auth_client.post("/api/rules/allow", json={"domain": "hitmyl.ink"})
+    await drain_background()
+
+    body = (await auth_client.post(f"/api/instances/{instance_id}/push")).json()
+    assert "did not keep" in body["error"]
+    assert "@@||hitmyl.ink^" in body["error"]
+
+
+async def test_a_refusal_does_not_go_to_the_retry_queue(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """The queue is for a node that was unreachable.
+
+    This node answered. Repeating the same write would not change the outcome,
+    and queueing it would rebuild one layer down the loop reconciliation was
+    just taught to stop.
+    """
+    instance_id = await add_instance(auth_client, "a", A)
+    FakeAdapter.state_for(A).refuses = {"@@||hitmyl.ink^"}
+    await auth_client.post("/api/rules/allow", json={"domain": "hitmyl.ink"})
+    await drain_background()
+    await auth_client.post(f"/api/instances/{instance_id}/push")
+
+    assert (await auth_client.get("/api/jobs")).json() == []
+
+
+async def test_a_refusing_node_is_still_online(auth_client: httpx.AsyncClient) -> None:
+    """It answered. Calling it unreachable would send an outage notification
+    about a node that is serving DNS perfectly well."""
+    instance_id = await add_instance(auth_client, "a", A)
+    FakeAdapter.state_for(A).refuses = {"@@||hitmyl.ink^"}
+    await auth_client.post("/api/rules/allow", json={"domain": "hitmyl.ink"})
+    await drain_background()
+    await auth_client.post(f"/api/instances/{instance_id}/push")
+
+    card = (await auth_client.get("/api/instances")).json()[0]
+    assert card["status"] == "online"
+    assert "did not keep" in card["last_error"]
+
+
+async def test_a_partial_push_is_not_recorded_as_a_full_sync(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """last_synced_at is the claim that everything landed. It did not."""
+    instance_id = await add_instance(auth_client, "a", A)
+    FakeAdapter.state_for(A).refuses = {"@@||hitmyl.ink^"}
+    await auth_client.post("/api/rules/allow", json={"domain": "hitmyl.ink"})
+    await drain_background()
+    await auth_client.post(f"/api/instances/{instance_id}/push")
+
+    assert (await auth_client.get("/api/instances")).json()[0]["last_synced_at"] is None
+
+
+async def test_a_push_that_lands_says_nothing(auth_client: httpx.AsyncClient) -> None:
+    """The check must not turn a working push into a complaint."""
+    instance_id = await add_instance(auth_client, "a", A)
+    await auth_client.post("/api/rules/allow", json={"domain": "example.com"})
+    await drain_background()
+
+    body = (await auth_client.post(f"/api/instances/{instance_id}/push")).json()
+    assert body["error"] == ""
+    card = (await auth_client.get("/api/instances")).json()[0]
+    assert card["last_error"] == ""
+    assert card["last_synced_at"] is not None
