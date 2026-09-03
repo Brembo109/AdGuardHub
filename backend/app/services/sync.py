@@ -11,6 +11,7 @@ import asyncio
 import contextlib
 import logging
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,6 +47,10 @@ from .notify import (
 from .retention import prune_applied_jobs
 
 logger = logging.getLogger(__name__)
+
+# Enough to identify what was refused without turning a status field into a
+# wall of text; the drift log carries the full set.
+MAX_REFUSED_SHOWN = 5
 
 ALL_KINDS: tuple[PayloadKind, ...] = (
     PayloadKind.rules,
@@ -85,18 +90,76 @@ async def desired_sections(session: AsyncSession) -> dict[str, dict]:
 # --------------------------------------------------------------------------
 
 
-async def push_kind(session: AsyncSession, adapter: DnsAdapter, kind: PayloadKind) -> None:
+async def _not_kept(
+    adapter: DnsAdapter, kind: PayloadKind, wanted: Any
+) -> list[str]:
+    """What the node accepted and then did not keep, read back straight away.
+
+    A 2xx says the request was accepted, not that its contents were stored. The
+    gap between those two is where this design's worst failure lives, and until
+    now only reconciliation looked into it — five minutes later, and calling it
+    drift, which is the wrong word for a write that never landed.
+
+    Settings are deliberately not checked here. Deciding whether a section
+    matches needs the comparison in services/reconcile.py, which knows that a
+    node answering ``Europe/Berlin`` to a requested ``Local`` has obeyed rather
+    than drifted; a plain equality check would report that as refused on every
+    push. Reconciliation verifies sections properly within its interval.
+    """
     if kind is PayloadKind.rules:
-        await adapter.push_rules(await desired_rules(session))
+        landed = set(await adapter.pull_rules())
+        return [rule for rule in wanted if rule not in landed]
+    if kind is PayloadKind.filters:
+        landed = {(item.kind, item.url) for item in await adapter.pull_filter_lists()}
+        return [
+            f"{item.kind}:{item.url}" for item in wanted if (item.kind, item.url) not in landed
+        ]
+    return []
+
+
+def describe_refused(refused: dict[str, list[str]]) -> str:
+    """One sentence naming what a node would not keep, or "" when it kept everything."""
+    if not refused:
+        return ""
+    parts = []
+    for kind, items in sorted(refused.items()):
+        shown = ", ".join(items[:MAX_REFUSED_SHOWN])
+        rest = len(items) - MAX_REFUSED_SHOWN
+        parts.append(f"{kind}: {shown}" + (f" and {rest} more" if rest > 0 else ""))
+    return "the node accepted the push and did not keep " + "; ".join(parts)
+
+
+async def push_kind(
+    session: AsyncSession,
+    adapter: DnsAdapter,
+    kind: PayloadKind,
+    *,
+    verify: bool = False,
+) -> list[str]:
+    """Push one payload. Returns what the node did not keep, empty when all landed.
+
+    ``verify`` costs one extra read per push and is what the instant-push path
+    uses, so a refused rule is reported while the operator is still looking at
+    the button they pressed. Reconciliation passes ``False``: it re-reads with
+    the full comparison anyway, which sections need and which this cannot do.
+    """
+    if kind is PayloadKind.rules:
+        wanted = await desired_rules(session)
+        await adapter.push_rules(wanted)
     elif kind is PayloadKind.filters:
-        await adapter.push_filter_lists(await desired_filter_lists(session))
+        wanted = await desired_filter_lists(session)
+        await adapter.push_filter_lists(wanted)
     elif kind is PayloadKind.settings:
+        wanted = None
         for name, data in (await desired_sections(session)).items():
             try:
                 await adapter.push_section(name, data)
             except AdapterError as exc:
                 # Name the section: "settings failed" alone is not actionable.
                 raise AdapterError(f"section {name!r}: {exc}", status=exc.status) from exc
+    else:  # pragma: no cover - PayloadKind has no fourth member
+        wanted = None
+    return await _not_kept(adapter, kind, wanted) if verify else []
 
 
 async def push_to_instance(
@@ -110,9 +173,12 @@ async def push_to_instance(
     # it, and after the push either branch has already overwritten the status.
     previous = instance.status
     adapter = build_adapter(instance, get_crypto())
+    refused: dict[str, list[str]] = {}
     try:
         for kind in kinds:
-            await push_kind(session, adapter, kind)
+            left = await push_kind(session, adapter, kind, verify=True)
+            if left:
+                refused[kind.value] = left
     except (AdapterError, ValueError) as exc:
         error = str(exc)
         was_online = previous == InstanceStatus.online.value
@@ -140,10 +206,23 @@ async def push_to_instance(
     finally:
         await adapter.aclose()
 
+    # A refusal is not a transport failure, and the difference decides everything
+    # that follows. The node answered, so it is online and was seen. The write
+    # will not start working on its own, so it must not go to the retry queue —
+    # that queue exists for a node that was unreachable, and feeding it something
+    # the node actively will not keep rebuilds, one layer down, exactly the loop
+    # reconciliation was just taught to stop.
+    kept = describe_refused(refused)
+    if kept:
+        logger.warning("%s: %s", instance.name, kept)
+
     instance.status = InstanceStatus.online.value
-    instance.last_error = ""
+    instance.last_error = kept
     instance.last_seen_at = utcnow()
-    instance.last_synced_at = utcnow()
+    # Only what actually landed counts as synced. Saying otherwise is the claim
+    # that made the same failure invisible in reconciliation for two releases.
+    if not refused:
+        instance.last_synced_at = utcnow()
     for kind in kinds:
         await close_jobs(session, instance, kind)
     await session.commit()
@@ -155,7 +234,14 @@ async def push_to_instance(
         {"id": instance.id, "name": instance.name, "status": instance.status, "error": ""},
     )
     await notify_if_recovered(instance, previous)
-    return ""
+    if refused:
+        await notify(
+            EVENT_PUSH_FAILED,
+            f"{instance.name} did not keep part of the push",
+            f"{reason or 'Sync'}: {kept}. Not queued for a retry — the node answered, "
+            "so repeating the same write would not change the outcome.",
+        )
+    return kept
 
 
 async def sync_all(

@@ -106,6 +106,20 @@ between those two is where this design's worst failure lives: the hub pushes, be
 the same difference five minutes later, pushes again, and repeats for as long as it runs. It has
 happened twice, and both times the hub knew its own correction had not taken and said nothing.
 
+An instant push reads back too, so a refused rule is named while you are still
+looking at the button you pressed rather than five minutes later under the wrong
+word. Such a push is **not** queued for a retry: the queue exists for a node that
+was unreachable, and a node that answered and would not keep the write will not
+keep it on the second attempt either — queueing it would rebuild the same loop
+one layer down. The node stays *online*, because it is; what it would not keep
+appears as its last error, and the push does not count as a completed sync.
+
+Sections are the exception, and deliberately: deciding whether one matches needs
+the comparison below, which knows that a node answering `Europe/Berlin` to a
+requested `Local` has obeyed rather than drifted. A plain equality check in the
+push path would report that as refused every time. Reconciliation verifies
+sections properly within its interval.
+
 So a correction is only reported as one once the node actually holds it. Where it does not, the
 log says *the node did not keep this correction* with the exact items, marks it uncorrected, and
 then goes quiet: a refusal repeats on every run by definition, so it is stated once rather than
