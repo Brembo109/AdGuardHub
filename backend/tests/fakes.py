@@ -17,6 +17,11 @@ class FakeInstanceState:
         self.sections: dict[str, dict[str, Any]] = {}
         self.query_log: list[QueryLogEntry] = []
         self.offline = False
+        # Rules this node accepts and then does not keep — a 2xx followed by
+        # nothing stored. Real AdGuard does this; a double that always stores
+        # what it is given cannot express the fault at all, which is why the
+        # loop it causes went unnoticed through two releases.
+        self.refuses: set[str] = set()
         self.push_calls = 0
         self.unsupported_sections: set[str] = set()
         self.stats: dict[str, Any] = {}
@@ -68,7 +73,7 @@ class FakeAdapter(DnsAdapter):
 
     async def push_rules(self, rules: list[str]) -> None:
         self._guard()
-        self.state.rules = list(rules)
+        self.state.rules = [rule for rule in rules if rule not in self.state.refuses]
         self.state.push_calls += 1
 
     async def pull_filter_lists(self) -> list[RemoteFilterList]:

@@ -98,6 +98,23 @@ that flaps for months is a different story:
 instance; dropping one would silently abandon a change that never reached a node, which is the
 exact failure the queue exists to prevent. Only jobs that already landed count as history.
 
+## When a correction does not hold
+
+Reconciliation corrects a difference by pushing the hub's state and then **reads it back**. A
+2xx from AdGuard means it accepted the request, not that it kept what was in it — and the gap
+between those two is where this design's worst failure lives: the hub pushes, believes, finds
+the same difference five minutes later, pushes again, and repeats for as long as it runs. It has
+happened twice, and both times the hub knew its own correction had not taken and said nothing.
+
+So a correction is only reported as one once the node actually holds it. Where it does not, the
+log says *the node did not keep this correction* with the exact items, marks it uncorrected, and
+then goes quiet: a refusal repeats on every run by definition, so it is stated once rather than
+several hundred times. It is said again when it changes, and normal reporting resumes the moment
+the node starts keeping it.
+
+Pushing continues throughout. A rule set is pushed whole, so holding it back over one refused
+line would strand every other line with it.
+
 *Clear log* on the dashboard empties the drift log by hand, for when a cause is fixed and the
 entries it left behind are noise rather than evidence — an upgrade that reported the same
 difference for a day, or a bug in the hub itself. It deletes the record, not the cause: a node
