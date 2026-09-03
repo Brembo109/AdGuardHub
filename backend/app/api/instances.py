@@ -23,6 +23,7 @@ from ..schemas import (
     InstanceOut,
     InstanceUpdate,
 )
+from ..semver import is_newer, parse_version
 from ..services import filtersizes
 from ..services.aggregate import invalidate_stats_cache
 from ..services.events import bus
@@ -39,7 +40,31 @@ from ..services.versions import record as _record
 router = APIRouter(prefix="/api/instances", tags=["instances"])
 
 
+def offered_update(instance: Instance) -> tuple[str, str]:
+    """The update to show for a node, dropping one that is not actually newer.
+
+    These fields are written by reconciliation and then read back for as long as
+    it takes the next run to come round. A row written by an earlier build can
+    therefore name the version the node is already running — which is what put
+    "v0.107.79 — update to v0.107.79" on a card and left it there, because
+    nothing between the two runs re-examined it.
+
+    Judged again on the way out, such a row simply never reaches the interface,
+    on every hub that already has one stored and without waiting for anything.
+    A version the hub cannot parse is left alone: it is not evidence the stored
+    update is wrong, and suppressing on it would hide a real one.
+    """
+    if not instance.update_version:
+        return "", ""
+    if parse_version(instance.version) and not is_newer(
+        instance.update_version, instance.version
+    ):
+        return "", ""
+    return instance.update_version, instance.update_url
+
+
 def to_out(instance: Instance) -> InstanceOut:
+    update_version, update_url = offered_update(instance)
     return InstanceOut(
         id=instance.id,
         name=instance.name,
@@ -52,8 +77,8 @@ def to_out(instance: Instance) -> InstanceOut:
         maintenance=instance.maintenance,
         status=instance.status,
         version=instance.version,
-        update_version=instance.update_version,
-        update_url=instance.update_url,
+        update_version=update_version,
+        update_url=update_url,
         update_error=instance.update_error,
         last_error=instance.last_error,
         last_seen_at=instance.last_seen_at,

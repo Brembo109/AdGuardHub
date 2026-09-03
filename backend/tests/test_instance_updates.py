@@ -218,3 +218,128 @@ async def test_the_update_fields_did_not_open_a_credential_leak(
     assert "password_encrypted" not in body
     # The positive half: the hub still says that one is stored.
     assert response.json()[0]["has_password"] is True
+
+
+# --------------------------------------------------------------------------
+# What is already in the database
+# --------------------------------------------------------------------------
+
+
+async def test_a_stored_update_to_the_running_version_is_not_shown(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """Reported after the comparison was fixed: the card still said it.
+
+    These fields are written by reconciliation and read back until the next run.
+    A row written by an earlier build names the version the node is already
+    running, and nothing in between re-examined it — so fixing the comparison
+    changed what would be written next and left every card exactly as it was.
+    """
+    from app.db import session_scope
+    from app.models import Instance
+
+    from .test_sync import A, add_instance
+
+    instance_id = await add_instance(auth_client, "a", A)
+    async with session_scope() as session:
+        row = await session.get(Instance, instance_id)
+        assert row is not None
+        row.version = "v0.107.79"
+        row.update_version = "v0.107.79"
+        row.update_url = "https://example.test/releases"
+        await session.commit()
+
+    body = (await auth_client.get("/api/instances")).json()[0]
+    assert body["version"] == "v0.107.79"
+    assert body["update_version"] == ""
+    assert body["update_url"] == ""
+
+
+async def test_a_genuinely_newer_stored_update_is_still_shown(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    from app.db import session_scope
+    from app.models import Instance
+
+    from .test_sync import A, add_instance
+
+    instance_id = await add_instance(auth_client, "a", A)
+    async with session_scope() as session:
+        row = await session.get(Instance, instance_id)
+        assert row is not None
+        row.version = "v0.107.79"
+        row.update_version = "v0.107.80"
+        await session.commit()
+
+    body = (await auth_client.get("/api/instances")).json()[0]
+    assert body["update_version"] == "v0.107.80"
+
+
+async def test_an_older_stored_update_is_not_offered_as_one(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """"Different" would have offered a downgrade; the question is "newer"."""
+    from app.db import session_scope
+    from app.models import Instance
+
+    from .test_sync import A, add_instance
+
+    instance_id = await add_instance(auth_client, "a", A)
+    async with session_scope() as session:
+        row = await session.get(Instance, instance_id)
+        assert row is not None
+        row.version = "v0.107.79"
+        row.update_version = "v0.107.60"
+        await session.commit()
+
+    assert (await auth_client.get("/api/instances")).json()[0]["update_version"] == ""
+
+
+async def test_a_version_the_hub_cannot_parse_leaves_the_stored_update_alone(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """An edge build is not evidence that the stored update is wrong."""
+    from app.db import session_scope
+    from app.models import Instance
+
+    from .test_sync import A, add_instance
+
+    instance_id = await add_instance(auth_client, "a", A)
+    async with session_scope() as session:
+        row = await session.get(Instance, instance_id)
+        assert row is not None
+        row.version = "unknown"
+        row.update_version = "v0.107.80"
+        await session.commit()
+
+    assert (await auth_client.get("/api/instances")).json()[0]["update_version"] == "v0.107.80"
+
+
+async def test_pressing_test_re_examines_the_update_line(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """The obvious thing to try on a card that looks wrong, and it used to do nothing.
+
+    check_instance refreshed the version, the status and last seen — every field
+    on the card except the one the operator was looking at — so a wrong update
+    line survived until the reconcile timer came round.
+    """
+    from app.db import session_scope
+    from app.models import Instance
+
+    from .test_sync import A, add_instance
+
+    instance_id = await add_instance(auth_client, "a", A)
+    async with session_scope() as session:
+        row = await session.get(Instance, instance_id)
+        assert row is not None
+        row.update_version = "v0.107.79"
+        await session.commit()
+
+    assert (await auth_client.post(f"/api/instances/{instance_id}/test")).status_code == 200
+
+    async with session_scope() as session:
+        row = await session.get(Instance, instance_id)
+        assert row is not None
+        # Cleared in the database, not merely hidden on the way out.
+        assert row.update_version == ""

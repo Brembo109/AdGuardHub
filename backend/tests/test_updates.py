@@ -14,8 +14,9 @@ import time
 import httpx
 import pytest
 
+from app.semver import is_newer, parse_version
 from app.services import updates
-from app.services.updates import UpdateChecker, install_method, is_newer, parse_version
+from app.services.updates import UpdateChecker, install_method
 
 
 class FakeTransport(httpx.AsyncBaseTransport):
