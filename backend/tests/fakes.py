@@ -22,6 +22,11 @@ class FakeInstanceState:
         # what it is given cannot express the fault at all, which is why the
         # loop it causes went unnoticed through two releases.
         self.refuses: set[str] = set()
+        # Payload kinds whose push raises, while the node stays reachable for
+        # everything else. A node that is simply offline cannot express this:
+        # the interesting case is one that answers a read, takes some writes and
+        # rejects one — which is what makes a pass correct part of its findings.
+        self.push_errors: set[str] = set()
         self.push_calls = 0
         self.unsupported_sections: set[str] = set()
         self.stats: dict[str, Any] = {}
@@ -63,6 +68,10 @@ class FakeAdapter(DnsAdapter):
         if self.state.offline:
             raise AdapterError(f"{self.base_url} is unreachable")
 
+    def _refuse_push(self, kind: str) -> None:
+        if kind in self.state.push_errors:
+            raise AdapterError(f"{self.base_url} rejected the {kind} push")
+
     async def check(self) -> str:
         self._guard()
         return self.VERSION
@@ -73,6 +82,7 @@ class FakeAdapter(DnsAdapter):
 
     async def push_rules(self, rules: list[str]) -> None:
         self._guard()
+        self._refuse_push("rules")
         self.state.rules = [rule for rule in rules if rule not in self.state.refuses]
         self.state.push_calls += 1
 
@@ -82,6 +92,7 @@ class FakeAdapter(DnsAdapter):
 
     async def push_filter_lists(self, lists: list[RemoteFilterList]) -> None:
         self._guard()
+        self._refuse_push("filters")
         # ``rules_count`` belongs to the node, not to the push: a real AdGuard does
         # not forget how many rules it parsed because the hub renamed a list or
         # toggled it. The hub always sends 0 (it never stores list contents), so
@@ -106,6 +117,7 @@ class FakeAdapter(DnsAdapter):
         self._guard()
         if name in self.state.unsupported_sections:
             raise AdapterError(f"{name} is not supported by {self.base_url}", status=404)
+        self._refuse_push("settings")
         self.state.sections[name] = dict(data)
         self.state.push_calls += 1
 

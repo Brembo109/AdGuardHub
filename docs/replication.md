@@ -126,6 +126,17 @@ then goes quiet: a refusal repeats on every run by definition, so it is stated o
 several hundred times. It is said again when it changes, and normal reporting resumes the moment
 the node starts keeping it.
 
+There is a third ending, and it used to be indistinguishable from the first: the push **errored**,
+so the node never saw the correction at all. That row now carries the reason — *the correction
+could not be pushed: …* — rather than the bare word *detected* repeating every five minutes with
+the cause held in memory and thrown away. It is stated once and again when it changes, like a
+refusal.
+
+Each payload kind is corrected on its own. A settings section one AdGuard build rejects used to
+abort the whole pass, so the rule set went uncorrected too and nothing said which of the two had
+gone wrong; now a failure in one area leaves the others to be fixed, which is the same
+best-effort-with-no-rollback rule the push path follows.
+
 Pushing continues throughout. A rule set is pushed whole, so holding it back over one refused
 line would strand every other line with it.
 
