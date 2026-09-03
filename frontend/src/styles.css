@@ -660,6 +660,17 @@ label {
   text-decoration: underline;
 }
 
+/* Why the hub could not find out — a fact about the check, not about the node,
+   so it stays quiet rather than taking a badge. It wraps: these are sentences,
+   and the card is narrow on a phone, which is where the reason used to be
+   invisible altogether. */
+.node-unknown {
+  display: inline-block;
+  font-size: 11.5px;
+  color: var(--dim);
+  max-width: 34ch;
+}
+
 .page-header {
   display: flex;
   justify-content: space-between;

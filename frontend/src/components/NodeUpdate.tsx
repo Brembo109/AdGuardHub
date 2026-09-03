@@ -6,6 +6,12 @@
  * configuration, and older builds have no endpoint for it. The third must never
  * render as the second: telling an operator their DNS is current when nobody
  * actually asked is worse than saying nothing.
+ *
+ * The third state used to render as the bare words "update unknown", with the
+ * reason in a `title` attribute. On a phone there is no hover, so the reason was
+ * unreachable exactly where the card is hardest to read — and "unknown" with no
+ * explanation looks like a fault even when it is a node saying, correctly, that
+ * its own updater is switched off. The reason is the label now.
  */
 
 import type { Instance } from '../api/types'
@@ -35,9 +41,13 @@ export function NodeUpdate({ instance }: { instance: Instance }) {
   if (state === 'unknown') {
     // Deliberately quiet: it is a thing the hub could not find out, not a fault
     // in the node, and it must not read as an update being available.
+    //
+    // The reasons the adapters produce are translated through dynamic-keys.json
+    // like any other backend string; a transport error the hub has never seen
+    // before falls through t() as itself, which is still better than silence.
     return (
-      <span className="hint" title={instance.update_error}>
-        {t('update unknown')}
+      <span className="node-unknown">
+        {instance.update_error ? t(instance.update_error) : t('update unknown')}
       </span>
     )
   }
