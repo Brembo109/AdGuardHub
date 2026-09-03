@@ -21,11 +21,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import re
 import time
 from dataclasses import asdict, dataclass
 
 import httpx
+
+from ..semver import is_newer
 
 logger = logging.getLogger(__name__)
 
@@ -59,28 +60,6 @@ class UpdateStatus:
     error: str
 
 
-def parse_version(text: str) -> tuple[int, ...] | None:
-    """``v0.3.1`` → ``(0, 3, 1)``. Anything else — "dev", a hash — is ``None``.
-
-    A pre-release suffix is dropped rather than ordered: ``v1.0.0-rc.1`` compares
-    as ``1.0.0``, so an operator running the candidate is not told to "update" to
-    the release it became. Getting that ordering right matters only if
-    pre-releases are ever published, and guessing at it now would be a rule
-    nobody has tested.
-    """
-    match = re.match(r"^v?(\d+)\.(\d+)\.(\d+)", text.strip())
-    return tuple(int(part) for part in match.groups()) if match else None
-
-
-def is_newer(latest: str, current: str) -> bool:
-    """Whether ``latest`` is a release worth telling the operator about.
-
-    An unparseable *current* — a development build, someone running from a
-    checkout — is never "out of date": it is not on the release track at all, and
-    nagging it would be noise.
-    """
-    left, right = parse_version(latest), parse_version(current)
-    return bool(left and right and left > right)
 
 
 def install_method() -> str:

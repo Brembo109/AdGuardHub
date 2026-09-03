@@ -8,13 +8,20 @@ pushes idempotent, lets the retry queue coalesce, and removes any need for merge
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..adapters import AdapterError, DnsAdapter, RemoteFilterList, build_adapter
+from ..adapters import (
+    AdapterError,
+    DnsAdapter,
+    RemoteFilterList,
+    RemoteUpdate,
+    build_adapter,
+)
 from ..db import session_scope
 from ..models import (
     FilterList,
@@ -301,8 +308,19 @@ async def check_instance(session: AsyncSession, instance: Instance) -> str:
         return ""
     was = instance.status
     adapter = build_adapter(instance, get_crypto())
+    update = RemoteUpdate()
     try:
         version = await adapter.check()
+        # Asked here too, not only on the reconcile timer. Pressing Test on a node
+        # whose update line looks wrong is the obvious thing to try, and this path
+        # used to refresh every field on the card except that one — so the wrong
+        # line survived every attempt to clear it until the timer came round.
+        #
+        # Suppressed on its own: what this function reports is whether the node is
+        # reachable, and an update endpoint that will not answer is not the node
+        # being down.
+        with contextlib.suppress(AdapterError, ValueError):
+            update = await adapter.check_update(version)
     except (AdapterError, ValueError) as exc:
         was_online = instance.status == InstanceStatus.online.value
         instance.status = InstanceStatus.unreachable.value
@@ -323,6 +341,9 @@ async def check_instance(session: AsyncSession, instance: Instance) -> str:
     # check() already asked /control/status for it; throwing it away meant the UI
     # could never say which AdGuard version a node is running.
     instance.version = version
+    instance.update_version = update.latest if update.available else ""
+    instance.update_url = update.url if update.available else ""
+    instance.update_error = update.error
     instance.last_error = ""
     instance.last_seen_at = datetime.now(UTC)
     await session.commit()

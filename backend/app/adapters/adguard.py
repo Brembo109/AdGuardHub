@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from ..semver import is_newer
 from . import session
 from .base import AdapterError, DnsAdapter, QueryLogEntry, RemoteFilterList, RemoteUpdate
 from .sections import SECTION_NAMES, SPEC_BY_NAME, SectionSpec
@@ -27,16 +28,6 @@ _SILENT_ERRORS = {
     "WriteError": "the connection dropped while sending the request",
     "RemoteProtocolError": "the instance sent a malformed HTTP response",
 }
-
-
-def _version_key(text: str) -> str:
-    """Compare AdGuard versions without tripping over the leading v.
-
-    ``/control/status`` answers ``v0.107.79`` and other places in the same API
-    answer ``0.107.79``. Comparing those as strings would report an update to the
-    version already running, which is the fault this exists to prevent.
-    """
-    return text.strip().lstrip("vV")
 
 
 def _int(value: Any) -> int:
@@ -263,7 +254,10 @@ class AdGuardAdapter(DnsAdapter):
         return RemoteUpdate(
             current=running,
             latest=latest,
-            available=bool(latest) and _version_key(latest) != _version_key(running),
+            # Strictly newer, not merely different: equality is what a node
+            # reporting its own version produces, and a difference in the other
+            # direction would offer a downgrade as an update.
+            available=is_newer(latest, running),
             url=url,
         )
 
