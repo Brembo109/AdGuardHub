@@ -324,24 +324,36 @@ async def reconcile_instance(
     # and did not keep the result — the one outcome the old code could not tell
     # apart from success, and the one that turns into an endless loop.
     refused: dict[str, Difference] = {}
+    # What could not be attempted at all: the push itself errored, so the node
+    # never took the write. Kept apart from a refusal, and from success, because
+    # all three used to reach the operator as the single word "detected".
+    failed: dict[str, str] = {}
     if correctable and apply_fixes:
-        try:
-            for difference in correctable:
+        for difference in correctable:
+            # Per difference rather than around the loop. A settings section one
+            # AdGuard build rejects used to abort the pass, so the rule set was
+            # never corrected — and the drift row still said only "detected".
+            # Best-effort with no rollback is the rule everywhere else in the
+            # sync engine; one shared try block quietly suspended it here.
+            try:
                 await push_kind(session, adapter, PayloadKind(difference.payload_kind))
                 remaining = await _still_differs(
                     session, adapter, difference.payload_kind, expected_sections
                 )
-                if remaining is None:
-                    fixed.add(difference.payload_kind)
-                else:
-                    refused[difference.payload_kind] = remaining
-            # True only if something actually landed. Claiming a correction that
-            # did not stick is what made this invisible for as long as it was.
-            report.corrected = bool(fixed)
-            if fixed:
-                instance.last_synced_at = utcnow()
-        except (AdapterError, ValueError) as exc:
-            report.error = str(exc)
+            except (AdapterError, ValueError) as exc:
+                failed[difference.payload_kind] = str(exc)
+                continue
+            if remaining is None:
+                fixed.add(difference.payload_kind)
+            else:
+                refused[difference.payload_kind] = remaining
+        # True only if something actually landed. Claiming a correction that
+        # did not stick is what made this invisible for as long as it was.
+        report.corrected = bool(fixed)
+        if fixed:
+            instance.last_synced_at = utcnow()
+        if failed:
+            report.error = "; ".join(f"{kind}: {text}" for kind, text in sorted(failed.items()))
 
     await adapter.aclose()
 
@@ -351,7 +363,9 @@ async def reconcile_instance(
             instance.name,
             "; ".join(item.summary for item in correctable),
             (
-                " — not kept by the node"
+                f" — the correction could not be pushed: {report.error}"
+                if failed
+                else " — not kept by the node"
                 if refused
                 else " — corrected"
                 if fixed
@@ -368,17 +382,30 @@ async def reconcile_instance(
             # gap, not drift. Logging it would append the same entry on every run.
             continue
         remaining = refused.get(difference.payload_kind)
-        if remaining is None:
+        error = failed.get(difference.payload_kind)
+        details = json.dumps(difference.details, default=str)
+        if error:
+            # The reason belongs in the row. It was going into report.error,
+            # which nothing persists, so a pass that tried and could not push
+            # was indistinguishable from one that never tried — both read
+            # "detected", five minutes apart, for as long as the fault lasted.
+            summary = f"{difference.summary} — the correction could not be pushed: {error}"
+        elif remaining is None:
             summary = difference.summary
-            details = json.dumps(difference.details, default=str)
         else:
             # Said as what it is. "1 rule(s) missing, corrected" describes a
             # correction that worked; this one did not, and the operator needs to
             # know that rather than watch it repeat.
             summary = f"the node did not keep this correction — {remaining.summary}"
             details = json.dumps(remaining.details, default=str)
-            if await _already_said(session, instance.id, difference.payload_kind, summary, details):
-                continue
+        # A refusal and a failing push both repeat on every run by definition,
+        # so each is stated once and again when it changes. A plain difference
+        # is not suppressed: it is expected to be corrected, and a second one
+        # means the correction is not holding.
+        if (error or remaining is not None) and await _already_said(
+            session, instance.id, difference.payload_kind, summary, details
+        ):
+            continue
         session.add(
             DriftEvent(
                 instance_id=instance.id,
@@ -406,7 +433,9 @@ async def reconcile_instance(
     if logged:
         await bus.publish("drift", {"instance": instance.name, "report": asdict(report)})
         headline = "; ".join(difference.summary for difference in logged)
-        if refused:
+        if failed:
+            title = f"A correction could not be pushed to {instance.name}"
+        elif refused:
             title = f"A correction did not hold on {instance.name}"
         else:
             title = f"Drift {'corrected' if report.corrected else 'detected'} on {instance.name}"
