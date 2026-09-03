@@ -133,15 +133,10 @@ async def push_kind(
     session: AsyncSession,
     adapter: DnsAdapter,
     kind: PayloadKind,
-    *,
-    verify: bool = False,
-) -> list[str]:
-    """Push one payload. Returns what the node did not keep, empty when all landed.
+) -> Any:
+    """Push one payload. Returns what was sent, so it can be read back later.
 
-    ``verify`` costs one extra read per push and is what the instant-push path
-    uses, so a refused rule is reported while the operator is still looking at
-    the button they pressed. Reconciliation passes ``False``: it re-reads with
-    the full comparison anyway, which sections need and which this cannot do.
+    Reading back is deliberately not done here — see ``not_kept``.
     """
     if kind is PayloadKind.rules:
         wanted = await desired_rules(session)
@@ -159,7 +154,34 @@ async def push_kind(
                 raise AdapterError(f"section {name!r}: {exc}", status=exc.status) from exc
     else:  # pragma: no cover - PayloadKind has no fourth member
         wanted = None
-    return await _not_kept(adapter, kind, wanted) if verify else []
+    return wanted
+
+
+async def not_kept(
+    adapter: DnsAdapter, sent: dict[PayloadKind, Any]
+) -> dict[str, list[str]]:
+    """What the node accepted and then did not keep — read back after every write.
+
+    The read-back happens at the end of the push rather than after each payload,
+    because the writes are **not independent**. AdGuard reconfigures itself on
+    every configuration change: a rule set, a subscription added, a settings
+    section — each one is its own `reconfiguring server` on the node. A later
+    reconfigure can undo what an earlier write put there.
+
+    Verifying rules the moment they were sent, before the subscriptions and the
+    settings sections had even left the hub, meant exactly one thing could
+    happen and did: the hub confirmed a rule had landed, overwrote it a moment
+    later with the rest of the push, and had nothing left to say about it. The
+    operator saw *corrected*, and the rule was gone by the next run — which is
+    the loop this verification exists to stop, one layer up from where it was
+    fixed before.
+    """
+    refused: dict[str, list[str]] = {}
+    for kind, wanted in sent.items():
+        left = await _not_kept(adapter, kind, wanted)
+        if left:
+            refused[kind.value] = left
+    return refused
 
 
 async def push_to_instance(
@@ -175,10 +197,11 @@ async def push_to_instance(
     adapter = build_adapter(instance, get_crypto())
     refused: dict[str, list[str]] = {}
     try:
+        sent: dict[PayloadKind, Any] = {}
         for kind in kinds:
-            left = await push_kind(session, adapter, kind, verify=True)
-            if left:
-                refused[kind.value] = left
+            sent[kind] = await push_kind(session, adapter, kind)
+        # Every write is done; only now is it safe to ask what survived them all.
+        refused = await not_kept(adapter, sent)
     except (AdapterError, ValueError) as exc:
         error = str(exc)
         was_online = previous == InstanceStatus.online.value

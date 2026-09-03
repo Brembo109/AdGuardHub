@@ -326,6 +326,37 @@ async def test_a_partial_push_is_not_recorded_as_a_full_sync(
     assert (await auth_client.get("/api/instances")).json()[0]["last_synced_at"] is None
 
 
+async def test_a_rule_undone_by_the_rest_of_the_same_push_is_caught(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """The three payloads of one push are not independent, and this is the proof.
+
+    AdGuard reconfigures itself on every configuration change, so writing a
+    settings section can undo the rule set that arrived moments before. While
+    each payload was verified straight after its own write, that was invisible:
+    the rules were read back before the sections had even been sent, the hub
+    reported them as landed, and then overwrote them itself. The operator saw
+    "corrected" and the rule was gone by the next run — with nothing anywhere
+    saying so.
+    """
+    instance_id = await add_instance(auth_client, "a", A)
+    state = FakeAdapter.state_for(A)
+    # Managed sections, so the push carries one — without that there is no
+    # second write to undo the first.
+    await auth_client.patch(
+        "/api/config/sections/access",
+        json={"managed": True, "data": {"blocked_hosts": []}},
+    )
+    await auth_client.post("/api/rules/allow", json={"domain": "hitmyl.ink"})
+    await drain_background()
+    state.section_push_drops_rules = True
+
+    body = (await auth_client.post(f"/api/instances/{instance_id}/push")).json()
+
+    assert "did not keep" in body["error"]
+    assert "@@||hitmyl.ink^" in body["error"]
+
+
 async def test_a_push_that_lands_says_nothing(auth_client: httpx.AsyncClient) -> None:
     """The check must not turn a working push into a complaint."""
     instance_id = await add_instance(auth_client, "a", A)
