@@ -12,13 +12,21 @@
  * delivering a line producing a line — so this asks, on a timer, for whatever is
  * newer than the last sequence number it holds. Following along costs one small
  * response; nothing is re-sent.
+ *
+ * Narrowing happens here rather than in the API on purpose. The hub keeps 500
+ * lines and this view keeps the same 500, so filtering server-side could not
+ * reach one line further back — it would only mean a round trip every time the
+ * operator changes their mind, and a cursor that means something different
+ * depending on the filter that fetched it.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../../api/client'
 import type { LogLine } from '../../api/types'
+import { IconSearch } from '../../components/icons'
 import { Card, Empty } from '../../components/ui'
 import { useT } from '../../i18n'
+import { type LogFilter, NO_FILTER, isFiltering, matches, sourceLabel } from './logFilter'
 
 const POLL_MS = 2000
 
@@ -29,6 +37,7 @@ export default function SettingsLog() {
   const t = useT()
   const [lines, setLines] = useState<LogLine[]>([])
   const [following, setFollowing] = useState(true)
+  const [filter, setFilter] = useState<LogFilter>(NO_FILTER)
   const [error, setError] = useState('')
   const cursor = useRef(0)
   const box = useRef<HTMLDivElement>(null)
@@ -56,11 +65,32 @@ export default function SettingsLog() {
     return () => clearInterval(timer)
   }, [poll, following])
 
+  const shown = useMemo(() => lines.filter((line) => matches(line, filter)), [lines, filter])
+
   // Follow the tail, unless the operator has scrolled up to read something.
   useEffect(() => {
     const node = box.current
     if (node && following) node.scrollTop = node.scrollHeight
-  }, [lines, following])
+  }, [shown, following])
+
+  const levels = [
+    { value: 0, label: t('All levels') },
+    { value: 20, label: t('Info and above') },
+    { value: 30, label: t('Warnings and above') },
+    { value: 40, label: t('Errors only') },
+  ]
+
+  // Built from the lines actually held, so the list never offers a source that
+  // has said nothing. The current selection is kept in it regardless: a logger
+  // whose last line has just scrolled out of the buffer must not silently drop
+  // the filter the operator set.
+  const sources = useMemo(() => {
+    const present = new Set(lines.map((line) => line.logger).filter(Boolean))
+    if (filter.logger) present.add(filter.logger)
+    return [...present].sort()
+  }, [lines, filter.logger])
+
+  const filtering = isFiltering(filter)
 
   return (
     <Card
@@ -85,16 +115,71 @@ export default function SettingsLog() {
         {error ? <span className="hint">{error}</span> : null}
       </div>
 
-      {lines.length ? (
+      <div className="filters" style={{ marginBottom: 12 }}>
+        <div className="search">
+          <IconSearch />
+          <input
+            value={filter.text}
+            aria-label={t('Search the log')}
+            placeholder={t('Search the lines')}
+            onChange={(event) => setFilter({ ...filter, text: event.target.value })}
+          />
+        </div>
+        <select
+          aria-label={t('Filter by level')}
+          style={{ flex: '0 0 175px' }}
+          value={filter.floor}
+          onChange={(event) => setFilter({ ...filter, floor: Number(event.target.value) })}
+        >
+          {levels.map((level) => (
+            <option key={level.value} value={level.value}>
+              {level.label}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label={t('Filter by source')}
+          style={{ flex: '0 0 190px' }}
+          value={filter.logger}
+          onChange={(event) => setFilter({ ...filter, logger: event.target.value })}
+        >
+          <option value="">{t('All sources')}</option>
+          {sources.map((logger) => (
+            <option key={logger} value={logger}>
+              {sourceLabel(logger)}
+            </option>
+          ))}
+        </select>
+        {filtering ? (
+          <button
+            type="button"
+            className="small"
+            style={{ flex: '0 0 auto' }}
+            onClick={() => setFilter(NO_FILTER)}
+          >
+            {t('Show all')}
+          </button>
+        ) : null}
+        <span style={{ marginLeft: 'auto', color: 'var(--dim)', fontSize: 12.5 }}>
+          {filtering
+            ? t('{shown} of {total} lines', {
+                shown: String(shown.length),
+                total: String(lines.length),
+              })
+            : t('{count} lines', { count: String(lines.length) })}
+        </span>
+      </div>
+
+      {shown.length ? (
         <div className="run-log" ref={box}>
-          {lines.map((line) => (
+          {shown.map((line) => (
             <div key={line.seq} className={`log-line ${line.level.toLowerCase()}`}>
               {line.message}
             </div>
           ))}
         </div>
       ) : (
-        <Empty>{t('Nothing logged yet.')}</Empty>
+        <Empty>{filtering ? t('No line matches this filter.') : t('Nothing logged yet.')}</Empty>
       )}
     </Card>
   )

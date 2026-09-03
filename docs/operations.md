@@ -20,6 +20,13 @@ along live. That is a window, not a replacement: it lives in memory, is cleared 
 your container or systemd log remains the record. Its own polling is deliberately left out of
 it, so watching the log does not push what you came to read out of the buffer.
 
+Those 500 lines are mostly the web server reporting requests, so the page narrows them three
+ways: a search over the line, a minimum level (*Warnings and above* is the one you want when
+something went wrong at a time you can name), and a source — the part of the hub that spoke,
+`services.sync` and `services.reconcile` being the two the sync engine writes under. The
+filters stack, the count on the right always says how many lines are being held back, and
+*Show all* clears them. A level the hub does not recognise is never hidden by the level filter.
+
 At the default `INFO` you get startup, schema migrations, notification failures, and
 sign-ins. `ADGUARDHUB_LOG_LEVEL=DEBUG` adds the per-instance diagnostics — why a node's stats
 came back empty, why a query log poll returned nothing — which is what you want while something
