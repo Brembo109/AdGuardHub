@@ -15,7 +15,18 @@ from sqlalchemy import select
 from starlette.responses import Response
 from starlette.types import Scope
 
-from .api import auth, backup, blocklists, config, control, instances, ops, querylog, rules
+from .api import (
+    auth,
+    backup,
+    blocklists,
+    config,
+    control,
+    diagnostics,
+    instances,
+    ops,
+    querylog,
+    rules,
+)
 from .api import settings as settings_api
 from .config import get_settings
 from .db import DataDirError, dispose_db, init_db, session_scope
@@ -129,6 +140,7 @@ app.include_router(ops.router)
 app.include_router(config.router)
 app.include_router(config.versions_router)
 app.include_router(backup.router)
+app.include_router(diagnostics.router)
 # Registered before the SPA fallback so /control/* is not swallowed by it.
 app.include_router(control.router)
 

@@ -209,4 +209,6 @@ export const api = {
   backupUrl: () => '/api/backup',
   restoreBackup: (document: unknown) =>
     post<BackupRestoreResult>('/api/backup/restore', document),
+  // Same reasoning as the backup download above.
+  diagnosticsUrl: () => '/api/diagnostics',
 }

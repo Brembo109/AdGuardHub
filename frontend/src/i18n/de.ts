@@ -537,6 +537,13 @@ export const de: Record<string, string> = {
   "The current state stays in the history, so this can be rolled back.": "Der aktuelle Stand bleibt im Verlauf erhalten, das lässt sich also zurücknehmen.",
   "{count} instance(s) came back without a password — re-enter it under Instances.": "{count} Instanz(en) kamen ohne Passwort zurück — tragen Sie es unter Instanzen erneut ein.",
 
+  // Diagnostics
+  "Diagnostics": "Diagnose",
+  "Download diagnostics": "Diagnosedatei herunterladen",
+  "One file to attach to a bug report: this hub’s version and how it was installed, the state of each node, the retry queue, recent drift, and the last 200 log lines.": "Eine Datei zum Anhängen an einen Fehlerbericht: Version dieses Hubs und Installationsart, Zustand jedes Nodes, die Wiederholungs-Warteschlange, aktuelle Abweichungen und die letzten 200 Protokollzeilen.",
+  "Node names, addresses and usernames are taken out — each node reads as node-1, node-2 throughout the file, including inside error messages and log lines, so it can still be followed from one section to the next. Passwords, webhook paths and the values of your settings areas are never in it.": "Node-Namen, -Adressen und -Benutzernamen werden entfernt — jeder Node heißt in der gesamten Datei node-1, node-2 usw., auch innerhalb von Fehlermeldungen und Protokollzeilen, sodass er von Abschnitt zu Abschnitt nachvollziehbar bleibt. Passwörter, Webhook-Pfade und die Werte Ihrer Einstellungsbereiche sind nie enthalten.",
+  "Your rules, subscription addresses and the domains in a drift entry are in it, because that is what most reports are about. It is plain JSON — open it before you post it.": "Ihre Regeln, Abonnement-Adressen und die Domains in einem Abweichungseintrag sind enthalten, denn darum geht es in den meisten Berichten. Es ist einfaches JSON — sehen Sie es sich an, bevor Sie es veröffentlichen.",
+
   // Sign-in attempts and the rate limit
   "From": "Von",
   "Kept in memory only, newest first, and cleared on restart — this is a diagnostic aid, not an audit trail. Neither the username nor the password attempted is ever recorded.": "Nur im Arbeitsspeicher, neueste zuerst, und bei einem Neustart weg — das ist eine Diagnosehilfe, kein Prüfprotokoll. Weder der versuchte Benutzername noch das Passwort werden jemals festgehalten.",
