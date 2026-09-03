@@ -20,6 +20,13 @@ along live. That is a window, not a replacement: it lives in memory, is cleared 
 your container or systemd log remains the record. Its own polling is deliberately left out of
 it, so watching the log does not push what you came to read out of the buffer.
 
+Those 500 lines are mostly the web server reporting requests, so the page narrows them three
+ways: a search over the line, a minimum level (*Warnings and above* is the one you want when
+something went wrong at a time you can name), and a source — the part of the hub that spoke,
+`services.sync` and `services.reconcile` being the two the sync engine writes under. The
+filters stack, the count on the right always says how many lines are being held back, and
+*Show all* clears them. A level the hub does not recognise is never hidden by the level filter.
+
 At the default `INFO` you get startup, schema migrations, notification failures, sign-ins, and
 what the sync engine did: each push and where it went, a push that failed and was queued, a
 push a node accepted and did not keep, a node going unreachable and coming back, and every
@@ -28,8 +35,9 @@ reconciliation pass that found something.
 What is **not** at INFO matters as much. A reconciliation pass that found nothing says nothing,
 and a node that has been down for an hour is reported once rather than on every pass — two
 nodes on a five-minute timer would otherwise write several hundred lines a day to report that
-nothing happened, which is how a log stops being read. Both are at `DEBUG`, together with the
-per-instance diagnostics below. `ADGUARDHUB_LOG_LEVEL=DEBUG` adds the per-instance diagnostics — why a node's stats
+nothing happened, which is how a log stops being read.
+
+`ADGUARDHUB_LOG_LEVEL=DEBUG` adds both of those, and the per-instance diagnostics — why a node's stats
 came back empty, why a query log poll returned nothing — which is what you want while something
 is misbehaving and nothing but noise the rest of the time. It also turns on the HTTP client's
 own narration, which is verbose: on a hub polling two nodes it accounts for the large majority
