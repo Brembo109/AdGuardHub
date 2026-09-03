@@ -22,6 +22,13 @@ class FakeInstanceState:
         # what it is given cannot express the fault at all, which is why the
         # loop it causes went unnoticed through two releases.
         self.refuses: set[str] = set()
+        # Whether writing a settings section wipes the rule set, the way a node
+        # reconfiguring itself can undo a write that arrived moments earlier.
+        # Real AdGuard reconfigures on every configuration change, so the three
+        # payloads of one push are not independent — and a double that treats
+        # them as independent cannot express the fault where a rule is confirmed
+        # as landed and then overwritten by the rest of the same push.
+        self.section_push_drops_rules = False
         # Payload kinds whose push raises, while the node stays reachable for
         # everything else. A node that is simply offline cannot express this:
         # the interesting case is one that answers a read, takes some writes and
@@ -119,6 +126,8 @@ class FakeAdapter(DnsAdapter):
             raise AdapterError(f"{name} is not supported by {self.base_url}", status=404)
         self._refuse_push("settings")
         self.state.sections[name] = dict(data)
+        if self.state.section_push_drops_rules:
+            self.state.rules = []
         self.state.push_calls += 1
 
     async def stats(self) -> dict[str, Any]:

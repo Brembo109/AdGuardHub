@@ -108,7 +108,13 @@ happened twice, and both times the hub knew its own correction had not taken and
 
 An instant push reads back too, so a refused rule is named while you are still
 looking at the button you pressed rather than five minutes later under the wrong
-word. Such a push is **not** queued for a retry: the queue exists for a node that
+word. The read-back happens once, **after every payload has been written**, and
+that ordering is the whole point: AdGuard reconfigures itself on every
+configuration change, so a settings section can undo the rule set that arrived a
+moment earlier. Checking each payload straight after its own write made that
+invisible — the rules were read back before the sections had even been sent, the
+hub called them landed, and then overwrote them itself. Such a push is **not**
+queued for a retry: the queue exists for a node that
 was unreachable, and a node that answered and would not keep the write will not
 keep it on the second attempt either — queueing it would rebuild the same loop
 one layer down. The node stays *online*, because it is; what it would not keep
