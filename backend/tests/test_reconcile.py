@@ -266,3 +266,104 @@ async def test_clearing_an_empty_log_is_not_an_error(auth_client: httpx.AsyncCli
 
 async def test_clearing_the_drift_log_needs_a_session(client: httpx.AsyncClient) -> None:
     assert (await client.delete("/api/drift")).status_code == 401
+
+
+# --------------------------------------------------------------------------
+# A correction that does not hold
+# --------------------------------------------------------------------------
+
+
+async def test_a_refused_rule_is_not_reported_as_corrected(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """Reported from a real fleet: the same allow rule pushed every five minutes.
+
+    AdGuard answered 2xx and did not keep the rule. The hub called that
+    "corrected", rediscovered it on the next run, corrected it again, and wrote a
+    drift event and fired a notification each time — while knowing, every time,
+    that its own correction had not taken.
+    """
+    await add_instance(auth_client, "a", A)
+    FakeAdapter.state_for(A).refuses = {"@@||hitmyl.ink^"}
+    await auth_client.post("/api/rules/allow", json={"domain": "hitmyl.ink"})
+    await drain_background()
+
+    reports = (await auth_client.post("/api/reconcile")).json()
+    assert reports[0]["corrected"] is False, "nothing landed, so nothing was corrected"
+
+    events = (await auth_client.get("/api/drift")).json()
+    assert len(events) == 1
+    assert "did not keep" in events[0]["summary"]
+    assert events[0]["corrected"] is False
+    assert "@@||hitmyl.ink^" in events[0]["details"]
+
+
+async def test_the_same_refusal_is_said_once_rather_than_every_run(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """The loop is the defect. One entry states it; three hundred bury it."""
+    await add_instance(auth_client, "a", A)
+    FakeAdapter.state_for(A).refuses = {"@@||hitmyl.ink^"}
+    await auth_client.post("/api/rules/allow", json={"domain": "hitmyl.ink"})
+    await drain_background()
+
+    for _ in range(5):
+        await auth_client.post("/api/reconcile")
+
+    assert len((await auth_client.get("/api/drift")).json()) == 1
+
+
+async def test_a_refusal_that_changes_is_reported_again(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """Quieting a repeat must not quiet a new fact."""
+    await add_instance(auth_client, "a", A)
+    FakeAdapter.state_for(A).refuses = {"@@||hitmyl.ink^"}
+    await auth_client.post("/api/rules/allow", json={"domain": "hitmyl.ink"})
+    await drain_background()
+    await auth_client.post("/api/reconcile")
+
+    FakeAdapter.state_for(A).refuses = {"@@||hitmyl.ink^", "@@||second.example^"}
+    await auth_client.post("/api/rules/allow", json={"domain": "second.example"})
+    await drain_background()
+    await auth_client.post("/api/reconcile")
+
+    events = (await auth_client.get("/api/drift")).json()
+    assert len(events) == 2
+    assert "second.example" in events[0]["details"]
+
+
+async def test_a_node_that_starts_keeping_it_is_corrected_normally(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """Recovery has to leave the quiet state behind, or it is a new kind of stuck."""
+    await add_instance(auth_client, "a", A)
+    FakeAdapter.state_for(A).refuses = {"@@||hitmyl.ink^"}
+    await auth_client.post("/api/rules/allow", json={"domain": "hitmyl.ink"})
+    await drain_background()
+    await auth_client.post("/api/reconcile")
+
+    FakeAdapter.state_for(A).refuses = set()
+    reports = (await auth_client.post("/api/reconcile")).json()
+
+    assert reports[0]["corrected"] is True
+    assert FakeAdapter.state_for(A).rules == ["@@||hitmyl.ink^"]
+    events = (await auth_client.get("/api/drift")).json()
+    assert events[0]["corrected"] is True
+    assert "did not keep" not in events[0]["summary"]
+
+
+async def test_an_ordinary_correction_still_reads_as_one(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """The verification must not turn a working correction into a complaint."""
+    await add_instance(auth_client, "a", A)
+    await auth_client.post("/api/rules", json={"text": "||ads.example.com^"})
+    await drain_background()
+    FakeAdapter.state_for(A).rules = []
+
+    reports = (await auth_client.post("/api/reconcile")).json()
+    assert reports[0]["corrected"] is True
+    event = (await auth_client.get("/api/drift")).json()[0]
+    assert event["corrected"] is True
+    assert "did not keep" not in event["summary"]

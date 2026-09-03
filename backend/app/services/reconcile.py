@@ -205,6 +205,57 @@ def is_correctable(difference: Difference) -> bool:
     return bool(set(difference.details) - {"_unsupported"})
 
 
+async def _still_differs(
+    session: AsyncSession,
+    adapter: Any,
+    kind: str,
+    expected_sections: dict[str, dict[str, Any]],
+) -> Difference | None:
+    """Re-read one payload from the node and diff it again.
+
+    A 2xx from AdGuard means it accepted the request, not that it kept what was
+    in it. Without asking again, "corrected" is a claim about the write having
+    been sent — which is exactly how a rule the node quietly refused could be
+    reported as fixed every five minutes, forever, while never arriving.
+
+    Only the payload that was just pushed is re-read, not the whole state.
+    """
+    if kind == PayloadKind.rules.value:
+        return diff_rules(await desired_rules(session), await adapter.pull_rules())
+    if kind == PayloadKind.filters.value:
+        return diff_filter_lists(
+            await desired_filter_lists(session), await adapter.pull_filter_lists()
+        )
+    actual = {name: await adapter.pull_section(name) for name in expected_sections}
+    return diff_settings(expected_sections, actual)
+
+
+async def _already_said(
+    session: AsyncSession, instance_id: int, kind: str, summary: str, details: str
+) -> bool:
+    """Whether the newest entry for this instance and payload already says this.
+
+    A refusal repeats by definition: the node goes on not keeping the same thing,
+    so every run would write the same entry. One says it; five hundred bury it.
+    Only refusals are held back this way — an out-of-band change that keeps being
+    made and corrected is genuinely new each time and stays in the log.
+    """
+    row = (
+        (
+            await session.execute(
+                select(DriftEvent)
+                .where(DriftEvent.instance_id == instance_id)
+                .where(DriftEvent.payload_kind == kind)
+                .order_by(DriftEvent.id.desc())
+                .limit(1)
+            )
+        )
+        .scalars()
+        .first()
+    )
+    return row is not None and row.summary == summary and row.details == details
+
+
 async def reconcile_instance(
     session: AsyncSession, instance: Instance, *, apply_fixes: bool = True
 ) -> InstanceReport:
@@ -269,34 +320,61 @@ async def reconcile_instance(
 
     correctable = [item for item in report.differences if is_correctable(item)]
     fixed: set[str] = set()
+    # What survived being corrected, by payload kind. The node took the request
+    # and did not keep the result — the one outcome the old code could not tell
+    # apart from success, and the one that turns into an endless loop.
+    refused: dict[str, Difference] = {}
     if correctable and apply_fixes:
         try:
             for difference in correctable:
                 await push_kind(session, adapter, PayloadKind(difference.payload_kind))
-                fixed.add(difference.payload_kind)
-            report.corrected = True
-            instance.last_synced_at = utcnow()
+                remaining = await _still_differs(
+                    session, adapter, difference.payload_kind, expected_sections
+                )
+                if remaining is None:
+                    fixed.add(difference.payload_kind)
+                else:
+                    refused[difference.payload_kind] = remaining
+            # True only if something actually landed. Claiming a correction that
+            # did not stick is what made this invisible for as long as it was.
+            report.corrected = bool(fixed)
+            if fixed:
+                instance.last_synced_at = utcnow()
         except (AdapterError, ValueError) as exc:
             report.error = str(exc)
 
     await adapter.aclose()
 
+    logged: list[Difference] = []
     for difference in report.differences:
         if not is_correctable(difference):
             # A section this AdGuard build does not implement is a standing capability
             # gap, not drift. Logging it would append the same entry on every run.
             continue
+        remaining = refused.get(difference.payload_kind)
+        if remaining is None:
+            summary = difference.summary
+            details = json.dumps(difference.details, default=str)
+        else:
+            # Said as what it is. "1 rule(s) missing, corrected" describes a
+            # correction that worked; this one did not, and the operator needs to
+            # know that rather than watch it repeat.
+            summary = f"the node did not keep this correction — {remaining.summary}"
+            details = json.dumps(remaining.details, default=str)
+            if await _already_said(session, instance.id, difference.payload_kind, summary, details):
+                continue
         session.add(
             DriftEvent(
                 instance_id=instance.id,
                 instance_name=instance.name,
                 payload_kind=difference.payload_kind,
-                summary=difference.summary,
-                details=json.dumps(difference.details, default=str),
+                summary=summary,
+                details=details,
                 # Per difference: a later push can fail after an earlier one succeeded.
                 corrected=difference.payload_kind in fixed,
             )
         )
+        logged.append(Difference(difference.payload_kind, summary, difference.details))
     await session.commit()
     await prune_drift_events(session)
 
@@ -306,14 +384,17 @@ async def reconcile_instance(
     # recorded either way.
     await notify_if_recovered(instance, previous)
 
-    if correctable:
+    # Tied to what was written, not to what was found. A refusal is found on every
+    # run by definition, and notifying each time is how the last loop of this shape
+    # sent a message every five minutes for weeks about a fault that never existed.
+    if logged:
         await bus.publish("drift", {"instance": instance.name, "report": asdict(report)})
-        headline = "; ".join(difference.summary for difference in correctable)
-        await notify(
-            EVENT_RECONCILE_FIX,
-            f"Drift {'corrected' if report.corrected else 'detected'} on {instance.name}",
-            headline,
-        )
+        headline = "; ".join(difference.summary for difference in logged)
+        if refused:
+            title = f"A correction did not hold on {instance.name}"
+        else:
+            title = f"Drift {'corrected' if report.corrected else 'detected'} on {instance.name}"
+        await notify(EVENT_RECONCILE_FIX, title, headline)
     return report
 
 
