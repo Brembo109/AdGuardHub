@@ -24,6 +24,7 @@ import QueryLog from './pages/QueryLog'
 import Rules from './pages/Rules'
 import SettingsLayout from './pages/settings/Layout'
 import SettingsBackup from './pages/settings/Backup'
+import SettingsDiagnostics from './pages/settings/Diagnostics'
 import SettingsGeneral from './pages/settings/General'
 import SettingsLog from './pages/settings/Log'
 import SettingsNotifications from './pages/settings/Notifications'
@@ -218,6 +219,7 @@ export default function App() {
             <Route path="security" element={<SettingsSecurity />} />
             <Route path="log" element={<SettingsLog />} />
             <Route path="backup" element={<SettingsBackup />} />
+            <Route path="diagnostics" element={<SettingsDiagnostics />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

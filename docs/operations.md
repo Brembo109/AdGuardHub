@@ -1,6 +1,7 @@
 # Running it
 
 - [Logs](#logs)
+- [Reporting a problem](#reporting-a-problem)
 - [Backup and restore](#backup-and-restore)
 - [Notifications](#notifications)
 - [Security](#security)
@@ -57,6 +58,36 @@ be written, the hub says so and carries on with stderr rather than refusing to s
 Docker's default json-file driver keeps that copy **without any size limit**, which on a
 long-running hub is a disk that fills quietly. The `logging:` block in the
 [Compose example](install.md#docker-compose) caps it at three files of 10 MB; keep it.
+
+## Reporting a problem
+
+*Settings → Diagnostics → Download diagnostics* produces one JSON file that answers the
+questions a report otherwise takes four replies to establish: which version, installed how,
+how many nodes and in what state, what is sitting in the retry queue, what reconciliation has
+been finding, and the last 200 lines the hub logged.
+
+It is **not** a backup, and the difference decides what is in it. A backup stays with you; this
+gets pasted into a public issue. So on top of the rule a backup already follows — no passwords,
+in the clear or encrypted — this one also drops everything that says *where* a node is or *who*
+signs in to it:
+
+| Left out | Kept |
+| --- | --- |
+| Node names, addresses, usernames | Scheme, port, and whether the address is a name or an IP |
+| The path of a notifier URL — a Discord webhook URL *is* its credential | The notifier's type and host |
+| The values inside a settings area — clients, MACs, resolvers | Which areas are replicated, and their key names |
+| Client and hub addresses in log lines | Public addresses, such as upstream resolvers |
+
+Every node becomes `node-1`, `node-2` **everywhere in the file**, including inside error strings
+and log lines — "connecting to `http://10.10.10.252/control/status`: timed out" is a `last_error`,
+a queued job's error and a log line, so redacting the column and leaving the sentence would be
+security theatre. Keeping the pseudonym consistent is what lets a drift entry still be matched to
+the node's state and to the log lines about it.
+
+What deliberately **stays in** is your filtering content: rule text, subscription addresses (minus
+any query string, where a self-hosted list would carry a token), and the domains in a drift entry.
+"This allow rule will not stick" is unanswerable without the rule. It is plain JSON, so read it
+before you post it.
 
 ## Backup and restore
 
