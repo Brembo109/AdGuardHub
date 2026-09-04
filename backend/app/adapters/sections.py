@@ -131,6 +131,11 @@ SPECS: tuple[SectionSpec, ...] = (
             FieldSpec("fallback_dns", "Fallback DNS servers", "lines",
                       "Used when the upstreams above fail or time out.",
                       group="Upstream DNS servers"),
+            FieldSpec("upstream_timeout", "Upstream timeout", "int",
+                      "How long to wait for an upstream before giving up on it. "
+                      "The whole wait happens before the fallback servers are tried, "
+                      "so a long value is felt by the client as a slow answer.",
+                      unit="seconds", group="Upstream DNS servers"),
 
             FieldSpec("use_private_ptr_resolvers", "Use private reverse DNS resolvers", "bool",
                       "Resolve PTR queries for local addresses with the servers below.",
@@ -166,8 +171,19 @@ SPECS: tuple[SectionSpec, ...] = (
                       "How long clients may cache a blocked answer.",
                       unit="seconds", group="DNS server configuration"),
             FieldSpec("ratelimit", "Rate limit", "int",
-                      "Requests per second per client; 0 disables it.",
+                      "Queries per second before AdGuard starts dropping them; 0 disables it. "
+                      "Counted per address block, not per device — see below.",
                       unit="req/s", group="DNS server configuration"),
+            FieldSpec("ratelimit_subnet_len_ipv4", "Rate limit block size (IPv4)", "int",
+                      "Prefix length the limit is counted over. 24 means every device in "
+                      "a /24 shares one limit; 32 gives each address its own.",
+                      group="DNS server configuration"),
+            FieldSpec("ratelimit_subnet_len_ipv6", "Rate limit block size (IPv6)", "int",
+                      "The same, for IPv6 addresses.",
+                      group="DNS server configuration"),
+            FieldSpec("ratelimit_whitelist", "Exempt from the rate limit", "lines",
+                      "Addresses the limit never applies to, one per line.",
+                      group="DNS server configuration"),
 
             FieldSpec("cache_size", "Cache size", "int",
                       unit="bytes", group="DNS cache configuration"),
@@ -187,6 +203,12 @@ SPECS: tuple[SectionSpec, ...] = (
                       group="DNS options"),
             FieldSpec("edns_cs_enabled", "Enable EDNS client subnet", "bool",
                       "Passes part of the client address to the upstream.",
+                      group="DNS options"),
+            FieldSpec("edns_cs_use_custom", "Send a custom client subnet", "bool",
+                      "Send the address below instead of the client's own.",
+                      group="DNS options"),
+            FieldSpec("edns_cs_custom_ip", "Custom client subnet", "text",
+                      "Only used when the option above is on.",
                       group="DNS options"),
         ),
     ),
