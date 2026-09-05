@@ -147,6 +147,18 @@ async def test_a_second_node_at_a_new_url_is_added(auth_client: httpx.AsyncClien
     assert len((await auth_client.get("/api/instances")).json()) == 2
 
 
+def _backup(snapshot: dict, instances: list | None = None) -> str:
+    """A file that is a backup in every respect except the parts given."""
+    return json.dumps(
+        {
+            "format": "adguardhub-backup",
+            "format_version": 1,
+            "snapshot": {"rules": [], "filter_lists": [], "sections": {}, **snapshot},
+            "instances": instances or [],
+        }
+    )
+
+
 @pytest.mark.parametrize(
     ("payload", "expected"),
     [
@@ -167,6 +179,26 @@ async def test_a_second_node_at_a_new_url_is_added(auth_client: httpx.AsyncClien
                 }
             ),
             "damaged",
+        ),
+        # The lists have the right shape; what is in them does not. Each of
+        # these used to get past validation and then either crashed the restore
+        # halfway through (a 500, with the rule tables already emptied in the
+        # transaction) or was written and broke whatever read it back.
+        (_backup({"rules": ["@@||bare-string.example^"]}), "rule 1 is damaged"),
+        (_backup({"rules": [{"text": 42}]}), "rule 1 has a 'text' that is not text"),
+        (_backup({"rules": [{"text": "||x^", "kind": "sideways"}]}), "expected one of"),
+        (_backup({"filter_lists": [{"url": 5}]}), "subscription 1 has a 'url'"),
+        (_backup({"filter_lists": [{"url": "https://x", "kind": "greylist"}]}), "expected one of"),
+        (_backup({"sections": {"dns": []}}), "section 'dns' is damaged"),
+        (_backup({"sections": {"dns": {"managed": True, "data": "x"}}}), "section 'dns'"),
+        (_backup({}, instances=["node"]), "instance 1 is damaged"),
+        (
+            _backup({}, instances=[{"name": "n", "base_url": "ftp://node.example"}]),
+            "not http:// or https://",
+        ),
+        (
+            _backup({}, instances=[{"name": "n", "base_url": "http://n", "adapter": "pihole"}]),
+            "adapter this hub does not have",
         ),
     ],
 )
