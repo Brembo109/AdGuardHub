@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import httpx
+import pytest
 
 from app.adapters.base import AdapterError, RemoteFilterList
 from app.services.reconcile import diff_filter_lists, diff_rules, diff_settings
@@ -421,3 +422,38 @@ async def test_an_edit_is_not_blocked_while_a_slow_node_is_corrected(
         FakeAdapter.push_rules = original  # type: ignore[method-assign]
     await pass_
     await drain_background()
+
+
+async def test_the_nodes_client_is_closed_even_when_the_pass_blows_up(
+    auth_client: httpx.AsyncClient, monkeypatch
+) -> None:
+    """The adapter owns an HTTP client. The pass closed it after a failed pull
+    and after a normal finish, and nowhere in between."""
+    from app.db import session_scope
+    from app.services.reconcile import reconcile_all
+    from app.services.sync import drain_background
+
+    from .fakes import FakeAdapter
+    from .test_sync import A, add_instance
+
+    await add_instance(auth_client, "a", A)
+    await drain_background()
+    FakeAdapter.state_for(A).rules = ["||out-of-band.example^"]  # something to correct
+
+    closed = 0
+
+    async def count_close(self: FakeAdapter) -> None:
+        nonlocal closed
+        closed += 1
+
+    async def blow_up(self: FakeAdapter, rules: list[str]) -> None:
+        raise RuntimeError("not an AdapterError: the kind nobody planned for")
+
+    monkeypatch.setattr(FakeAdapter, "aclose", count_close)
+    monkeypatch.setattr(FakeAdapter, "push_rules", blow_up)
+
+    with pytest.raises(RuntimeError):
+        async with session_scope() as session:
+            await reconcile_all(session)
+
+    assert closed == 1

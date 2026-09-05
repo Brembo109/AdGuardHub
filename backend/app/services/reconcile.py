@@ -302,87 +302,92 @@ async def reconcile_instance(
     # branches below overwrite the status before either can be decided.
     previous = instance.status
     adapter = build_adapter(instance, get_crypto())
-    try:
-        state = await adapter.pull_state(tuple(expected_sections))
-    except (AdapterError, ValueError) as exc:
-        await adapter.aclose()
-        report.error = str(exc)
-        was_online = previous == InstanceStatus.online.value
-        instance.status = InstanceStatus.unreachable.value
-        instance.last_error = report.error
+    # Closed however this ends. The two hand-placed aclose() calls covered the
+    # pull failing and the pass finishing; anything else that escaped between
+    # them — a fault in the diff, a cancellation at shutdown — leaked the
+    # node's HTTP client and its connection.
+    async with contextlib.aclosing(adapter):
+        try:
+            state = await adapter.pull_state(tuple(expected_sections))
+        except (AdapterError, ValueError) as exc:
+            report.error = str(exc)
+            was_online = previous == InstanceStatus.online.value
+            instance.status = InstanceStatus.unreachable.value
+            instance.last_error = report.error
+            await session.commit()
+            if was_online:
+                await notify(
+                    EVENT_INSTANCE_UNREACHABLE,
+                    f"{instance.name} is unreachable",
+                    f"Reconciliation could not reach {instance.base_url}: {exc}",
+                )
+            return report
+
+        report.checked = True
+        instance.status = InstanceStatus.online.value
+        instance.last_error = ""
+        instance.last_seen_at = utcnow()
+        # /control/status is the cheapest call AdGuard has, and reconciliation is the
+        # only thing that talks to every node on a timer. Without this the reported
+        # version would only ever refresh when the operator pressed Test by hand.
+        with contextlib.suppress(AdapterError, ValueError):
+            instance.version = await adapter.check()
+
+        # Asked here for the same reason as the version: this is the only thing that
+        # talks to every node on a timer. The node answers from its own cached check
+        # rather than reaching out, so this costs one local request.
+        with contextlib.suppress(AdapterError, ValueError):
+            # The version read a moment ago is what "is there a newer one" is asked
+            # against: AdGuard's version endpoint says what exists, never what is
+            # installed.
+            update = await adapter.check_update(instance.version or "")
+            instance.update_version = update.latest if update.available else ""
+            instance.update_url = update.url if update.available else ""
+            instance.update_error = update.error
+
+        # Written out now, before the pass talks to the node again. The status
+        # fields above mark the row dirty, and the first query below would flush
+        # them — which opens a write transaction that SQLite backs with a lock on
+        # the whole file, held until this session commits. That commit used to be
+        # at the very end, after every correction push and read-back, so against a
+        # slow node the hub could not accept a single edit for as long as the
+        # correction took: each waited on SQLite's busy timeout and failed with
+        # "database is locked". Nothing below needs these writes to be pending.
         await session.commit()
-        if was_online:
-            await notify(
-                EVENT_INSTANCE_UNREACHABLE,
-                f"{instance.name} is unreachable",
-                f"Reconciliation could not reach {instance.base_url}: {exc}",
-            )
-        return report
 
-    report.checked = True
-    instance.status = InstanceStatus.online.value
-    instance.last_error = ""
-    instance.last_seen_at = utcnow()
-    # /control/status is the cheapest call AdGuard has, and reconciliation is the
-    # only thing that talks to every node on a timer. Without this the reported
-    # version would only ever refresh when the operator pressed Test by hand.
-    with contextlib.suppress(AdapterError, ValueError):
-        instance.version = await adapter.check()
+        candidates = [
+            diff_rules(await desired_rules(session), state.rules),
+            diff_filter_lists(await desired_filter_lists(session), state.filter_lists),
+            diff_settings(expected_sections, state.sections),
+        ]
+        report.differences = [item for item in candidates if item is not None]
 
-    # Asked here for the same reason as the version: this is the only thing that
-    # talks to every node on a timer. The node answers from its own cached check
-    # rather than reaching out, so this costs one local request.
-    with contextlib.suppress(AdapterError, ValueError):
-        # The version read a moment ago is what "is there a newer one" is asked
-        # against: AdGuard's version endpoint says what exists, never what is
-        # installed.
-        update = await adapter.check_update(instance.version or "")
-        instance.update_version = update.latest if update.available else ""
-        instance.update_url = update.url if update.available else ""
-        instance.update_error = update.error
+        correctable = [item for item in report.differences if is_correctable(item)]
+        fixed: set[str] = set()
+        # What survived being corrected, by payload kind. The node took the request
+        # and did not keep the result — the one outcome the old code could not tell
+        # apart from success, and the one that turns into an endless loop.
+        refused: dict[str, Difference] = {}
+        # What could not be attempted at all: the push itself errored, so the node
+        # never took the write. Kept apart from a refusal, and from success, because
+        # all three used to reach the operator as the single word "detected".
+        failed: dict[str, str] = {}
+        if correctable and apply_fixes:
+            # A correction is a full-state push like any other, and races an edit's
+            # push to the same node the same way — see sync.push_lock. Held around
+            # the read-back too, so what is verified is what this pass wrote.
+            async with push_lock(instance.id):
+                await _correct(
+                    session, adapter, correctable, expected_sections, fixed, refused, failed
+                )
+            # True only if something actually landed. Claiming a correction that
+            # did not stick is what made this invisible for as long as it was.
+            report.corrected = bool(fixed)
+            if fixed:
+                instance.last_synced_at = utcnow()
+            if failed:
+                report.error = "; ".join(f"{kind}: {text}" for kind, text in sorted(failed.items()))
 
-    # Written out now, before the pass talks to the node again. The status
-    # fields above mark the row dirty, and the first query below would flush
-    # them — which opens a write transaction that SQLite backs with a lock on
-    # the whole file, held until this session commits. That commit used to be
-    # at the very end, after every correction push and read-back, so against a
-    # slow node the hub could not accept a single edit for as long as the
-    # correction took: each waited on SQLite's busy timeout and failed with
-    # "database is locked". Nothing below needs these writes to be pending.
-    await session.commit()
-
-    candidates = [
-        diff_rules(await desired_rules(session), state.rules),
-        diff_filter_lists(await desired_filter_lists(session), state.filter_lists),
-        diff_settings(expected_sections, state.sections),
-    ]
-    report.differences = [item for item in candidates if item is not None]
-
-    correctable = [item for item in report.differences if is_correctable(item)]
-    fixed: set[str] = set()
-    # What survived being corrected, by payload kind. The node took the request
-    # and did not keep the result — the one outcome the old code could not tell
-    # apart from success, and the one that turns into an endless loop.
-    refused: dict[str, Difference] = {}
-    # What could not be attempted at all: the push itself errored, so the node
-    # never took the write. Kept apart from a refusal, and from success, because
-    # all three used to reach the operator as the single word "detected".
-    failed: dict[str, str] = {}
-    if correctable and apply_fixes:
-        # A correction is a full-state push like any other, and races an edit's
-        # push to the same node the same way — see sync.push_lock. Held around
-        # the read-back too, so what is verified is what this pass wrote.
-        async with push_lock(instance.id):
-            await _correct(session, adapter, correctable, expected_sections, fixed, refused, failed)
-        # True only if something actually landed. Claiming a correction that
-        # did not stick is what made this invisible for as long as it was.
-        report.corrected = bool(fixed)
-        if fixed:
-            instance.last_synced_at = utcnow()
-        if failed:
-            report.error = "; ".join(f"{kind}: {text}" for kind, text in sorted(failed.items()))
-
-    await adapter.aclose()
 
     if correctable:
         logger.info(
