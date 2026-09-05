@@ -33,7 +33,7 @@ from .notify import (
     notify_if_recovered,
 )
 from .retention import prune_drift_events
-from .sync import desired_filter_lists, desired_rules, desired_sections, push_kind
+from .sync import desired_filter_lists, desired_rules, desired_sections, push_kind, push_lock
 
 logger = logging.getLogger(__name__)
 
@@ -256,6 +256,36 @@ async def _already_said(
     return row is not None and row.summary == summary and row.details == details
 
 
+async def _correct(
+    session: AsyncSession,
+    adapter: Any,
+    correctable: list[Difference],
+    expected_sections: dict[str, dict[str, Any]],
+    fixed: set[str],
+    refused: dict[str, Difference],
+    failed: dict[str, str],
+) -> None:
+    """Push each correctable difference and sort it into fixed, refused or failed."""
+    for difference in correctable:
+        # Per difference rather than around the loop. A settings section one
+        # AdGuard build rejects used to abort the pass, so the rule set was
+        # never corrected — and the drift row still said only "detected".
+        # Best-effort with no rollback is the rule everywhere else in the
+        # sync engine; one shared try block quietly suspended it here.
+        try:
+            await push_kind(session, adapter, PayloadKind(difference.payload_kind))
+            remaining = await _still_differs(
+                session, adapter, difference.payload_kind, expected_sections
+            )
+        except (AdapterError, ValueError) as exc:
+            failed[difference.payload_kind] = str(exc)
+            continue
+        if remaining is None:
+            fixed.add(difference.payload_kind)
+        else:
+            refused[difference.payload_kind] = remaining
+
+
 async def reconcile_instance(
     session: AsyncSession, instance: Instance, *, apply_fixes: bool = True
 ) -> InstanceReport:
@@ -329,24 +359,11 @@ async def reconcile_instance(
     # all three used to reach the operator as the single word "detected".
     failed: dict[str, str] = {}
     if correctable and apply_fixes:
-        for difference in correctable:
-            # Per difference rather than around the loop. A settings section one
-            # AdGuard build rejects used to abort the pass, so the rule set was
-            # never corrected — and the drift row still said only "detected".
-            # Best-effort with no rollback is the rule everywhere else in the
-            # sync engine; one shared try block quietly suspended it here.
-            try:
-                await push_kind(session, adapter, PayloadKind(difference.payload_kind))
-                remaining = await _still_differs(
-                    session, adapter, difference.payload_kind, expected_sections
-                )
-            except (AdapterError, ValueError) as exc:
-                failed[difference.payload_kind] = str(exc)
-                continue
-            if remaining is None:
-                fixed.add(difference.payload_kind)
-            else:
-                refused[difference.payload_kind] = remaining
+        # A correction is a full-state push like any other, and races an edit's
+        # push to the same node the same way — see sync.push_lock. Held around
+        # the read-back too, so what is verified is what this pass wrote.
+        async with push_lock(instance.id):
+            await _correct(session, adapter, correctable, expected_sections, fixed, refused, failed)
         # True only if something actually landed. Claiming a correction that
         # did not stick is what made this invisible for as long as it was.
         report.corrected = bool(fixed)
