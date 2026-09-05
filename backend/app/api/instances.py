@@ -126,6 +126,21 @@ async def test_connection(
         # Re-testing a saved instance whose password field was left blank.
         existing = await session.get(Instance, payload.instance_id)
         if existing is not None and existing.password_encrypted:
+            if payload.base_url != existing.base_url:
+                # The stored password belongs to the node at the stored address
+                # and goes nowhere else. Combining "the password of instance 3"
+                # with "whatever address is in the form" was a way to make the
+                # hub deliver a node's password, in a login attempt, to any
+                # host somebody typed — the one thing the API otherwise never
+                # does with a password. A node that moved gets its password
+                # typed once more.
+                return ConnectionResult(
+                    ok=False,
+                    error=(
+                        "The address differs from the saved one, so the saved password "
+                        "is not used. Enter the password to test the new address."
+                    ),
+                )
             password = get_crypto().decrypt(existing.password_encrypted)
 
     adapter = adapter_cls(

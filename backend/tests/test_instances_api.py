@@ -35,6 +35,56 @@ async def test_failed_connection_check_reports_inline(auth_client: httpx.AsyncCl
     assert "unreachable" in response.json()["error"]
 
 
+async def test_the_stored_password_is_only_sent_to_its_own_node(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """A saved password is reused for a test against the saved address, and
+    against nothing else.
+
+    "Password left blank, instance id given" made the hub decrypt the stored
+    password and log in with it wherever the form's URL pointed. The API never
+    returns a password — but it would deliver one, as a login attempt, to any
+    host an operator (or whoever holds their session) typed in.
+    """
+    instance_id = await add_instance(auth_client, "a", A)
+    elsewhere = "http://collector.example"
+
+    response = await auth_client.post(
+        "/api/instances/test-connection",
+        json={
+            "base_url": elsewhere,
+            "username": "admin",
+            "password": "",
+            "instance_id": instance_id,
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is False
+    assert "saved password is not used" in body["error"]
+    # No adapter was even built for the other address.
+    assert elsewhere not in FakeAdapter.states
+
+    # A trailing slash is not a different address; the form strips it anyway.
+    same = await auth_client.post(
+        "/api/instances/test-connection",
+        json={"base_url": A + "/", "username": "admin", "password": "", "instance_id": instance_id},
+    )
+    assert same.json()["ok"] is True
+
+    # Typing the password tests any address, as before.
+    typed = await auth_client.post(
+        "/api/instances/test-connection",
+        json={
+            "base_url": elsewhere,
+            "username": "admin",
+            "password": "pw",
+            "instance_id": instance_id,
+        },
+    )
+    assert typed.json()["ok"] is True
+
+
 async def test_connection_check_reuses_the_stored_password(
     auth_client: httpx.AsyncClient,
 ) -> None:
