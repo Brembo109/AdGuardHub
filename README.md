@@ -132,4 +132,4 @@ than AdGuard Home is not planned at all — see the [roadmap](./docs/roadmap.md)
 
 ## License
 
-MIT
+[MIT](./LICENSE)
