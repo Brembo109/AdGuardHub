@@ -266,3 +266,72 @@ def _quiet_buffer():
     get_buffer().clear()
     yield
     get_buffer().clear()
+
+
+async def test_ipv6_and_hardware_addresses_are_masked_like_private_ipv4(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """A drift entry about the clients section names the household by every
+    address family it has. IPv4 was masked; the rest shipped."""
+    await _add_node(auth_client)
+    async with session_scope() as session:
+        session.add(
+            DriftEvent(
+                instance_id=1,
+                instance_name=NODE_NAME,
+                payload_kind="settings",
+                summary="1 section(s) differ: clients",
+                details=(
+                    '{"clients": {"expected": [{"name": "laptop", "ids": ["192.168.1.20", '
+                    '"fd12:3456:789a::20", "fe80::1c2d:3e4f:5a6b:7c8d%eth0", '
+                    '"aa:bb:cc:dd:ee:ff"]}], "actual": []}}'
+                ),
+            )
+        )
+        await session.commit()
+    logging.getLogger("adguardhub.auth").warning("Failed sign-in from fd00::42 (hub login)")
+    logging.getLogger("adguardhub.auth").warning("Failed sign-in from ::1 (hub login)")
+
+    raw = json.dumps(await _bundle(auth_client))
+
+    for private in (
+        "192.168.1.20",
+        "fd12:3456:789a::20",
+        "fe80::1c2d:3e4f:5a6b:7c8d",
+        "aa:bb:cc:dd:ee:ff",
+        "fd00::42",
+        "from ::1 ",
+    ):
+        assert private not in raw, f"{private!r} reached the bundle"
+    assert "<local-ipv6>" in raw
+    assert "<mac>" in raw
+
+
+async def test_a_public_resolver_and_a_time_survive_the_masking(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """The masking must not eat what is diagnostic: which upstream a node uses,
+    or when something happened."""
+    await _add_node(auth_client)
+    async with session_scope() as session:
+        session.add(
+            DriftEvent(
+                instance_id=1,
+                instance_name=NODE_NAME,
+                payload_kind="settings",
+                summary="1 section(s) differ: dns",
+                details=(
+                    '{"dns": {"expected": {"upstream_dns": ["2606:4700:4700::1111", '
+                    '"9.9.9.9"]}, "actual": {"upstream_dns": ["tls://dns.quad9.net"]}}}'
+                ),
+            )
+        )
+        await session.commit()
+    logging.getLogger("adguardhub").info("Reconcile pass at 12:34:56, took 00:00:03")
+
+    raw = json.dumps(await _bundle(auth_client))
+
+    assert "2606:4700:4700::1111" in raw
+    assert "9.9.9.9" in raw
+    assert "12:34:56" in raw
+    assert "00:00:03" in raw
