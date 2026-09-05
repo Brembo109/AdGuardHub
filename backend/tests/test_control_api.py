@@ -230,6 +230,50 @@ async def test_the_surface_can_be_switched_off(app_client: httpx.AsyncClient) ->
     assert "switched off" in response.json()["detail"]
 
 
+async def test_a_switched_off_surface_does_not_look_at_credentials(
+    app_client: httpx.AsyncClient, monkeypatch
+) -> None:
+    """Off means off: no bcrypt, no lockout count, no sign-in log entry.
+
+    The switch used to be checked inside each handler, after the credentials
+    had been verified — so a switched-off API still hashed every Basic Auth
+    password, counted wrong ones toward the lockout and logged them, and only
+    then said 404.
+    """
+    from app import security
+
+    await app_client.put("/api/settings/hub", json={"external_api_enabled": False})
+    # The sign-in record is process-wide, so measure from here rather than from zero.
+    before = (await app_client.get("/api/settings/sign-ins")).json()
+    await app_client.post("/api/auth/logout")
+
+    hashed: list[str] = []
+    real = security.verify_password
+
+    def spy(password: str, password_hash: str) -> bool:
+        hashed.append(password)
+        return real(password, password_hash)
+
+    monkeypatch.setattr(security, "verify_password", spy)
+
+    for door in (
+        lambda: app_client.get("/control/status", auth=("admin", "wrong")),
+        lambda: app_client.post("/control/login", json={"name": "admin", "password": "wrong"}),
+        lambda: app_client.get("/control/status"),
+        lambda: app_client.post("/control/filtering/set_rules", json={"rules": []}),
+    ):
+        response = await door()
+        assert response.status_code == 404, response.text
+        assert "switched off" in response.json()["detail"]
+    assert hashed == []
+
+    # Nothing was counted or recorded against the source either.
+    await app_client.post("/api/auth/login", json={"username": "admin", "password": "supersecret"})
+    after = (await app_client.get("/api/settings/sign-ins")).json()
+    assert after["failures"] == before["failures"]
+    assert after["lockouts"] == before["lockouts"]
+
+
 # --------------------------------------------------------------------------
 # HTTP Basic Auth
 #
