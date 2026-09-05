@@ -24,15 +24,42 @@ from ..services import hubsettings
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
-def _set_cookie(response: Response, user: User) -> None:
+def _served_over_tls(request: Request) -> bool:
+    """Whether the browser reached the hub over https, for the cookie's Secure flag.
+
+    Secure tells the browser never to send the cookie over plain http again. That
+    matters behind a reverse proxy that terminates TLS: without it, one http
+    request to the hub's address — a bookmark from before the proxy, a link
+    typed without the s — carries the session cookie across the network in the
+    clear, and on the LAN this hub is built for that is readable.
+
+    Judged per request rather than switched on in the configuration, because
+    over plain http, which is how the hub is served by default, a Secure cookie
+    is one the browser will never send back: the login would succeed and every
+    following request would be anonymous. uvicorn fills the scheme in from
+    X-Forwarded-Proto for proxies it trusts (``--forwarded-allow-ips``, which
+    defaults to localhost), so a proxy on another host has to be named there
+    for this to take effect.
+    """
+    return request.url.scheme == "https"
+
+
+def _set_cookie(request: Request, response: Response, user: User) -> None:
     settings = get_settings()
     response.set_cookie(
         settings.session_cookie,
         get_sessions().issue(user.username, user.password_hash),
         max_age=settings.session_max_age,
         httponly=True,
+        secure=_served_over_tls(request),
         samesite="lax",
         path="/",
+    )
+
+
+def _clear_cookie(request: Request, response: Response) -> None:
+    response.delete_cookie(
+        get_settings().session_cookie, path="/", secure=_served_over_tls(request)
     )
 
 
@@ -50,14 +77,16 @@ async def auth_state(request: Request, session: SessionDep) -> AuthState:
 
 
 @router.post("/setup", response_model=AuthState)
-async def setup(payload: SetupRequest, response: Response, session: SessionDep) -> AuthState:
+async def setup(
+    payload: SetupRequest, request: Request, response: Response, session: SessionDep
+) -> AuthState:
     """Create the admin account. Only available while no account exists."""
     if await admin_exists(session):
         raise HTTPException(status.HTTP_409_CONFLICT, "An admin account already exists")
     user = User(username=payload.username, password_hash=await make_password_hash(payload.password))
     session.add(user)
     await session.commit()
-    _set_cookie(response, user)
+    _set_cookie(request, response, user)
     return AuthState(authenticated=True, username=user.username, setup_required=False)
 
 
@@ -72,19 +101,23 @@ async def login(
         note_signin_failure(source, "hub login")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid username or password")
     note_signin_success(source, "hub login")
-    _set_cookie(response, user)
+    _set_cookie(request, response, user)
     return AuthState(authenticated=True, username=user.username)
 
 
 @router.post("/logout")
-async def logout(response: Response) -> dict[str, bool]:
-    response.delete_cookie(get_settings().session_cookie, path="/")
+async def logout(request: Request, response: Response) -> dict[str, bool]:
+    _clear_cookie(request, response)
     return {"ok": True}
 
 
 @router.post("/password")
 async def change_password(
-    payload: PasswordChange, user: CurrentUser, response: Response, session: SessionDep
+    payload: PasswordChange,
+    user: CurrentUser,
+    request: Request,
+    response: Response,
+    session: SessionDep,
 ) -> dict[str, bool]:
     if not await check_password(payload.current_password, user.password_hash):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Current password is incorrect")
@@ -97,5 +130,5 @@ async def change_password(
     # change just ended all of them — including the one this request came in
     # on. That one is re-issued: the person who changed the password is the one
     # person who should not be signed out by it.
-    _set_cookie(response, user)
+    _set_cookie(request, response, user)
     return {"ok": True}

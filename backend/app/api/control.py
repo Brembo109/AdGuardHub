@@ -98,16 +98,16 @@ async def login(
         note_signin_failure(source, "AdGuard-compatible login")
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Invalid username or password")
     note_signin_success(source, "AdGuard-compatible login")
-    _set_cookie(response, user)
+    _set_cookie(request, response, user)
     return {}
 
 
 @router.get("/logout")
 @router.post("/logout")
-async def logout(response: Response) -> dict[str, str]:
-    from ..config import get_settings
+async def logout(request: Request, response: Response) -> dict[str, str]:
+    from .auth import _clear_cookie
 
-    response.delete_cookie(get_settings().session_cookie, path="/")
+    _clear_cookie(request, response)
     return {}
 
 
