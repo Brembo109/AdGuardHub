@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import binascii
 import logging
@@ -16,7 +15,7 @@ from .config import get_settings
 from .db import get_session
 from .models import User
 from .runtime import get_credentials, get_login_throttle, get_sessions
-from .security import verify_password
+from .security import check_password
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
@@ -166,21 +165,19 @@ async def _user_from_basic_auth(
 
     result = await session.execute(select(User).where(User.username == username))
     user = result.scalars().first()
-    if user is None:
+
+    cache = get_credentials()
+    if user is not None and cache.check(username, password):
+        return user, ""
+    # Off the loop, and costing the same whether the account exists or not —
+    # see security.check_password.
+    if not await check_password(password, user.password_hash if user else None):
         # The name is not in the message: it is attacker-supplied, and the first
         # time somebody types their password into the username box it would be
         # written to the log.
-        return None, "no such account"
-
-    cache = get_credentials()
-    if cache.check(username, password):
-        return user, ""
-    # bcrypt is ~300 ms of straight CPU work; off the loop, or one request would
-    # stall every other request and the background workers with it.
-    if await asyncio.to_thread(verify_password, password, user.password_hash):
-        cache.remember(username, password)
-        return user, ""
-    return None, "wrong password"
+        return None, "no such account" if user is None else "wrong password"
+    cache.remember(username, password)
+    return user, ""
 
 
 async def control_user(request: Request, session: SessionDep) -> User:

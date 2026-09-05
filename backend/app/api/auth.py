@@ -17,7 +17,7 @@ from ..deps import (
 from ..models import User
 from ..runtime import get_credentials, get_sessions, using_ephemeral_secret
 from ..schemas import AuthState, LoginRequest, PasswordChange, SetupRequest
-from ..security import hash_password, verify_password
+from ..security import check_password, make_password_hash
 from ..services import hubsettings
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -55,7 +55,7 @@ async def setup(payload: SetupRequest, response: Response, session: SessionDep) 
     """Create the admin account. Only available while no account exists."""
     if await admin_exists(session):
         raise HTTPException(status.HTTP_409_CONFLICT, "An admin account already exists")
-    user = User(username=payload.username, password_hash=hash_password(payload.password))
+    user = User(username=payload.username, password_hash=await make_password_hash(payload.password))
     session.add(user)
     await session.commit()
     _set_cookie(response, user.username)
@@ -69,7 +69,7 @@ async def login(
     source = enforce_login_throttle(request)
     result = await session.execute(select(User).where(User.username == payload.username))
     user = result.scalars().first()
-    if user is None or not verify_password(payload.password, user.password_hash):
+    if not await check_password(payload.password, user.password_hash if user else None):
         note_signin_failure(source, "hub login")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid username or password")
     note_signin_success(source, "hub login")
@@ -87,9 +87,9 @@ async def logout(response: Response) -> dict[str, bool]:
 async def change_password(
     payload: PasswordChange, user: CurrentUser, session: SessionDep
 ) -> dict[str, bool]:
-    if not verify_password(payload.current_password, user.password_hash):
+    if not await check_password(payload.current_password, user.password_hash):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Current password is incorrect")
-    user.password_hash = hash_password(payload.new_password)
+    user.password_hash = await make_password_hash(payload.new_password)
     await session.commit()
     # The Basic Auth cache holds credentials that were accepted; the old password
     # must stop working here at the same moment it stops working everywhere else.

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import logging
 import os
 import secrets
 import time
+from functools import lru_cache
 
 import bcrypt
 from cryptography.fernet import Fernet, InvalidToken
@@ -185,6 +187,43 @@ def verify_password(password: str, password_hash: str) -> bool:
         return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("ascii"))
     except ValueError:
         return False
+
+
+@lru_cache(maxsize=1)
+def _decoy_hash() -> str:
+    """A hash to check an unknown account's password against.
+
+    Made once, from a password nobody knows, so that a sign-in for a name that
+    does not exist costs the same bcrypt run as one for a name that does.
+    """
+    return hash_password(secrets.token_urlsafe(32))
+
+
+async def check_password(password: str, password_hash: str | None) -> bool:
+    """Whether ``password`` matches ``password_hash`` — off the event loop, and
+    at the same cost whether or not there is an account behind it.
+
+    bcrypt is ~300 ms of straight CPU work, by design. Run on the loop, that is
+    300 ms during which nothing else in the hub moves: no push reaches a node,
+    no query log entry is read, the event stream stalls, and every other request
+    waits. And a login form is the one route on the hub that anyone on the
+    network can hit without a session. ``asyncio.to_thread`` puts the work where
+    it belongs.
+
+    ``password_hash`` is ``None`` for an account that does not exist. Answering
+    that case without hashing took about a millisecond against three hundred for
+    a real account, which told anyone on the network the admin's username — half
+    of the only credential the hub has — from timing alone. So the decoy hash is
+    checked instead, and the answer is still no.
+    """
+    hashed = password_hash if password_hash is not None else _decoy_hash()
+    matched = await asyncio.to_thread(verify_password, password, hashed)
+    return matched and password_hash is not None
+
+
+async def make_password_hash(password: str) -> str:
+    """``hash_password`` off the event loop, for the same reason as ``check_password``."""
+    return await asyncio.to_thread(hash_password, password)
 
 
 class VerifiedCredentials:
