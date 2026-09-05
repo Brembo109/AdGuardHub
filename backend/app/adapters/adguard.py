@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -36,6 +37,23 @@ def _int(value: Any) -> int:
         return int(value or 0)
     except (TypeError, ValueError):
         return 0
+
+
+def _web_link(value: Any) -> str:
+    """A URL the interface may offer as a link, or "" when it must not.
+
+    ``announcement_url`` is whatever the node sends, and it ends up as the
+    ``href`` of a link on the Instances page. A node that answers with a
+    ``javascript:`` URL — or whatever is answering *for* a node on a plain-HTTP
+    LAN — hands the operator's browser a script to run under the hub's own
+    session, which controls every node. React renders such an href as given.
+    Only a web page is somewhere to send a person; anything else is dropped,
+    and the update is still reported, just without a link.
+    """
+    link = str(value or "").strip()
+    if urlsplit(link).scheme.lower() not in {"http", "https"}:
+        return ""
+    return link
 
 
 def describe_transport_error(exc: Exception, timeout: float | None = None) -> str:
@@ -239,7 +257,7 @@ class AdGuardAdapter(DnsAdapter):
         # current_version is believed over it.
         running = str(data.get("current_version") or "").strip() or current.strip()
         latest = str(data.get("new_version") or "").strip()
-        url = str(data.get("announcement_url") or "")
+        url = _web_link(data.get("announcement_url"))
 
         if latest and not running:
             # Nothing to compare against. "Could not find out" is the truth here,

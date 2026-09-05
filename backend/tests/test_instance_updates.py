@@ -57,6 +57,32 @@ async def test_a_newer_build_is_reported_with_where_to_read_about_it() -> None:
     assert update.error == ""
 
 
+async def test_only_a_web_page_is_offered_as_the_place_to_read_about_it() -> None:
+    """The announcement URL becomes an ``href`` on the Instances page, and a node
+    is not trusted to choose what the operator's browser runs. Anything but
+    http(s) is dropped; the update itself is still reported."""
+    for hostile in (
+        "javascript:alert(document.cookie)",
+        " JavaScript:alert(1)",
+        "data:text/html,<script>alert(1)</script>",
+        "vbscript:msgbox",
+        "//evil.example/relative-scheme",
+    ):
+        adapter = adapter_answering(
+            json_route(
+                {
+                    "current_version": "v0.107.60",
+                    "new_version": "v0.107.64",
+                    "announcement_url": hostile,
+                }
+            )
+        )
+        update = await adapter.check_update()
+        assert update.available is True, hostile
+        assert update.latest == "v0.107.64"
+        assert update.url == "", hostile
+
+
 async def test_a_current_node_reports_nothing_to_install() -> None:
     """AdGuard leaves new_version out when there is none."""
     adapter = adapter_answering(json_route({"current_version": "v0.107.64"}))
