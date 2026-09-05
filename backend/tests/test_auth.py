@@ -188,3 +188,50 @@ async def test_a_restart_with_the_same_env_password_keeps_sessions(
             "/api/auth/login", json={"username": "admin", "password": "rotated-elsewhere"}
         )
     ).status_code == 200
+
+
+async def _over(scheme: str) -> httpx.AsyncClient:
+    from app.main import app
+
+    return httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url=f"{scheme}://testserver"
+    )
+
+
+async def test_the_cookie_is_marked_secure_only_when_served_over_https(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """Behind a proxy that terminates TLS the cookie must never travel over
+    plain http; over plain http itself a Secure cookie would never come back."""
+    async with await _over("https") as tls:
+        login = await tls.post(
+            "/api/auth/login", json={"username": "admin", "password": "supersecret"}
+        )
+        assert login.status_code == 200
+        assert "secure" in login.headers["set-cookie"].lower()
+        assert "httponly" in login.headers["set-cookie"].lower()
+        assert (await tls.get("/api/rules")).status_code == 200
+
+        logout = await tls.post("/api/auth/logout")
+        assert "secure" in logout.headers["set-cookie"].lower()
+
+    async with await _over("http") as plain:
+        login = await plain.post(
+            "/api/auth/login", json={"username": "admin", "password": "supersecret"}
+        )
+        assert login.status_code == 200
+        assert "secure" not in login.headers["set-cookie"].lower()
+
+        # The AdGuard-compatible login follows the same rule.
+        await plain.post("/api/auth/logout")
+        app_login = await plain.post(
+            "/control/login", json={"name": "admin", "password": "supersecret"}
+        )
+        assert app_login.status_code == 200
+        assert "secure" not in app_login.headers["set-cookie"].lower()
+
+    async with await _over("https") as tls:
+        app_login = await tls.post(
+            "/control/login", json={"name": "admin", "password": "supersecret"}
+        )
+        assert "secure" in app_login.headers["set-cookie"].lower()
