@@ -99,6 +99,20 @@ MIN_NEEDLE = 3
 
 _PRIVATE_V4 = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b")
 
+# Anything shaped like an IPv6 address: hex groups around at least two colons,
+# not touching another hex digit, colon or dot on either side, so a clock time
+# or the middle of a longer token is not caught. Whether it actually is an
+# address, and of what kind, is left to ipaddress — the pattern only finds
+# candidates. The optional %zone is what a link-local address carries.
+_V6_CANDIDATE = re.compile(
+    r"(?<![0-9A-Za-z:.])(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}(?:%[0-9A-Za-z]+)?"
+    r"(?![0-9A-Za-z:])"
+)
+
+# A MAC address is a client's hardware identity. AdGuard's clients section
+# carries them, so a drift entry about that section does too.
+_MAC = re.compile(r"\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b")
+
 
 class Redactor:
     """Replaces everything that identifies a node, everywhere it appears.
@@ -139,7 +153,15 @@ class Redactor:
         # Whatever is left that looks like a private address belongs to a client
         # or to the hub's own host, not to a node — those were replaced above.
         # Neither is diagnostic, and together they map somebody's network.
-        return _PRIVATE_V4.sub(_mask_private, value)
+        # The same rule for both address families: a drift entry about the
+        # clients section, or a sign-in line, names IPv6 hosts as readily as
+        # IPv4 ones, and a household's link-local and ULA addresses map it just
+        # as well. Hardware addresses go too, for the same reason. The MAC
+        # pattern runs last: a MAC is also six hex groups around colons, and
+        # ipaddress rightly refuses it, so the IPv6 pass leaves it alone.
+        value = _PRIVATE_V4.sub(_mask_private, value)
+        value = _V6_CANDIDATE.sub(_mask_private_v6, value)
+        return _MAC.sub("<mac>", value)
 
     def _replace(self, match: re.Match[str]) -> str:
         alias = self._by_lower.get(match.group(0).lower())
@@ -181,6 +203,19 @@ def _mask_private(match: re.Match[str]) -> str:
     if address.is_private or address.is_loopback or address.is_link_local:
         return "<local-ip>"
     return match.group(0)
+
+
+def _mask_private_v6(match: re.Match[str]) -> str:
+    text = match.group(0)
+    try:
+        address = ipaddress.ip_address(text.split("%", 1)[0])
+    except ValueError:
+        # Colons and hex that are not an address — a MAC, a hash, a time with
+        # too many fields. Leave it alone.
+        return text
+    if address.is_private or address.is_loopback or address.is_link_local:
+        return "<local-ipv6>"
+    return text
 
 
 def _host_kind(base_url: str) -> str:
