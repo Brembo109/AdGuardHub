@@ -1,4 +1,4 @@
-fastapi==0.115.6
+fastapi==0.141.1
 uvicorn[standard]==0.34.0
 # The asyncio extra, not bare sqlalchemy: SQLAlchemy declares greenlet — which
 # its async engine cannot run without — only for python_version < "3.13", so on
@@ -13,5 +13,5 @@ httpx==0.28.1
 pydantic==2.10.4
 pydantic-settings==2.7.0
 bcrypt==4.2.1
-cryptography==44.0.0
+cryptography==50.0.1
 itsdangerous==2.2.0
