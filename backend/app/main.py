@@ -34,7 +34,7 @@ from .deps import admin_exists
 from .logging_setup import configure as configure_logging
 from .models import User
 from .runtime import using_ephemeral_secret
-from .security import SecretKeyError, hash_password
+from .security import SecretKeyError, hash_password, verify_password
 from .services import hubsettings
 from .services.querylog import querylog_worker
 from .services.reconcile import reconcile_worker
@@ -62,7 +62,11 @@ async def bootstrap_admin() -> None:
                 select(User).where(User.username == config.admin_username)
             )
             user = existing.scalars().first()
-            if user is not None:
+            # Only when the password actually moved. bcrypt salts every hash, so
+            # rehashing an unchanged password on every start would still change
+            # the hash — and every session cookie is tied to it, so each restart
+            # would sign everyone out of a hub whose password never changed.
+            if user is not None and not verify_password(config.admin_password, user.password_hash):
                 user.password_hash = hash_password(config.admin_password)
                 await session.commit()
             return
