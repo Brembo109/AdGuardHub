@@ -205,13 +205,15 @@ async def test_a_refused_attempt_never_reaches_bcrypt(
         await auth_client.post("/api/auth/login", json=BAD)
 
     calls: list[str] = []
-    import app.api.auth as auth_module
+    from app import security
 
     def spy(password: str, password_hash: str) -> bool:
         calls.append(password)
         return False
 
-    monkeypatch.setattr(auth_module, "verify_password", spy)
+    # Every door reaches bcrypt through security.check_password, so this is
+    # the one place a spy sees all of them.
+    monkeypatch.setattr(security, "verify_password", spy)
 
     assert (await auth_client.post("/api/auth/login", json=BAD)).status_code == 429
     assert calls == [], "the password was hashed despite the source being locked out"

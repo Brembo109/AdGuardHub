@@ -36,7 +36,7 @@ from ..deps import (
 )
 from ..models import FilterList, Instance, ListKind, PayloadKind, Rule
 from ..schemas import ControlLogin
-from ..security import verify_password
+from ..security import check_password
 from ..services import versions as version_service
 from ..services.aggregate import cached_stats
 from ..services.config import get_section, loads, set_section
@@ -94,7 +94,7 @@ async def login(
     source = enforce_login_throttle(request)
     result = await session.execute(select(User).where(User.username == payload.name))
     user = result.scalars().first()
-    if user is None or not verify_password(payload.password, user.password_hash):
+    if not await check_password(payload.password, user.password_hash if user else None):
         note_signin_failure(source, "AdGuard-compatible login")
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Invalid username or password")
     note_signin_success(source, "AdGuard-compatible login")
