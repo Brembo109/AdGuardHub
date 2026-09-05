@@ -367,3 +367,57 @@ async def test_an_ordinary_correction_still_reads_as_one(
     event = (await auth_client.get("/api/drift")).json()[0]
     assert event["corrected"] is True
     assert "did not keep" not in event["summary"]
+
+
+async def test_an_edit_is_not_blocked_while_a_slow_node_is_corrected(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    """Reconciliation must not hold the database while it talks to a node.
+
+    Setting the instance's status marks the row dirty, the first diff query
+    flushes it, and SQLite hands that connection the write lock — which it then
+    kept through every correction push and read-back. Against a slow node that
+    is seconds, during which every write to the hub waited on SQLite's busy
+    timeout and then failed with "database is locked".
+    """
+    import asyncio
+    import time
+
+    from app.db import session_scope
+    from app.services.reconcile import reconcile_all
+    from app.services.sync import drain_background
+
+    from .fakes import FakeAdapter
+    from .test_sync import A, add_instance
+
+    await add_instance(auth_client, "a", A)
+    await drain_background()
+    node = FakeAdapter.state_for(A)
+    node.rules = ["||out-of-band.example^"]  # so the pass has something to correct
+
+    original = FakeAdapter.push_rules
+    gate = asyncio.Event()
+
+    async def a_slow_node(self: FakeAdapter, rules: list[str]) -> None:
+        await gate.wait()
+        await original(self, rules)
+
+    FakeAdapter.push_rules = a_slow_node  # type: ignore[method-assign]
+    try:
+
+        async def correct() -> None:
+            async with session_scope() as session:
+                await reconcile_all(session)
+
+        pass_ = asyncio.create_task(correct())
+        await asyncio.sleep(0.05)  # the correction is now waiting inside the node
+
+        started = time.monotonic()
+        edit = await auth_client.post("/api/rules", json={"text": "||new.example^"})
+        assert edit.status_code == 201, edit.text
+        assert time.monotonic() - started < 1.0, "the edit waited on the database"
+    finally:
+        gate.set()
+        FakeAdapter.push_rules = original  # type: ignore[method-assign]
+    await pass_
+    await drain_background()

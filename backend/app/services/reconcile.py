@@ -341,6 +341,16 @@ async def reconcile_instance(
         instance.update_url = update.url if update.available else ""
         instance.update_error = update.error
 
+    # Written out now, before the pass talks to the node again. The status
+    # fields above mark the row dirty, and the first query below would flush
+    # them — which opens a write transaction that SQLite backs with a lock on
+    # the whole file, held until this session commits. That commit used to be
+    # at the very end, after every correction push and read-back, so against a
+    # slow node the hub could not accept a single edit for as long as the
+    # correction took: each waited on SQLite's busy timeout and failed with
+    # "database is locked". Nothing below needs these writes to be pending.
+    await session.commit()
+
     candidates = [
         diff_rules(await desired_rules(session), state.rules),
         diff_filter_lists(await desired_filter_lists(session), state.filter_lists),
