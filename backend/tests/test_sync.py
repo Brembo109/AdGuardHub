@@ -368,3 +368,46 @@ async def test_a_push_that_lands_says_nothing(auth_client: httpx.AsyncClient) ->
     card = (await auth_client.get("/api/instances")).json()[0]
     assert card["last_error"] == ""
     assert card["last_synced_at"] is not None
+
+
+async def test_two_pushes_to_one_node_land_in_order(auth_client: httpx.AsyncClient) -> None:
+    """Two edits a moment apart must leave the node with the state after both.
+
+    Every push is full state and every edit schedules its own, so two edits race
+    two pushes to the same node — and whichever the node *finishes* last is the
+    state it keeps. Held up on the first push (a slow login, a node pausing to
+    reconfigure), the state from before the second edit used to land last, and
+    the node carried it until reconciliation happened to look.
+    """
+    import asyncio
+
+    await add_instance(auth_client, "a", A)
+    await drain_background()
+    node = FakeAdapter.state_for(A)
+
+    original = FakeAdapter.push_rules
+    gate = asyncio.Event()
+    pushes = 0
+
+    async def first_push_is_slow(self: FakeAdapter, rules: list[str]) -> None:
+        nonlocal pushes
+        pushes += 1
+        if pushes == 1:
+            await gate.wait()
+        await original(self, rules)
+
+    FakeAdapter.push_rules = first_push_is_slow  # type: ignore[method-assign]
+    try:
+        added = await auth_client.post("/api/rules", json={"text": "||one.example^"})
+        assert added.status_code == 201
+        await asyncio.sleep(0.05)  # push #1 is now waiting inside the node
+        added = await auth_client.post("/api/rules", json={"text": "||two.example^"})
+        assert added.status_code == 201
+        await asyncio.sleep(0.05)
+        gate.set()
+        await drain_background()
+    finally:
+        FakeAdapter.push_rules = original  # type: ignore[method-assign]
+
+    assert sorted(node.rules) == ["||one.example^", "||two.example^"]
+

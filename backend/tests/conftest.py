@@ -26,7 +26,7 @@ from app.services import (
 )
 from app.services.aggregate import invalidate_stats_cache  # noqa: E402
 from app.services.querylog import buffer  # noqa: E402
-from app.services.sync import drain_background  # noqa: E402
+from app.services.sync import drain_background, reset_push_locks  # noqa: E402
 
 from .fakes import FakeAdapter  # noqa: E402
 
@@ -46,6 +46,9 @@ async def fresh_db(tmp_path, monkeypatch) -> AsyncIterator[None]:
     await buffer.clear()
     # Cached AdGuard sessions are process-wide; keep them from leaking between tests.
     adapter_session.store.reset()
+    # So are the per-node push locks, and a lock is bound to the first event
+    # loop that waits on it — which is the previous test's.
+    reset_push_locks()
     # Runtime settings are cached process-wide; reload them per test.
     hubsettings._cache = None
     # So is the aggregated-statistics cache — one test's numbers must not be

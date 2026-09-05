@@ -184,13 +184,57 @@ async def not_kept(
     return refused
 
 
+# One lock per node, for as long as the process runs.
+#
+# Every push is full state, and every edit schedules one as a task of its own.
+# Two edits a moment apart therefore race two full-state pushes to the same
+# node — and full state is exactly what makes the order matter: whichever
+# request AdGuard *finishes* last is the state it keeps. When the earlier push
+# lands last (a slow login, a `reconfiguring server` pause on the node), the
+# node holds the state from before the second edit, and nothing notices until
+# reconciliation happens to look, up to five minutes later. That is the window
+# this project exists to close. Reconciliation's own corrections push the same
+# way and race the same way, so they take the same lock.
+#
+# Per node rather than one global lock, because a node that is slow or down
+# must not delay the others (spec §6).
+_push_locks: dict[int, asyncio.Lock] = {}
+
+
+def push_lock(instance_id: int) -> asyncio.Lock:
+    lock = _push_locks.get(instance_id)
+    if lock is None:
+        lock = _push_locks[instance_id] = asyncio.Lock()
+    return lock
+
+
+def reset_push_locks() -> None:
+    """Forget every lock. For tests, which run each case on a fresh event loop."""
+    _push_locks.clear()
+
+
 async def push_to_instance(
     session: AsyncSession,
     instance: Instance,
     kinds: tuple[PayloadKind, ...],
     reason: str,
 ) -> str:
-    """Push ``kinds`` to one instance. Returns an error string, or "" on success."""
+    """Push ``kinds`` to one instance. Returns an error string, or "" on success.
+
+    Pushes to the same node run one at a time — see ``push_lock``. The desired
+    state is read inside the lock, so the push that runs last carries the
+    newest state, whatever order the edits behind them arrived in.
+    """
+    async with push_lock(instance.id):
+        return await _push_to_instance(session, instance, kinds, reason)
+
+
+async def _push_to_instance(
+    session: AsyncSession,
+    instance: Instance,
+    kinds: tuple[PayloadKind, ...],
+    reason: str,
+) -> str:
     # Read once, before the probe: both notifications below are edge-triggered on
     # it, and after the push either branch has already overwritten the status.
     previous = instance.status
