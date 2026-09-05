@@ -98,7 +98,7 @@ async def login(
         note_signin_failure(source, "AdGuard-compatible login")
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Invalid username or password")
     note_signin_success(source, "AdGuard-compatible login")
-    _set_cookie(response, user.username)
+    _set_cookie(response, user)
     return {}
 
 

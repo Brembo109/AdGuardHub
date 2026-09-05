@@ -30,8 +30,8 @@ def test_crypto_round_trip_and_key_isolation() -> None:
 
 def test_session_tokens_are_rejected_when_expired_or_forged() -> None:
     sessions = Sessions("key-one")
-    token = sessions.issue("admin")
-    assert sessions.verify(token, 3600) == "admin"
+    token = sessions.issue("admin", "$2b$12$not-a-real-hash")
+    assert sessions.verify(token, 3600).subject == "admin"
     assert sessions.verify(token, -1) is None
     assert Sessions("key-two").verify(token, 3600) is None
 

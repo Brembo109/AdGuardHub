@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import logging
 import os
 import secrets
 import time
+from dataclasses import dataclass
 
 import bcrypt
 from cryptography.fernet import Fernet, InvalidToken
@@ -158,22 +160,69 @@ class Crypto:
             ) from exc
 
 
+@dataclass(frozen=True, slots=True)
+class SessionClaims:
+    """What a valid session cookie says: who it is for, and which password it was issued under."""
+
+    subject: str
+    password_fingerprint: str
+
+    def issued_under(self, password_hash: str) -> bool:
+        """Whether the account's password is still the one this session was issued with."""
+        return hmac.compare_digest(self.password_fingerprint, password_fingerprint(password_hash))
+
+
+def password_fingerprint(password_hash: str) -> str:
+    """A short, non-reversible stand-in for the stored hash.
+
+    The cookie is signed, not encrypted, so whatever ties it to the password has
+    to be safe to hand to the browser. A digest of the bcrypt hash says nothing
+    about the password — the hash already carries its own salt and work factor —
+    and it changes whenever the password does, which is the whole point.
+    """
+    return hashlib.sha256(password_hash.encode("utf-8")).hexdigest()[:16]
+
+
 class Sessions:
-    """Signed, expiring session cookies for the single admin user."""
+    """Signed, expiring session cookies for the single admin user.
+
+    A cookie is tied to the password it was issued under. Until it was, the
+    signature alone decided, so a cookie stayed valid for its full fourteen days
+    however many times the password was changed in between — and changing the
+    password is exactly what an operator does when they suspect a session has
+    been taken. Logging out never reached the server either, and there is no
+    session table to revoke from; binding the token to the password hash is what
+    gives the operator a way to end every session at once.
+    """
 
     def __init__(self, secret_key: str) -> None:
         self._serializer = URLSafeTimedSerializer(secret_key, salt="adguardhub-session")
 
-    def issue(self, username: str) -> str:
-        return self._serializer.dumps({"sub": username})
+    def issue(self, username: str, password_hash: str) -> str:
+        return self._serializer.dumps(
+            {"sub": username, "pw": password_fingerprint(password_hash)}
+        )
 
-    def verify(self, token: str, max_age: int) -> str | None:
+    def verify(self, token: str, max_age: int) -> SessionClaims | None:
+        """The claims of a well-signed, unexpired token, or ``None``.
+
+        Whether the password behind the claims is still current is the caller's
+        question, because only the caller has the account in hand: see
+        ``SessionClaims.issued_under``. A token from before fingerprints existed
+        has none and is refused, which signs everyone out once on upgrade — the
+        alternative is to keep honouring exactly the tokens this change exists
+        to be able to end.
+        """
         try:
             data = self._serializer.loads(token, max_age=max_age)
         except (BadSignature, SignatureExpired):
             return None
-        subject = data.get("sub") if isinstance(data, dict) else None
-        return subject if isinstance(subject, str) else None
+        if not isinstance(data, dict):
+            return None
+        subject, fingerprint = data.get("sub"), data.get("pw")
+        if not isinstance(subject, str) or not isinstance(fingerprint, str):
+            return None
+        return SessionClaims(subject=subject, password_fingerprint=fingerprint)
 
 
 def hash_password(password: str) -> str:

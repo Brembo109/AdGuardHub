@@ -38,14 +38,31 @@ async def current_user(request: Request, session: SessionDep) -> User:
     token = request.cookies.get(settings.session_cookie)
     if not token:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
-    username = get_sessions().verify(token, settings.session_max_age)
-    if username is None:
+    claims = get_sessions().verify(token, settings.session_max_age)
+    if claims is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Session expired")
-    result = await session.execute(select(User).where(User.username == username))
+    result = await session.execute(select(User).where(User.username == claims.subject))
     user = result.scalars().first()
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Unknown user")
+    # The password changed since this cookie was issued. Whoever holds it now
+    # has to prove they know the new one, which is the whole reason it changed.
+    if not claims.issued_under(user.password_hash):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Session expired")
     return user
+
+
+async def session_user(request: Request, session: AsyncSession) -> User | None:
+    """The admin behind the session cookie, or ``None`` — never an error.
+
+    For the one place that reports whether somebody is signed in rather than
+    insisting on it. Same rules as ``current_user``, so /api/auth/state can
+    never call a session live that every other route would refuse.
+    """
+    try:
+        return await current_user(request, session)
+    except HTTPException:
+        return None
 
 
 CurrentUser = Annotated[User, Depends(current_user)]
